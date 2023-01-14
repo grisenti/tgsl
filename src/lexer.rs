@@ -6,6 +6,19 @@ pub enum TokenType {
   String,
   Number,
 
+  Plus,
+  Minus,
+  Times,
+  Divide,
+  Le,
+  Gr,
+  Leq,
+  Geq,
+  Eq,
+  Same,
+  Different,
+  Not,
+
   And,
   Or,
   If,
@@ -72,17 +85,45 @@ pub struct Lexer<'src> {
 }
 
 impl<'src> Lexer<'src> {
-  fn advance(&mut self) -> bool {
+  fn is_at_end(&self) -> bool {
+    self.total_offset == self.source.len()
+  }
+
+  fn advance(&mut self) {
     if let Some((offset, ch)) = self.current.next() {
       self.total_offset = offset;
       self.lookahead = ch;
-      return true;
+    } else {
+      self.total_offset = self.source.len();
     }
-    false
+  }
+
+  fn match_double_operator(
+    &mut self,
+    single: TokenType,
+    double_requires: char,
+    double_kind: TokenType,
+  ) -> Token {
+    if let Some((offset, ch)) = self.current.clone().next() {
+      let start = self.total_offset;
+      if ch == double_requires {
+        self.advance();
+        let ret = Token::new(double_kind, &self.source[start..self.total_offset + 1]);
+        self.advance();
+        return ret;
+      }
+    }
+    self.match_single_operator(single)
+  }
+
+  fn match_single_operator(&mut self, kind: TokenType) -> Token {
+    let ret = Token::new(kind, &self.source[self.total_offset..self.total_offset + 1]);
+    self.advance();
+    ret
   }
 
   fn skip_whitespace(&mut self) {
-    loop {
+    while !self.is_at_end() {
       let ch = self.lookahead;
       if ch == '\n' {
         self.line_no += 1;
@@ -93,9 +134,7 @@ impl<'src> Lexer<'src> {
       } else {
         break;
       }
-      if !self.advance() {
-        break;
-      }
+      self.advance();
     }
   }
 
@@ -115,32 +154,25 @@ impl<'src> Lexer<'src> {
 
   fn process_number(&mut self) -> Token {
     assert!(self.lookahead.is_ascii_digit());
+    let mut dot_encountered = false;
     let tok_start = self.total_offset;
-    if let Some((tok_end, last_ch)) = self.current.find(|(_, c)| !c.is_numeric()) {
-      self.total_offset = tok_end;
-      self.lookahead = last_ch;
-      Token::new(TokenType::Number, &self.source[tok_start..tok_end])
-    } else {
-      self.total_offset = self.source.len();
-      self.lookahead = '\0';
-      Token::new(TokenType::Number, &self.source[tok_start..])
+    while !self.is_at_end() {
+      if self.lookahead.is_ascii_digit() || (self.lookahead == '.' && !dot_encountered) {
+        self.advance();
+      } else {
+        break;
+      }
     }
+    Token::new(
+      TokenType::Number,
+      &self.source[tok_start..self.total_offset],
+    )
   }
 
   fn process_string(&mut self) -> Token {
+    todo!();
     assert!(self.lookahead == '"');
     let tok_start = self.total_offset;
-    self.current.next();
-    self.current.find(|(_, c)| *c == '"').unwrap();
-    if let Some((tok_end, last_ch)) = self.current.next() {
-      self.total_offset = tok_end;
-      self.lookahead = last_ch;
-      Token::new(TokenType::String, &self.source[tok_start..tok_end])
-    } else {
-      self.total_offset = self.source.len();
-      self.lookahead = '\0';
-      Token::new(TokenType::String, &self.source[tok_start..])
-    }
   }
 
   pub fn new(source: &'src str) -> Self {
@@ -170,14 +202,26 @@ impl<'src> Lexer<'src> {
 
   pub fn next_token(&mut self) -> Result<Token, String> {
     self.skip_whitespace();
-    if is_first_id_charachter(self.lookahead) {
-      Ok(self.process_identifier())
-    } else if self.lookahead.is_ascii_digit() {
-      Ok(self.process_number())
-    } else if self.lookahead == '"' {
-      Ok(self.process_string())
-    } else {
-      Err("invalid charachter".to_string())
+    match self.lookahead {
+      '<' => Ok(self.match_double_operator(TokenType::Le, '=', TokenType::Leq)),
+      '>' => Ok(self.match_double_operator(TokenType::Gr, '=', TokenType::Geq)),
+      '=' => Ok(self.match_double_operator(TokenType::Eq, '=', TokenType::Same)),
+      '!' => Ok(self.match_double_operator(TokenType::Not, '=', TokenType::Different)),
+      '+' => Ok(self.match_single_operator(TokenType::Plus)),
+      '-' => Ok(self.match_single_operator(TokenType::Minus)),
+      '/' => Ok(self.match_single_operator(TokenType::Divide)),
+      '*' => Ok(self.match_single_operator(TokenType::Times)),
+      _ => {
+        if is_first_id_charachter(self.lookahead) {
+          Ok(self.process_identifier())
+        } else if self.lookahead.is_ascii_digit() {
+          Ok(self.process_number())
+        } else if self.lookahead == '"' {
+          Ok(self.process_string())
+        } else {
+          Err("invalid charachter".to_string())
+        }
+      }
     }
   }
 
@@ -218,11 +262,36 @@ mod test {
   }
 
   #[test]
+  fn lex_operators() {
+    let mut lex = Lexer::new("+-*/=!<><=>===!=");
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Plus, "+")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Minus, "-")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Times, "*")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Divide, "/")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Eq, "=")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Not, "!")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Le, "<")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Gr, ">")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Leq, "<=")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Geq, ">=")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Same, "==")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Different, "!=")));
+  }
+
+  #[test]
   fn lex_keywords() {}
 
   #[test]
   fn lex_strings() {}
 
   #[test]
-  fn lex_numbers() {}
+  fn lex_numbers() {
+    let mut lex = Lexer::new("123 123.33 0.99");
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Number, "123")));
+    assert_eq!(
+      lex.next_token(),
+      Ok(Token::new(TokenType::Number, "123.33"))
+    );
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Number, "0.99")));
+  }
 }
