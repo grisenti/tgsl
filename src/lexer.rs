@@ -1,24 +1,19 @@
-use std::{collections::HashMap, str::CharIndices};
+use std::str::CharIndices;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum TokenType {
   Id,
   String,
   Number,
+  Basic,
 
-  Plus,
-  Minus,
-  Times,
-  Divide,
-  Le,
-  Gr,
+  // operators
   Leq,
   Geq,
-  Eq,
   Same,
   Different,
-  Not,
 
+  // keywords
   And,
   Or,
   If,
@@ -29,6 +24,8 @@ pub enum TokenType {
   Null,
   Return,
   Var,
+
+  EndOfFile,
 }
 
 fn token_type(input: &str) -> TokenType {
@@ -72,6 +69,13 @@ impl<'src> Token<'src> {
       lexeme,
     }
   }
+
+  fn basic(lexeme: &'src str) -> Self {
+    Self {
+      kind: TokenType::Basic,
+      lexeme,
+    }
+  }
 }
 
 pub struct Lexer<'src> {
@@ -98,44 +102,59 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  fn match_double_operator(
-    &mut self,
-    single: TokenType,
-    double_requires: char,
-    double_kind: TokenType,
-  ) -> Token {
+  fn match_alternatives_or_basic(&mut self, alternatives: &[(char, TokenType)]) -> Token {
     if let Some((offset, ch)) = self.current.clone().next() {
       let start = self.total_offset;
-      if ch == double_requires {
+      if let Some((_, kind)) = alternatives.into_iter().find(|(c, _)| *c == ch) {
         self.advance();
-        let ret = Token::new(double_kind, &self.source[start..self.total_offset + 1]);
+        let ret = Token::new(kind.clone(), &self.source[start..self.total_offset + 1]);
         self.advance();
         return ret;
       }
     }
-    self.match_single_operator(single)
+    self.match_single()
   }
 
-  fn match_single_operator(&mut self, kind: TokenType) -> Token {
-    let ret = Token::new(kind, &self.source[self.total_offset..self.total_offset + 1]);
+  fn match_single(&mut self) -> Token {
+    let ret = Token::basic(&self.source[self.total_offset..self.total_offset + 1]);
     self.advance();
     ret
   }
 
-  fn skip_whitespace(&mut self) {
+  fn skip_line_comment(&mut self) {
+    if let Some((offset, ch)) = self.current.find(|(_, c)| *c == '\n') {
+      self.lookahead = ch;
+      self.total_offset = offset;
+    }
+  }
+
+  fn try_skip_comment(&mut self) -> Result<(), String> {
+    if let Some((offset, next_ch)) = self.current.clone().next() {
+      match next_ch {
+        '/' => self.skip_line_comment(),
+        _ => {}
+      }
+    }
+    Ok(())
+  }
+
+  fn skip_unused(&mut self) -> Result<(), String> {
     while !self.is_at_end() {
-      let ch = self.lookahead;
-      if ch == '\n' {
-        self.line_no += 1;
-        self.char_no = 0;
-        self.line_start = self.current.clone();
-      } else if ch == '\t' || ch == ' ' {
-        self.char_no += 1;
-      } else {
-        break;
+      match self.lookahead {
+        '\n' => {
+          self.line_no += 1;
+          self.char_no = 0;
+          self.line_start = self.current.clone();
+        }
+        '/' => self.try_skip_comment()?,
+        '\t' | ' ' => {
+          self.char_no += 1;
+        }
+        _ => break,
       }
       self.advance();
     }
+    Ok(())
   }
 
   fn process_identifier(&mut self) -> Token {
@@ -159,6 +178,8 @@ impl<'src> Lexer<'src> {
     while !self.is_at_end() {
       if self.lookahead.is_ascii_digit() || (self.lookahead == '.' && !dot_encountered) {
         self.advance();
+      } else if self.lookahead == '.' {
+        dot_encountered = true;
       } else {
         break;
       }
@@ -169,10 +190,34 @@ impl<'src> Lexer<'src> {
     )
   }
 
-  fn process_string(&mut self) -> Token {
-    todo!();
+  fn process_string(&mut self) -> Result<Token, String> {
     assert!(self.lookahead == '"');
     let tok_start = self.total_offset;
+    let mut escaped = false;
+    self.advance();
+    while !self.is_at_end() {
+      match self.lookahead {
+        '"' => {
+          if !escaped {
+            break;
+          } else {
+            escaped = false;
+          }
+        }
+        '\\' => escaped = true,
+        _ => {}
+      }
+      self.advance();
+    }
+    if self.lookahead == '"' {
+      self.advance();
+      Ok(Token::new(
+        TokenType::String,
+        &self.source[tok_start..self.total_offset],
+      ))
+    } else {
+      Err("incomplete string".to_string())
+    }
   }
 
   pub fn new(source: &'src str) -> Self {
@@ -201,25 +246,23 @@ impl<'src> Lexer<'src> {
   }
 
   pub fn next_token(&mut self) -> Result<Token, String> {
-    self.skip_whitespace();
+    self.skip_unused()?;
+    if self.is_at_end() {
+      return Ok(Token::new(TokenType::EndOfFile, ""));
+    }
     match self.lookahead {
-      '<' => Ok(self.match_double_operator(TokenType::Le, '=', TokenType::Leq)),
-      '>' => Ok(self.match_double_operator(TokenType::Gr, '=', TokenType::Geq)),
-      '=' => Ok(self.match_double_operator(TokenType::Eq, '=', TokenType::Same)),
-      '!' => Ok(self.match_double_operator(TokenType::Not, '=', TokenType::Different)),
-      '+' => Ok(self.match_single_operator(TokenType::Plus)),
-      '-' => Ok(self.match_single_operator(TokenType::Minus)),
-      '/' => Ok(self.match_single_operator(TokenType::Divide)),
-      '*' => Ok(self.match_single_operator(TokenType::Times)),
+      '<' => Ok(self.match_alternatives_or_basic(&[('=', TokenType::Leq)])),
+      '>' => Ok(self.match_alternatives_or_basic(&[('=', TokenType::Geq)])),
+      '=' => Ok(self.match_alternatives_or_basic(&[('=', TokenType::Same)])),
+      '!' => Ok(self.match_alternatives_or_basic(&[('=', TokenType::Different)])),
+      '"' => self.process_string(),
       _ => {
         if is_first_id_charachter(self.lookahead) {
           Ok(self.process_identifier())
         } else if self.lookahead.is_ascii_digit() {
           Ok(self.process_number())
-        } else if self.lookahead == '"' {
-          Ok(self.process_string())
         } else {
-          Err("invalid charachter".to_string())
+          Ok(self.match_single())
         }
       }
     }
@@ -263,15 +306,10 @@ mod test {
 
   #[test]
   fn lex_operators() {
-    let mut lex = Lexer::new("+-*/=!<><=>===!=");
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Plus, "+")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Minus, "-")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Times, "*")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Divide, "/")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Eq, "=")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Not, "!")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Le, "<")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Gr, ">")));
+    let mut lex = Lexer::new("+-*<=>===!=");
+    assert_eq!(lex.next_token(), Ok(Token::basic("+")));
+    assert_eq!(lex.next_token(), Ok(Token::basic("-")));
+    assert_eq!(lex.next_token(), Ok(Token::basic("*")));
     assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Leq, "<=")));
     assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Geq, ">=")));
     assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Same, "==")));
@@ -279,19 +317,45 @@ mod test {
   }
 
   #[test]
-  fn lex_keywords() {}
+  fn lex_keywords() {
+    let mut lex = Lexer::new("var if else");
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Var, "var")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::If, "if")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Else, "else")));
+  }
 
   #[test]
-  fn lex_strings() {}
+  fn lex_strings() {
+    let mut lex = Lexer::new(
+      r#"
+      "simple" "with \"quotes\""
+      "#,
+    );
+    assert_eq!(
+      lex.next_token(),
+      Ok(Token::new(TokenType::String, "\"simple\""))
+    );
+    assert_eq!(
+      lex.next_token(),
+      Ok(Token::new(TokenType::String, r#""with \"quotes\"""#))
+    );
+  }
 
   #[test]
   fn lex_numbers() {
-    let mut lex = Lexer::new("123 123.33 0.99");
+    let mut lex = Lexer::new("1 123 123.33 0.9");
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Number, "1")));
     assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Number, "123")));
     assert_eq!(
       lex.next_token(),
       Ok(Token::new(TokenType::Number, "123.33"))
     );
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Number, "0.99")));
+    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Number, "0.9")));
+  }
+
+  #[test]
+  fn skip_comments() {
+    let mut lex = Lexer::new("//comment\nid");
+    assert_eq!(lex.next_token(), Ok(Token::identifier("id")));
   }
 }
