@@ -166,7 +166,10 @@ impl<'src> Lexer<'src> {
           self.line_start_offset = self.total_offset + 1;
           self.line_start = self.current.clone();
         }
-        '/' => self.try_skip_comment()?,
+        '/' => {
+          self.try_skip_comment()?;
+          return Ok(());
+        }
         '\t' | ' ' => {}
         _ => break,
       }
