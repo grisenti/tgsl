@@ -1,4 +1,4 @@
-use std::str::CharIndices;
+use std::{fmt::Display, str::CharIndices};
 
 use crate::errors::*;
 
@@ -83,6 +83,16 @@ impl<'src> Token<'src> {
     Self {
       kind: TokenType::EndOfFile,
       lexeme: "",
+    }
+  }
+}
+
+impl Display for Token<'_> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    if self.lexeme != "" {
+      write!(f, "{}", self.lexeme)
+    } else {
+      write!(f, "{:?}", self.kind)
     }
   }
 }
