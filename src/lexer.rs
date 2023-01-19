@@ -78,6 +78,13 @@ impl<'src> Token<'src> {
       lexeme,
     }
   }
+
+  pub fn eof() -> Self {
+    Self {
+      kind: TokenType::EndOfFile,
+      lexeme: "",
+    }
+  }
 }
 
 pub struct Lexer<'src> {
