@@ -12,7 +12,7 @@ type CompErrVec = Vec<CompilerError>;
 type PRes<NodeType> = Result<Box<NodeType>, CompErrVec>;
 
 impl<'src> Parser<'src> {
-  fn advance(&mut self) -> Result<Token, CompErrVec> {
+  fn advance(&mut self) -> Result<Token<'src>, CompErrVec> {
     match self.lex.next_token() {
       Ok(next) => {
         self.lookahead = next.clone();
@@ -35,27 +35,48 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn match_or_err(&mut self, token: Token) -> Result<(), CompErrVec> {
+    if self.lookahead == token {
+      self.advance()?;
+      Ok(())
+    } else {
+      Err(vec![CompilerError::from_lexer_state(
+        &self.lex,
+        format!("expected ')' got, {}", self.lookahead),
+        ErrorType::Parsing,
+      )])
+    }
+  }
+
   fn syncronize(&mut self) {
     todo!();
   }
 
   fn parse_primary(&mut self) -> PRes<Expr<'src>> {
-    let res = match self.lookahead.kind {
+    match self.lookahead.kind {
       TokenType::Number
       | TokenType::String
       | TokenType::True
       | TokenType::False
-      | TokenType::Null => Ok(Box::new(Expr::Literal {
-        literal: self.lookahead.clone(),
-      })),
+      | TokenType::Null => {
+        let ret = Ok(Box::new(Expr::Literal {
+          literal: self.lookahead.clone(),
+        }));
+        self.advance()?;
+        ret
+      }
+      TokenType::Basic if self.lookahead.lexeme == "(" => {
+        self.advance()?;
+        let ret = Ok(self.parse_expression()?);
+        self.match_or_err(Token::basic(")"))?;
+        ret
+      }
       _ => Err(vec![CompilerError::from_lexer_state(
         &self.lex,
         format!("expected literal, got {}", self.lookahead),
         ErrorType::Parsing,
       )]),
-    }?;
-    self.advance()?;
-    Ok(res)
+    }
   }
 
   fn parse_unary(&mut self) -> PRes<Expr<'src>> {
@@ -81,6 +102,7 @@ impl<'src> Parser<'src> {
     }
     Ok(expr)
   }
+
   fn parse_term(&mut self) -> PRes<Expr<'src>> {
     let mut expr = self.parse_factor()?;
     while let Some(op) = self.matches_alternatives(&[Token::basic("+"), Token::basic("-")])? {
