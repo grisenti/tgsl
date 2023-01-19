@@ -34,11 +34,11 @@ impl Display for CompilerError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let spaces = self.line_str[0..self.token_start]
       .char_indices()
-      .map(|(_, c)| ' ')
+      .map(|_| ' ')
       .collect::<String>();
     let underlines = self.line_str[self.token_start..self.token_end]
       .char_indices()
-      .map(|(_, c)| '~')
+      .map(|_| '~')
       .collect::<String>();
     write!(
       f,
