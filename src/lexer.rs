@@ -59,18 +59,18 @@ pub struct Token<'src> {
 }
 
 impl<'src> Token<'src> {
-  fn new(kind: TokenType, lexeme: &'src str) -> Self {
+  pub fn new(kind: TokenType, lexeme: &'src str) -> Self {
     Self { kind, lexeme }
   }
 
-  fn identifier(lexeme: &'src str) -> Self {
+  pub fn identifier(lexeme: &'src str) -> Self {
     Self {
       kind: token_type(lexeme),
       lexeme,
     }
   }
 
-  fn basic(lexeme: &'src str) -> Self {
+  pub fn basic(lexeme: &'src str) -> Self {
     Self {
       kind: TokenType::Basic,
       lexeme,
