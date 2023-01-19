@@ -42,7 +42,7 @@ impl Display for CompilerError {
       .collect::<String>();
     write!(
       f,
-      "{:?} error: {}\n  | \n{} | {}\n  | {}{}",
+      "{:?} error: {}\n  | \n{} | {}\n  | {}{}\n",
       self.kind, self.error_msg, self.line_no, self.line_str, spaces, underlines
     )
   }
