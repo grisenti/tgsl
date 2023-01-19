@@ -104,7 +104,8 @@ pub struct Lexer<'src> {
   total_offset: usize,
   line_start: CharIndices<'src>,
   line_no: u32,
-  char_no: u32,
+  line_start_offset: usize,
+  prev_token_start: usize,
 }
 
 impl<'src> Lexer<'src> {
@@ -162,13 +163,11 @@ impl<'src> Lexer<'src> {
       match self.lookahead {
         '\n' => {
           self.line_no += 1;
-          self.char_no = 0;
+          self.line_start_offset = self.total_offset + 1;
           self.line_start = self.current.clone();
         }
         '/' => self.try_skip_comment()?,
-        '\t' | ' ' => {
-          self.char_no += 1;
-        }
+        '\t' | ' ' => {}
         _ => break,
       }
       self.advance();
@@ -252,8 +251,9 @@ impl<'src> Lexer<'src> {
         total_offset: offset,
         lookahead: ch,
         line_start: source.char_indices(),
-        line_no: 0,
-        char_no: 0,
+        line_no: 1,
+        line_start_offset: 0,
+        prev_token_start: 0,
       }
     } else {
       Self {
@@ -263,13 +263,15 @@ impl<'src> Lexer<'src> {
         lookahead: '\0',
         line_start: source.char_indices(),
         line_no: 0,
-        char_no: 0,
+        line_start_offset: 0,
+        prev_token_start: 0,
       }
     }
   }
 
   pub fn next_token(&mut self) -> Result<Token<'src>, CompilerError> {
     self.skip_unused()?;
+    self.prev_token_start = self.total_offset - self.line_start_offset;
     if self.is_at_end() {
       return Ok(Token::new(TokenType::EndOfFile, ""));
     }
@@ -297,6 +299,14 @@ impl<'src> Lexer<'src> {
 
   pub fn line_no(&self) -> u32 {
     self.line_no
+  }
+
+  pub fn prev_token_start(&self) -> usize {
+    self.prev_token_start
+  }
+
+  pub fn prev_token_end(&self) -> usize {
+    self.total_offset - self.line_start_offset
   }
 }
 
@@ -374,5 +384,18 @@ mod test {
   fn skip_comments() {
     let mut lex = Lexer::new("//comment\nid");
     assert_eq!(lex.next_token(), Ok(Token::identifier("id")));
+  }
+
+  #[test]
+  fn token_start() {
+    let mut lex = Lexer::new("hello how\nare you");
+    lex.next_token();
+    assert_eq!(lex.prev_token_start(), 0);
+    lex.next_token();
+    assert_eq!(lex.prev_token_start(), 6);
+    lex.next_token();
+    assert_eq!(lex.prev_token_start(), 0);
+    lex.next_token();
+    assert_eq!(lex.prev_token_start(), 4);
   }
 }
