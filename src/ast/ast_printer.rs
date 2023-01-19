@@ -6,8 +6,8 @@ pub struct ASTPrinter {
 }
 
 impl ASTPrinter {
-  pub fn print(root: &mut dyn ASTNode, flat: bool) {
-    root.accept(&mut Self { spaces: 0, flat });
+  pub fn print(root: &ASTNode, flat: bool) {
+    (&mut Self { spaces: 0, flat }).visit(root);
   }
 
   fn print_with_spaces(&self, rest: &str) {
@@ -27,26 +27,33 @@ impl ASTPrinter {
 }
 
 impl NodeVisitor for ASTPrinter {
-  fn visit_binary_expr(&mut self, exp: &mut BinaryExpr) {
-    self.print_with_spaces("(");
-    self.change_spaces(1);
-    exp.left.accept(self);
-    self.print_with_spaces(exp.operator.lexeme);
-    exp.right.accept(self);
-    self.change_spaces(-1);
-    self.print_with_spaces(")");
-  }
-
-  fn visit_unary_expr(&mut self, exp: &mut UnaryExpr) {
-    self.print_with_spaces("(");
-    self.change_spaces(1);
-    self.print_with_spaces(exp.operator.lexeme);
-    exp.right.accept(self);
-    self.change_spaces(-1);
-    self.print_with_spaces(")");
-  }
-
-  fn visit_literal_expr(&mut self, exp: &mut Literal) {
-    self.print_with_spaces(exp.token.lexeme);
+  fn visit_expr(&mut self, expr: &Expr) {
+    match expr {
+      Expr::BinaryExpr {
+        left,
+        operator,
+        right,
+      } => {
+        self.print_with_spaces("(");
+        self.change_spaces(1);
+        self.visit_expr(left);
+        self.print_with_spaces(operator.lexeme);
+        self.visit_expr(right);
+        self.change_spaces(-1);
+        self.print_with_spaces(")");
+      }
+      Expr::UnaryExpr { operator, right } => {
+        self.print_with_spaces("(");
+        self.change_spaces(1);
+        self.print_with_spaces(operator.lexeme);
+        self.visit_expr(right);
+        self.change_spaces(-1);
+        self.print_with_spaces(")");
+      }
+      Expr::Literal { literal } => {
+        self.print_with_spaces(literal.lexeme);
+      }
+      _ => {}
+    }
   }
 }

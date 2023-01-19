@@ -4,27 +4,17 @@ mod expression;
 pub use ast_printer::*;
 pub use expression::*;
 
-pub trait ASTNode {
-  fn accept(&mut self, visitor: &mut dyn NodeVisitor);
-}
-
-macro_rules! accept_impl {
-  (
-    $derived:ty, $base:ty, $lt:lifetime, $visit_name:ident) => {
-    impl<$lt> $base for $derived {
-      fn accept(&mut self, visitor: &mut dyn NodeVisitor) {
-        visitor.$visit_name(self);
-      }
-    }
-  };
+pub enum ASTNode<'src> {
+  Expr(Expr<'src>),
 }
 
 pub trait NodeVisitor {
-  fn visit_binary_expr(&mut self, exp: &mut BinaryExpr);
-  fn visit_unary_expr(&mut self, exp: &mut UnaryExpr);
-  fn visit_literal_expr(&mut self, exp: &mut Literal);
-}
+  fn visit(&mut self, root: &ASTNode) {
+    match root {
+      ASTNode::Expr(exp) => self.visit_expr(&exp),
+      _ => {}
+    }
+  }
 
-accept_impl!(BinaryExpr<'src>, Expr, 'src, visit_binary_expr);
-accept_impl!(UnaryExpr<'src>, Expr, 'src, visit_unary_expr);
-accept_impl!(Literal<'src>, Expr, 'src, visit_literal_expr);
+  fn visit_expr(&mut self, expr: &Expr);
+}
