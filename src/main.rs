@@ -1,8 +1,8 @@
-mod lexer;
+mod ast;
 mod errors;
+mod lexer;
 
 use lexer::*;
-use errors::*;
 
 fn main() {
   let mut lex = Lexer::new("hello how are you");
