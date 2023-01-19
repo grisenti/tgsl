@@ -111,7 +111,7 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  fn match_alternatives_or_basic(&mut self, alternatives: &[(char, TokenType)]) -> Token {
+  fn match_alternatives_or_basic(&mut self, alternatives: &[(char, TokenType)]) -> Token<'src> {
     if let Some((_, ch)) = self.current.clone().next() {
       let start = self.total_offset;
       if let Some((_, kind)) = alternatives.into_iter().find(|(c, _)| *c == ch) {
@@ -124,7 +124,7 @@ impl<'src> Lexer<'src> {
     self.match_single()
   }
 
-  fn match_single(&mut self) -> Token {
+  fn match_single(&mut self) -> Token<'src> {
     let ret = Token::basic(&self.source[self.total_offset..self.total_offset + 1]);
     self.advance();
     ret
@@ -166,7 +166,7 @@ impl<'src> Lexer<'src> {
     Ok(())
   }
 
-  fn process_identifier(&mut self) -> Token {
+  fn process_identifier(&mut self) -> Token<'src> {
     assert!(is_first_id_charachter(self.lookahead));
     let tok_start = self.total_offset;
     if let Some((tok_end, last_ch)) = self.current.find(|(_, c)| !is_id_charachter(*c)) {
@@ -180,7 +180,7 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  fn process_number(&mut self) -> Token {
+  fn process_number(&mut self) -> Token<'src> {
     assert!(self.lookahead.is_ascii_digit());
     let mut dot_encountered = false;
     let tok_start = self.total_offset;
@@ -199,7 +199,7 @@ impl<'src> Lexer<'src> {
     )
   }
 
-  fn process_string(&mut self) -> Result<Token, CompilerError> {
+  fn process_string(&mut self) -> Result<Token<'src>, CompilerError> {
     assert!(self.lookahead == '"');
     let tok_start = self.total_offset;
     let mut escaped = false;
@@ -258,7 +258,7 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  pub fn next_token(&mut self) -> Result<Token, CompilerError> {
+  pub fn next_token(&mut self) -> Result<Token<'src>, CompilerError> {
     self.skip_unused()?;
     if self.is_at_end() {
       return Ok(Token::new(TokenType::EndOfFile, ""));
