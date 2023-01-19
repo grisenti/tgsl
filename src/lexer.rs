@@ -256,15 +256,9 @@ impl<'src> Lexer<'src> {
       '=' => Ok(self.match_alternatives_or_basic(&[('=', TokenType::Same)])),
       '!' => Ok(self.match_alternatives_or_basic(&[('=', TokenType::Different)])),
       '"' => self.process_string(),
-      _ => {
-        if is_first_id_charachter(self.lookahead) {
-          Ok(self.process_identifier())
-        } else if self.lookahead.is_ascii_digit() {
-          Ok(self.process_number())
-        } else {
-          Ok(self.match_single())
-        }
-      }
+      c if is_first_id_charachter(c) => Ok(self.process_identifier()),
+      c if c.is_ascii_digit() => Ok(self.process_number()),
+      _ => Ok(self.match_single()),
     }
   }
 
