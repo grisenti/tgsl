@@ -1,5 +1,7 @@
 use std::str::CharIndices;
 
+use crate::errors::*;
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum TokenType {
   Id,
@@ -103,7 +105,7 @@ impl<'src> Lexer<'src> {
   }
 
   fn match_alternatives_or_basic(&mut self, alternatives: &[(char, TokenType)]) -> Token {
-    if let Some((offset, ch)) = self.current.clone().next() {
+    if let Some((_, ch)) = self.current.clone().next() {
       let start = self.total_offset;
       if let Some((_, kind)) = alternatives.into_iter().find(|(c, _)| *c == ch) {
         self.advance();
@@ -128,8 +130,8 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  fn try_skip_comment(&mut self) -> Result<(), String> {
-    if let Some((offset, next_ch)) = self.current.clone().next() {
+  fn try_skip_comment(&mut self) -> Result<(), CompilerError> {
+    if let Some((_, next_ch)) = self.current.clone().next() {
       match next_ch {
         '/' => self.skip_line_comment(),
         _ => {}
@@ -138,7 +140,7 @@ impl<'src> Lexer<'src> {
     Ok(())
   }
 
-  fn skip_unused(&mut self) -> Result<(), String> {
+  fn skip_unused(&mut self) -> Result<(), CompilerError> {
     while !self.is_at_end() {
       match self.lookahead {
         '\n' => {
@@ -190,7 +192,7 @@ impl<'src> Lexer<'src> {
     )
   }
 
-  fn process_string(&mut self) -> Result<Token, String> {
+  fn process_string(&mut self) -> Result<Token, CompilerError> {
     assert!(self.lookahead == '"');
     let tok_start = self.total_offset;
     let mut escaped = false;
@@ -216,7 +218,11 @@ impl<'src> Lexer<'src> {
         &self.source[tok_start..self.total_offset],
       ))
     } else {
-      Err("incomplete string".to_string())
+      Err(CompilerError::from_lexer_state(
+        self,
+        "incomplete string".to_string(),
+        ErrorType::Lexing,
+      ))
     }
   }
 
@@ -245,7 +251,7 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  pub fn next_token(&mut self) -> Result<Token, String> {
+  pub fn next_token(&mut self) -> Result<Token, CompilerError> {
     self.skip_unused()?;
     if self.is_at_end() {
       return Ok(Token::new(TokenType::EndOfFile, ""));
