@@ -1,5 +1,5 @@
 use crate::ast::Expr;
-use crate::errors::{ErrorType, SourceError};
+use crate::errors::{SourceError, SourceErrorType};
 use crate::lexer::{Token, TokenInfo};
 
 pub enum RetVal {
@@ -20,7 +20,7 @@ fn nums_or_error(
     Err(SourceError::from_token_info(
       op_info,
       "operator only works for numbers".to_string(),
-      ErrorType::Runtime,
+      SourceErrorType::Runtime,
     ))
   }
 }

@@ -2,7 +2,7 @@ use crate::{lexer::TokenInfo, Lexer};
 use std::fmt::Display;
 
 #[derive(Debug, PartialEq)]
-pub enum ErrorType {
+pub enum SourceErrorType {
   Lexing,
   Parsing,
   Runtime,
@@ -15,11 +15,11 @@ pub struct SourceError {
   token_end: usize,
   line_str: String,
   error_msg: String,
-  kind: ErrorType,
+  kind: SourceErrorType,
 }
 
 impl SourceError {
-  pub fn from_lexer_state(lex: &Lexer, error_msg: String, kind: ErrorType) -> Self {
+  pub fn from_lexer_state(lex: &Lexer, error_msg: String, kind: SourceErrorType) -> Self {
     Self {
       line_no: lex.line_no(),
       token_start: lex.prev_token_start(),
@@ -30,7 +30,7 @@ impl SourceError {
     }
   }
 
-  pub fn from_token_info(info: TokenInfo, error_msg: String, kind: ErrorType) -> Self {
+  pub fn from_token_info(info: TokenInfo, error_msg: String, kind: SourceErrorType) -> Self {
     Self {
       line_no: info.line_no,
       token_start: info.start,

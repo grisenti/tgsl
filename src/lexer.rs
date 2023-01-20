@@ -229,7 +229,7 @@ impl<'src> Lexer<'src> {
       Err(SourceError::from_lexer_state(
         self,
         "incomplete string".to_string(),
-        ErrorType::Lexing,
+        SourceErrorType::Lexing,
       ))
     }
   }

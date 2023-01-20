@@ -44,7 +44,7 @@ impl<'src> Parser<'src> {
       Err(vec![SourceError::from_lexer_state(
         &self.lex,
         format!("expected ')' got, {}", self.lookahead),
-        ErrorType::Parsing,
+        SourceErrorType::Parsing,
       )])
     }
   }
@@ -71,7 +71,7 @@ impl<'src> Parser<'src> {
       _ => Err(vec![SourceError::from_lexer_state(
         &self.lex,
         format!("expected literal, got {}", self.lookahead),
-        ErrorType::Parsing,
+        SourceErrorType::Parsing,
       )]),
     }
   }
