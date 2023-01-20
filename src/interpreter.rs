@@ -1,48 +1,55 @@
-use std::sync::mpsc::RecvTimeoutError;
-
 use crate::ast::Expr;
-use crate::lexer::Token;
+use crate::errors::{CompilerError, ErrorType};
+use crate::lexer::{Token, TokenInfo};
 
 pub enum RetVal {
   Str(String),
   Num(f64),
 }
 
-type IntepreterResult = Result<RetVal, ()>;
+type IntepreterResult = Result<RetVal, CompilerError>;
 
-fn nums_or_error(lhs: &RetVal, rhs: &RetVal) -> Result<(f64, f64), ()> {
+fn nums_or_error(
+  lhs: &RetVal,
+  rhs: &RetVal,
+  op_info: TokenInfo,
+) -> Result<(f64, f64), CompilerError> {
   if let (RetVal::Num(l), RetVal::Num(r)) = (lhs, rhs) {
     Ok((*l, *r))
   } else {
-    Err(())
+    Err(CompilerError::from_token_info(
+      op_info,
+      "operator only works for numbers".to_string(),
+      ErrorType::Runtime,
+    ))
   }
 }
 
-fn plus(lhs: &RetVal, rhs: &RetVal) -> IntepreterResult {
-  let (x, y) = nums_or_error(&lhs, &rhs)?;
+fn plus(lhs: &RetVal, rhs: &RetVal, op_info: TokenInfo) -> IntepreterResult {
+  let (x, y) = nums_or_error(&lhs, &rhs, op_info)?;
   Ok(RetVal::Num(x + y))
 }
 
-fn minus(lhs: &RetVal, rhs: &RetVal) -> IntepreterResult {
-  let (x, y) = nums_or_error(&lhs, &rhs)?;
+fn minus(lhs: &RetVal, rhs: &RetVal, op_info: TokenInfo) -> IntepreterResult {
+  let (x, y) = nums_or_error(&lhs, &rhs, op_info)?;
   Ok(RetVal::Num(x - y))
 }
 
-fn times(lhs: &RetVal, rhs: &RetVal) -> IntepreterResult {
-  let (x, y) = nums_or_error(&lhs, &rhs)?;
+fn times(lhs: &RetVal, rhs: &RetVal, op_info: TokenInfo) -> IntepreterResult {
+  let (x, y) = nums_or_error(&lhs, &rhs, op_info)?;
   Ok(RetVal::Num(x * y))
 }
 
-fn divide(lhs: &RetVal, rhs: &RetVal) -> IntepreterResult {
-  let (x, y) = nums_or_error(&lhs, &rhs)?;
+fn divide(lhs: &RetVal, rhs: &RetVal, op_info: TokenInfo) -> IntepreterResult {
+  let (x, y) = nums_or_error(&lhs, &rhs, op_info)?;
   Ok(RetVal::Num(x / y))
 }
 
-fn unary_minus(rhs: &RetVal) -> IntepreterResult {
+fn unary_minus(rhs: &RetVal, op_info: TokenInfo) -> IntepreterResult {
   if let RetVal::Num(x) = rhs {
     Ok(RetVal::Num(-x))
   } else {
-    Err(())
+    panic!()
   }
 }
 
@@ -50,7 +57,8 @@ pub fn interpret(exp: Expr) -> IntepreterResult {
   match exp {
     Expr::Literal { literal } => match literal.token {
       Token::Number(num) => Ok(RetVal::Num(num)),
-      _ => Err(()),
+      Token::String(s) => Ok(RetVal::Str(s.to_string())),
+      _ => panic!(),
     },
     Expr::BinaryExpr {
       left,
@@ -60,17 +68,17 @@ pub fn interpret(exp: Expr) -> IntepreterResult {
       let lhs = interpret(*left)?;
       let rhs = interpret(*right)?;
       match operator.token {
-        Token::Basic('+') => plus(&lhs, &rhs),
-        Token::Basic('-') => minus(&lhs, &rhs),
-        Token::Basic('*') => times(&lhs, &rhs),
-        Token::Basic('/') => divide(&lhs, &rhs),
+        Token::Basic('+') => plus(&lhs, &rhs, operator.info),
+        Token::Basic('-') => minus(&lhs, &rhs, operator.info),
+        Token::Basic('*') => times(&lhs, &rhs, operator.info),
+        Token::Basic('/') => divide(&lhs, &rhs, operator.info),
         _ => panic!(),
       }
     }
     Expr::UnaryExpr { operator, right } => {
       let rhs = interpret(*right)?;
       match operator.token {
-        Token::Basic('-') => unary_minus(&rhs),
+        Token::Basic('-') => unary_minus(&rhs, operator.info),
         _ => panic!(),
       }
     }
