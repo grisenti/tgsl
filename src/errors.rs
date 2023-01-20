@@ -9,7 +9,7 @@ pub enum ErrorType {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct CompilerError {
+pub struct SourceError {
   line_no: u32,
   token_start: usize,
   token_end: usize,
@@ -18,7 +18,7 @@ pub struct CompilerError {
   kind: ErrorType,
 }
 
-impl CompilerError {
+impl SourceError {
   pub fn from_lexer_state(lex: &Lexer, error_msg: String, kind: ErrorType) -> Self {
     Self {
       line_no: lex.line_no(),
@@ -42,7 +42,7 @@ impl CompilerError {
   }
 }
 
-impl Display for CompilerError {
+impl Display for SourceError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let spaces = self.line_str[0..self.token_start]
       .char_indices()

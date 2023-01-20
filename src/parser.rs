@@ -5,10 +5,10 @@ use super::lexer::*;
 pub struct Parser<'src> {
   lex: Lexer<'src>,
   lookahead: Token<'src>,
-  errors: Vec<CompilerError>,
+  errors: Vec<SourceError>,
 }
 
-type CompErrVec = Vec<CompilerError>;
+type CompErrVec = Vec<SourceError>;
 type TokenPairOpt<'src> = Option<TokenPair<'src>>;
 type PRes<Node> = Result<Box<Node>, CompErrVec>;
 
@@ -41,7 +41,7 @@ impl<'src> Parser<'src> {
       self.advance()?;
       Ok(())
     } else {
-      Err(vec![CompilerError::from_lexer_state(
+      Err(vec![SourceError::from_lexer_state(
         &self.lex,
         format!("expected ')' got, {}", self.lookahead),
         ErrorType::Parsing,
@@ -68,7 +68,7 @@ impl<'src> Parser<'src> {
         self.match_or_err(Token::Basic(')'))?;
         ret
       }
-      _ => Err(vec![CompilerError::from_lexer_state(
+      _ => Err(vec![SourceError::from_lexer_state(
         &self.lex,
         format!("expected literal, got {}", self.lookahead),
         ErrorType::Parsing,

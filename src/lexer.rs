@@ -135,7 +135,7 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  fn try_skip_comment(&mut self) -> Result<bool, CompilerError> {
+  fn try_skip_comment(&mut self) -> Result<bool, SourceError> {
     if let Some((_, next_ch)) = self.current.clone().next() {
       match next_ch {
         '/' => {
@@ -148,7 +148,7 @@ impl<'src> Lexer<'src> {
     Ok(false)
   }
 
-  fn skip_unused(&mut self) -> Result<(), CompilerError> {
+  fn skip_unused(&mut self) -> Result<(), SourceError> {
     while !self.is_at_end() {
       match self.lookahead {
         '\n' => {
@@ -201,7 +201,7 @@ impl<'src> Lexer<'src> {
     Token::Number(self.source[tok_start..self.total_offset].parse().unwrap()) // number already checked
   }
 
-  fn process_string(&mut self) -> Result<Token<'src>, CompilerError> {
+  fn process_string(&mut self) -> Result<Token<'src>, SourceError> {
     assert!(self.lookahead == '"');
     let tok_start = self.total_offset;
     let mut escaped = false;
@@ -226,7 +226,7 @@ impl<'src> Lexer<'src> {
         &self.source[tok_start + 1..self.total_offset - 1],
       ))
     } else {
-      Err(CompilerError::from_lexer_state(
+      Err(SourceError::from_lexer_state(
         self,
         "incomplete string".to_string(),
         ErrorType::Lexing,
@@ -261,7 +261,7 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  pub fn next_token(&mut self) -> Result<Token<'src>, CompilerError> {
+  pub fn next_token(&mut self) -> Result<Token<'src>, SourceError> {
     self.skip_unused()?;
     self.prev_token_start = self.total_offset - self.line_start_offset;
     if self.is_at_end() {

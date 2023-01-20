@@ -1,5 +1,5 @@
 use crate::ast::Expr;
-use crate::errors::{CompilerError, ErrorType};
+use crate::errors::{ErrorType, SourceError};
 use crate::lexer::{Token, TokenInfo};
 
 pub enum RetVal {
@@ -7,17 +7,17 @@ pub enum RetVal {
   Num(f64),
 }
 
-type IntepreterResult = Result<RetVal, CompilerError>;
+type IntepreterResult = Result<RetVal, SourceError>;
 
 fn nums_or_error(
   lhs: &RetVal,
   rhs: &RetVal,
   op_info: TokenInfo,
-) -> Result<(f64, f64), CompilerError> {
+) -> Result<(f64, f64), SourceError> {
   if let (RetVal::Num(l), RetVal::Num(r)) = (lhs, rhs) {
     Ok((*l, *r))
   } else {
-    Err(CompilerError::from_token_info(
+    Err(SourceError::from_token_info(
       op_info,
       "operator only works for numbers".to_string(),
       ErrorType::Runtime,
