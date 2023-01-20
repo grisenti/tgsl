@@ -148,14 +148,17 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  fn try_skip_comment(&mut self) -> Result<(), CompilerError> {
+  fn try_skip_comment(&mut self) -> Result<bool, CompilerError> {
     if let Some((_, next_ch)) = self.current.clone().next() {
       match next_ch {
-        '/' => self.skip_line_comment(),
+        '/' => {
+          self.skip_line_comment();
+          return Ok(true);
+        }
         _ => {}
       }
     }
-    Ok(())
+    Ok(false)
   }
 
   fn skip_unused(&mut self) -> Result<(), CompilerError> {
@@ -165,15 +168,18 @@ impl<'src> Lexer<'src> {
           self.line_no += 1;
           self.line_start_offset = self.total_offset + 1;
           self.line_start = self.current.clone();
+          self.advance();
         }
         '/' => {
-          self.try_skip_comment()?;
-          return Ok(());
+          if !self.try_skip_comment()? {
+            break;
+          }
         }
-        '\t' | ' ' => {}
+        '\t' | ' ' => {
+          self.advance();
+        }
         _ => break,
       }
-      self.advance();
     }
     Ok(())
   }
