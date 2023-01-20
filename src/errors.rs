@@ -1,10 +1,11 @@
-use crate::Lexer;
+use crate::{lexer::TokenInfo, Lexer};
 use std::fmt::Display;
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorType {
   Lexing,
   Parsing,
+  Runtime,
 }
 
 #[derive(Debug, PartialEq)]
@@ -24,6 +25,17 @@ impl CompilerError {
       token_start: lex.prev_token_start(),
       token_end: lex.prev_token_end(),
       line_str: lex.line().to_string(),
+      error_msg,
+      kind,
+    }
+  }
+
+  pub fn from_token_info(info: TokenInfo, error_msg: String, kind: ErrorType) -> Self {
+    Self {
+      line_no: info.line_no,
+      token_start: info.start,
+      token_end: info.end,
+      line_str: info.line.to_string(),
       error_msg,
       kind,
     }
