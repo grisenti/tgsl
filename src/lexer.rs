@@ -3,13 +3,13 @@ use std::{fmt::Display, str::CharIndices};
 use crate::errors::*;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum TokenType {
-  Id,
-  String,
-  Number,
-  Basic,
+pub enum Token<'src> {
+  String(&'src str),
+  Number(f64),
+  Id(&'src str),
+  Basic(char),
 
-  // operators
+  // wide operators
   Leq,
   Geq,
   Same,
@@ -30,19 +30,19 @@ pub enum TokenType {
   EndOfFile,
 }
 
-fn token_type(input: &str) -> TokenType {
+fn indentifier_token(input: &str) -> Token {
   match input {
-    "and" => TokenType::And,
-    "or" => TokenType::Or,
-    "if" => TokenType::If,
-    "else" => TokenType::Else,
-    "true" => TokenType::True,
-    "false" => TokenType::False,
-    "fun" => TokenType::Fun,
-    "null" => TokenType::Null,
-    "ret" => TokenType::Return,
-    "var" => TokenType::Var,
-    _ => TokenType::Id,
+    "and" => Token::And,
+    "or" => Token::Or,
+    "if" => Token::If,
+    "else" => Token::Else,
+    "true" => Token::True,
+    "false" => Token::False,
+    "fun" => Token::Fun,
+    "null" => Token::Null,
+    "ret" => Token::Return,
+    "var" => Token::Var,
+    _ => Token::Id(input),
   }
 }
 
@@ -54,45 +54,14 @@ fn is_first_id_charachter(c: char) -> bool {
   c.is_alphabetic() || c == '_'
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Token<'src> {
-  pub kind: TokenType,
-  pub lexeme: &'src str,
-}
-
-impl<'src> Token<'src> {
-  pub fn new(kind: TokenType, lexeme: &'src str) -> Self {
-    Self { kind, lexeme }
-  }
-
-  pub fn identifier(lexeme: &'src str) -> Self {
-    Self {
-      kind: token_type(lexeme),
-      lexeme,
-    }
-  }
-
-  pub fn basic(lexeme: &'src str) -> Self {
-    Self {
-      kind: TokenType::Basic,
-      lexeme,
-    }
-  }
-
-  pub fn eof() -> Self {
-    Self {
-      kind: TokenType::EndOfFile,
-      lexeme: "",
-    }
-  }
-}
-
 impl Display for Token<'_> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    if self.lexeme != "" {
-      write!(f, "{}", self.lexeme)
-    } else {
-      write!(f, "{:?}", self.kind)
+    match self {
+      Self::String(s) => write!(f, "\"{}\"", s),
+      Self::Number(num) => write!(f, "{}", num),
+      Self::Id(id) => write!(f, "{}", id),
+      Self::Basic(c) => write!(f, "'{}'", c),
+      _ => write!(f, "{:?}", self),
     }
   }
 }
@@ -122,21 +91,19 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  fn match_alternatives_or_basic(&mut self, alternatives: &[(char, TokenType)]) -> Token<'src> {
+  fn match_wide_or_single_operator(&mut self, alternatives: &[(char, Token<'src>)]) -> Token<'src> {
     if let Some((_, ch)) = self.current.clone().next() {
-      let start = self.total_offset;
       if let Some((_, kind)) = alternatives.into_iter().find(|(c, _)| *c == ch) {
         self.advance();
-        let ret = Token::new(kind.clone(), &self.source[start..self.total_offset + 1]);
         self.advance();
-        return ret;
+        return *kind;
       }
     }
-    self.match_single()
+    self.match_basic()
   }
 
-  fn match_single(&mut self) -> Token<'src> {
-    let ret = Token::basic(&self.source[self.total_offset..self.total_offset + 1]);
+  fn match_basic(&mut self) -> Token<'src> {
+    let ret = Token::Basic(self.lookahead);
     self.advance();
     ret
   }
@@ -190,11 +157,11 @@ impl<'src> Lexer<'src> {
     if let Some((tok_end, last_ch)) = self.current.find(|(_, c)| !is_id_charachter(*c)) {
       self.total_offset = tok_end;
       self.lookahead = last_ch;
-      Token::identifier(&self.source[tok_start..tok_end])
+      indentifier_token(&self.source[tok_start..tok_end])
     } else {
       self.total_offset = self.source.len();
       self.lookahead = '\0';
-      Token::identifier(&self.source[tok_start..])
+      indentifier_token(&self.source[tok_start..])
     }
   }
 
@@ -211,10 +178,7 @@ impl<'src> Lexer<'src> {
         break;
       }
     }
-    Token::new(
-      TokenType::Number,
-      &self.source[tok_start..self.total_offset],
-    )
+    Token::Number(self.source[tok_start..self.total_offset].parse().unwrap()) // number already checked
   }
 
   fn process_string(&mut self) -> Result<Token<'src>, CompilerError> {
@@ -238,9 +202,8 @@ impl<'src> Lexer<'src> {
     }
     if self.lookahead == '"' {
       self.advance();
-      Ok(Token::new(
-        TokenType::String,
-        &self.source[tok_start..self.total_offset],
+      Ok(Token::String(
+        &self.source[tok_start + 1..self.total_offset - 1],
       ))
     } else {
       Err(CompilerError::from_lexer_state(
@@ -282,17 +245,17 @@ impl<'src> Lexer<'src> {
     self.skip_unused()?;
     self.prev_token_start = self.total_offset - self.line_start_offset;
     if self.is_at_end() {
-      return Ok(Token::new(TokenType::EndOfFile, ""));
+      return Ok(Token::EndOfFile);
     }
     match self.lookahead {
-      '<' => Ok(self.match_alternatives_or_basic(&[('=', TokenType::Leq)])),
-      '>' => Ok(self.match_alternatives_or_basic(&[('=', TokenType::Geq)])),
-      '=' => Ok(self.match_alternatives_or_basic(&[('=', TokenType::Same)])),
-      '!' => Ok(self.match_alternatives_or_basic(&[('=', TokenType::Different)])),
+      '<' => Ok(self.match_wide_or_single_operator(&[('=', Token::Leq)])),
+      '>' => Ok(self.match_wide_or_single_operator(&[('=', Token::Geq)])),
+      '=' => Ok(self.match_wide_or_single_operator(&[('=', Token::Same)])),
+      '!' => Ok(self.match_wide_or_single_operator(&[('=', Token::Different)])),
       '"' => self.process_string(),
       c if is_first_id_charachter(c) => Ok(self.process_identifier()),
       c if c.is_ascii_digit() => Ok(self.process_number()),
-      _ => Ok(self.match_single()),
+      _ => Ok(self.match_basic()),
     }
   }
 
@@ -327,37 +290,37 @@ mod test {
   fn get_line() {
     let mut lex = Lexer::new("first\nsecond line");
     assert_eq!(lex.line(), "first");
-    assert_eq!(lex.next_token(), Ok(Token::identifier("first")));
-    assert_eq!(lex.next_token(), Ok(Token::identifier("second")));
+    assert_eq!(lex.next_token(), Ok(Token::Id("first")));
+    assert_eq!(lex.next_token(), Ok(Token::Id("second")));
     assert_eq!(lex.line(), "second line");
   }
 
   #[test]
   fn lex_identifiers() {
     let mut lex = Lexer::new("token t2__2\n\t  __tok4");
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Id, "token")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Id, "t2__2")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Id, "__tok4")));
+    assert_eq!(lex.next_token(), Ok(Token::Id("token")));
+    assert_eq!(lex.next_token(), Ok(Token::Id("t2__2")));
+    assert_eq!(lex.next_token(), Ok(Token::Id("__tok4")));
   }
 
   #[test]
   fn lex_operators() {
     let mut lex = Lexer::new("+-*<=>===!=");
-    assert_eq!(lex.next_token(), Ok(Token::basic("+")));
-    assert_eq!(lex.next_token(), Ok(Token::basic("-")));
-    assert_eq!(lex.next_token(), Ok(Token::basic("*")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Leq, "<=")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Geq, ">=")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Same, "==")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Different, "!=")));
+    assert_eq!(lex.next_token(), Ok(Token::Basic('+')));
+    assert_eq!(lex.next_token(), Ok(Token::Basic('-')));
+    assert_eq!(lex.next_token(), Ok(Token::Basic('*')));
+    assert_eq!(lex.next_token(), Ok(Token::Leq));
+    assert_eq!(lex.next_token(), Ok(Token::Geq));
+    assert_eq!(lex.next_token(), Ok(Token::Same));
+    assert_eq!(lex.next_token(), Ok(Token::Different));
   }
 
   #[test]
   fn lex_keywords() {
     let mut lex = Lexer::new("var if else");
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Var, "var")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::If, "if")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Else, "else")));
+    assert_eq!(lex.next_token(), Ok(Token::Var));
+    assert_eq!(lex.next_token(), Ok(Token::If));
+    assert_eq!(lex.next_token(), Ok(Token::Else));
   }
 
   #[test]
@@ -367,32 +330,23 @@ mod test {
       "simple" "with \"quotes\""
       "#,
     );
-    assert_eq!(
-      lex.next_token(),
-      Ok(Token::new(TokenType::String, "\"simple\""))
-    );
-    assert_eq!(
-      lex.next_token(),
-      Ok(Token::new(TokenType::String, r#""with \"quotes\"""#))
-    );
+    assert_eq!(lex.next_token(), Ok(Token::String("simple")));
+    assert_eq!(lex.next_token(), Ok(Token::String("with \\\"quotes\\\"")));
   }
 
   #[test]
   fn lex_numbers() {
     let mut lex = Lexer::new("1 123 123.33 0.9");
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Number, "1")));
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Number, "123")));
-    assert_eq!(
-      lex.next_token(),
-      Ok(Token::new(TokenType::Number, "123.33"))
-    );
-    assert_eq!(lex.next_token(), Ok(Token::new(TokenType::Number, "0.9")));
+    assert_eq!(lex.next_token(), Ok(Token::Number(1.0)));
+    assert_eq!(lex.next_token(), Ok(Token::Number(123.0)));
+    assert_eq!(lex.next_token(), Ok(Token::Number(123.33)));
+    assert_eq!(lex.next_token(), Ok(Token::Number(0.9)));
   }
 
   #[test]
   fn skip_comments() {
     let mut lex = Lexer::new("//comment\nid");
-    assert_eq!(lex.next_token(), Ok(Token::identifier("id")));
+    assert_eq!(lex.next_token(), Ok(Token::Id("id")));
   }
 
   #[test]

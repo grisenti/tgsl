@@ -37,7 +37,7 @@ impl NodeVisitor for ASTPrinter {
         self.print_with_spaces("(");
         self.change_spaces(1);
         self.visit_expr(left);
-        self.print_with_spaces(operator.lexeme);
+        self.print_with_spaces(&format!("{}", operator));
         self.visit_expr(right);
         self.change_spaces(-1);
         self.print_with_spaces(")");
@@ -45,13 +45,13 @@ impl NodeVisitor for ASTPrinter {
       Expr::UnaryExpr { operator, right } => {
         self.print_with_spaces("(");
         self.change_spaces(1);
-        self.print_with_spaces(operator.lexeme);
+        self.print_with_spaces(&format!("{}", operator));
         self.visit_expr(right);
         self.change_spaces(-1);
         self.print_with_spaces(")");
       }
       Expr::Literal { literal } => {
-        self.print_with_spaces(literal.lexeme);
+        self.print_with_spaces(&format!("{}", literal));
       }
       _ => {}
     }

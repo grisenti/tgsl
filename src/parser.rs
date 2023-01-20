@@ -9,7 +9,7 @@ pub struct Parser<'src> {
 }
 
 type CompErrVec = Vec<CompilerError>;
-type PRes<NodeType> = Result<Box<NodeType>, CompErrVec>;
+type PRes<Node> = Result<Box<Node>, CompErrVec>;
 
 impl<'src> Parser<'src> {
   fn advance(&mut self) -> Result<Token<'src>, CompErrVec> {
@@ -53,22 +53,18 @@ impl<'src> Parser<'src> {
   }
 
   fn parse_primary(&mut self) -> PRes<Expr<'src>> {
-    match self.lookahead.kind {
-      TokenType::Number
-      | TokenType::String
-      | TokenType::True
-      | TokenType::False
-      | TokenType::Null => {
+    match self.lookahead {
+      Token::Number(_) | Token::String(_) | Token::True | Token::False | Token::Null => {
         let ret = Ok(Box::new(Expr::Literal {
           literal: self.lookahead.clone(),
         }));
         self.advance()?;
         ret
       }
-      TokenType::Basic if self.lookahead.lexeme == "(" => {
+      Token::Basic(c) if c == '(' => {
         self.advance()?;
         let ret = Ok(self.parse_expression()?);
-        self.match_or_err(Token::basic(")"))?;
+        self.match_or_err(Token::Basic(')'))?;
         ret
       }
       _ => Err(vec![CompilerError::from_lexer_state(
@@ -80,7 +76,7 @@ impl<'src> Parser<'src> {
   }
 
   fn parse_unary(&mut self) -> PRes<Expr<'src>> {
-    if let Some(op) = self.matches_alternatives(&[Token::basic("-"), Token::basic("!")])? {
+    if let Some(op) = self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')])? {
       Ok(Box::new(Expr::UnaryExpr {
         operator: op,
         right: self.parse_primary()?,
@@ -92,7 +88,7 @@ impl<'src> Parser<'src> {
 
   fn parse_factor(&mut self) -> PRes<Expr<'src>> {
     let mut expr = self.parse_unary()?;
-    while let Some(op) = self.matches_alternatives(&[Token::basic("*"), Token::basic("/")])? {
+    while let Some(op) = self.matches_alternatives(&[Token::Basic('*'), Token::Basic('/')])? {
       let right = self.parse_unary()?;
       expr = Box::new(Expr::BinaryExpr {
         left: expr,
@@ -105,7 +101,7 @@ impl<'src> Parser<'src> {
 
   fn parse_term(&mut self) -> PRes<Expr<'src>> {
     let mut expr = self.parse_factor()?;
-    while let Some(op) = self.matches_alternatives(&[Token::basic("+"), Token::basic("-")])? {
+    while let Some(op) = self.matches_alternatives(&[Token::Basic('+'), Token::Basic('-')])? {
       let right = self.parse_factor()?;
       expr = Box::new(Expr::BinaryExpr {
         left: expr,
@@ -118,12 +114,9 @@ impl<'src> Parser<'src> {
 
   fn parse_comparison(&mut self) -> PRes<Expr<'src>> {
     let mut expr = self.parse_term()?;
-    while let Some(op) = self.matches_alternatives(&[
-      Token::new(TokenType::Leq, "<="),
-      Token::new(TokenType::Geq, ">="),
-      Token::basic("<"),
-      Token::basic(">"),
-    ])? {
+    while let Some(op) =
+      self.matches_alternatives(&[Token::Leq, Token::Geq, Token::Basic('<'), Token::Basic('>')])?
+    {
       let right = self.parse_term()?;
       expr = Box::new(Expr::BinaryExpr {
         left: expr,
@@ -136,10 +129,7 @@ impl<'src> Parser<'src> {
 
   fn parse_equality(&mut self) -> PRes<Expr<'src>> {
     let mut expr = self.parse_comparison()?;
-    while let Some(op) = self.matches_alternatives(&[
-      Token::new(TokenType::Same, "=="),
-      Token::new(TokenType::Different, "!="),
-    ])? {
+    while let Some(op) = self.matches_alternatives(&[Token::Same, Token::Different])? {
       let right = self.parse_comparison()?;
       expr = Box::new(Expr::BinaryExpr {
         left: expr,
@@ -157,7 +147,7 @@ impl<'src> Parser<'src> {
   pub fn new(lex: Lexer<'src>) -> Self {
     Self {
       lex,
-      lookahead: Token::eof(),
+      lookahead: Token::EndOfFile,
       errors: Vec::new(),
     }
   }
