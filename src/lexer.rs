@@ -30,6 +30,26 @@ pub enum Token<'src> {
   EndOfFile,
 }
 
+#[derive(Clone, Copy)]
+pub struct TokenInfo<'src> {
+  pub line_no: u32,
+  pub line: &'src str,
+  pub start: usize,
+  pub end: usize,
+}
+
+#[derive(Clone, Copy)]
+pub struct TokenPair<'src> {
+  pub token: Token<'src>,
+  pub info: TokenInfo<'src>,
+}
+
+impl<'src> TokenPair<'src> {
+  pub fn new(token: Token<'src>, info: TokenInfo<'src>) -> Self {
+    Self { token, info }
+  }
+}
+
 fn indentifier_token(input: &str) -> Token {
   match input {
     "and" => Token::And,
@@ -279,6 +299,15 @@ impl<'src> Lexer<'src> {
 
   pub fn prev_token_end(&self) -> usize {
     self.total_offset - self.line_start_offset
+  }
+
+  pub fn prev_token_info(&self) -> TokenInfo<'src> {
+    TokenInfo {
+      line_no: self.line_no,
+      line: self.line(),
+      start: self.prev_token_start,
+      end: self.prev_token_end(),
+    }
   }
 }
 
