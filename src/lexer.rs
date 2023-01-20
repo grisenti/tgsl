@@ -396,6 +396,7 @@ mod test {
   }
 
   #[test]
+  #[allow(unused)]
   fn token_start() {
     let mut lex = Lexer::new("hello how\nare you");
     lex.next_token();
