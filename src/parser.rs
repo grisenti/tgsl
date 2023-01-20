@@ -9,6 +9,7 @@ pub struct Parser<'src> {
 }
 
 type CompErrVec = Vec<CompilerError>;
+type TokenPairOpt<'src> = Option<TokenPair<'src>>;
 type PRes<Node> = Result<Box<Node>, CompErrVec>;
 
 impl<'src> Parser<'src> {
@@ -25,9 +26,9 @@ impl<'src> Parser<'src> {
   fn matches_alternatives(
     &mut self,
     alternatives: &[Token<'static>],
-  ) -> Result<Option<Token<'src>>, CompErrVec> {
+  ) -> Result<TokenPairOpt<'src>, CompErrVec> {
     if alternatives.contains(&self.lookahead) {
-      let res = self.lookahead.clone();
+      let res = TokenPair::new(self.lookahead, self.lex.prev_token_info());
       self.advance()?;
       Ok(Some(res))
     } else {
@@ -56,7 +57,7 @@ impl<'src> Parser<'src> {
     match self.lookahead {
       Token::Number(_) | Token::String(_) | Token::True | Token::False | Token::Null => {
         let ret = Ok(Box::new(Expr::Literal {
-          literal: self.lookahead.clone(),
+          literal: TokenPair::new(self.lookahead, self.lex.prev_token_info()),
         }));
         self.advance()?;
         ret

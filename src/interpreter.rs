@@ -48,7 +48,7 @@ fn unary_minus(rhs: &RetVal) -> IntepreterResult {
 
 pub fn interpret(exp: Expr) -> IntepreterResult {
   match exp {
-    Expr::Literal { literal } => match literal {
+    Expr::Literal { literal } => match literal.token {
       Token::Number(num) => Ok(RetVal::Num(num)),
       _ => Err(()),
     },
@@ -59,7 +59,7 @@ pub fn interpret(exp: Expr) -> IntepreterResult {
     } => {
       let lhs = interpret(*left)?;
       let rhs = interpret(*right)?;
-      match operator {
+      match operator.token {
         Token::Basic('+') => plus(&lhs, &rhs),
         Token::Basic('-') => minus(&lhs, &rhs),
         Token::Basic('*') => times(&lhs, &rhs),
@@ -69,7 +69,7 @@ pub fn interpret(exp: Expr) -> IntepreterResult {
     }
     Expr::UnaryExpr { operator, right } => {
       let rhs = interpret(*right)?;
-      match operator {
+      match operator.token {
         Token::Basic('-') => unary_minus(&rhs),
         _ => panic!(),
       }
