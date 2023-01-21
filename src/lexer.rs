@@ -285,7 +285,7 @@ impl<'src> Lexer<'src> {
   pub fn line(&self) -> &'src str {
     let mut start = self.line_start.clone();
     if let Some((end, _)) = start.find(|(_, c)| *c == '\n') {
-      &self.line_start.as_str()[..end]
+      &self.line_start.as_str()[..(end - self.line_start_offset)]
     } else {
       self.line_start.as_str()
     }
@@ -319,11 +319,13 @@ mod test {
 
   #[test]
   fn get_line() {
-    let mut lex = Lexer::new("first\nsecond line");
+    let mut lex = Lexer::new("first\nsecond\nthird");
     assert_eq!(lex.line(), "first");
     assert_eq!(lex.next_token(), Ok(Token::Id("first")));
     assert_eq!(lex.next_token(), Ok(Token::Id("second")));
-    assert_eq!(lex.line(), "second line");
+    assert_eq!(lex.line(), "second");
+    assert_eq!(lex.next_token(), Ok(Token::Id("third")));
+    assert_eq!(lex.line(), "third");
   }
 
   #[test]
