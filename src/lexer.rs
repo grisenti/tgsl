@@ -26,6 +26,7 @@ pub enum Token<'src> {
   Null,
   Return,
   Var,
+  Print,
 
   EndOfFile,
 }
@@ -62,6 +63,7 @@ fn indentifier_token(input: &str) -> Token {
     "null" => Token::Null,
     "ret" => Token::Return,
     "var" => Token::Var,
+    "print" => Token::Print,
     _ => Token::Id(input),
   }
 }
