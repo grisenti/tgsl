@@ -1,11 +1,14 @@
 mod ast_printer;
 mod expression;
+mod statement;
 
 pub use ast_printer::*;
 pub use expression::*;
+pub use statement::*;
 
 pub enum ASTNode<'src> {
   Expr(Expr<'src>),
+  Stmt(Stmt<'src>),
 }
 
 pub trait NodeVisitor {
