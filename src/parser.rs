@@ -10,10 +10,10 @@ pub struct Parser<'src> {
 
 type CompErrVec = Vec<SourceError>;
 type TokenPairOpt<'src> = Option<TokenPair<'src>>;
-type PRes<Node> = Result<Box<Node>, CompErrVec>;
+type PRes<Node> = Result<Box<Node>, SourceError>;
 
 impl<'src> Parser<'src> {
-  fn advance(&mut self) -> Result<Token<'src>, CompErrVec> {
+  fn advance(&mut self) -> Result<Token<'src>, SourceError> {
     match self.lex.next_token() {
       Ok(next) => {
         self.lookahead = next.clone();
@@ -26,7 +26,7 @@ impl<'src> Parser<'src> {
   fn matches_alternatives(
     &mut self,
     alternatives: &[Token<'static>],
-  ) -> Result<TokenPairOpt<'src>, CompErrVec> {
+  ) -> Result<TokenPairOpt<'src>, SourceError> {
     if alternatives.contains(&self.lookahead) {
       let res = TokenPair::new(self.lookahead, self.lex.prev_token_info());
       self.advance()?;
@@ -36,16 +36,16 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn match_or_err(&mut self, token: Token) -> Result<(), CompErrVec> {
+  fn match_or_err(&mut self, token: Token) -> Result<(), SourceError> {
     if self.lookahead == token {
       self.advance()?;
       Ok(())
     } else {
-      Err(vec![SourceError::from_lexer_state(
+      Err(SourceError::from_lexer_state(
         &self.lex,
         format!("expected ')' got, {}", self.lookahead),
         SourceErrorType::Parsing,
-      )])
+      ))
     }
   }
 
@@ -68,11 +68,11 @@ impl<'src> Parser<'src> {
         self.match_or_err(Token::Basic(')'))?;
         ret
       }
-      _ => Err(vec![SourceError::from_lexer_state(
+      _ => Err(SourceError::from_lexer_state(
         &self.lex,
         format!("expected literal, got {}", self.lookahead),
         SourceErrorType::Parsing,
-      )]),
+      )),
     }
   }
 
