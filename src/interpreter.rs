@@ -141,46 +141,59 @@ impl<'src> Interpreter<'src> {
     }
   }
 
+  fn handle_literal_expression(&self, literal: TokenPair<'src>) -> ExprResult {
+    match literal.token {
+      Token::Number(num) => Ok(ExprValue::Num(num)),
+      Token::String(s) => Ok(ExprValue::Str(s.to_string())),
+      Token::True => Ok(ExprValue::Boolean(true)),
+      Token::False => Ok(ExprValue::Boolean(false)),
+      Token::Null => Ok(ExprValue::Null),
+      Token::Id(id) => self.get_identifier(id, literal.info),
+      _ => panic!(),
+    }
+  }
+
+  fn handle_binary_expression(
+    &self,
+    left: Expr<'src>,
+    op: TokenPair<'src>,
+    right: Expr<'src>,
+  ) -> ExprResult {
+    let lhs = self.interpret_expression(left)?;
+    let rhs = self.interpret_expression(right)?;
+    match op.token {
+      Token::Basic('+') => add(lhs, rhs, op.info),
+      Token::Basic('-') => binary_num(lhs, rhs, op.info, |x, y| x - y),
+      Token::Basic('*') => binary_num(lhs, rhs, op.info, |x, y| x * y),
+      Token::Basic('/') => binary_num(lhs, rhs, op.info, |x, y| x / y),
+      Token::Basic('<') => compare(lhs, rhs, op.info, |x, y| x < y, |x, y| x < y),
+      Token::Basic('>') => compare(lhs, rhs, op.info, |x, y| x > y, |x, y| x > y),
+      Token::Leq => compare(lhs, rhs, op.info, |x, y| x <= y, |x, y| x <= y),
+      Token::Geq => compare(lhs, rhs, op.info, |x, y| x >= y, |x, y| x >= y),
+      Token::Same => equal(lhs, rhs, op.info),
+      Token::Different => unary_not(equal(lhs, rhs, op.info)?, op.info),
+      _ => panic!(),
+    }
+  }
+
+  fn handle_unary_expression(&self, op: TokenPair<'src>, right: Expr<'src>) -> ExprResult {
+    let rhs = self.interpret_expression(right)?;
+    match op.token {
+      Token::Basic('-') => unary_minus(rhs, op.info),
+      Token::Basic('!') => unary_not(rhs, op.info),
+      _ => panic!(),
+    }
+  }
+
   fn interpret_expression(&self, exp: Expr<'src>) -> ExprResult {
     match exp {
-      Expr::Literal { literal } => match literal.token {
-        Token::Number(num) => Ok(ExprValue::Num(num)),
-        Token::String(s) => Ok(ExprValue::Str(s.to_string())),
-        Token::True => Ok(ExprValue::Boolean(true)),
-        Token::False => Ok(ExprValue::Boolean(false)),
-        Token::Null => Ok(ExprValue::Null),
-        Token::Id(id) => self.get_identifier(id, literal.info),
-        _ => panic!(),
-      },
+      Expr::Literal { literal } => self.handle_literal_expression(literal),
       Expr::BinaryExpr {
         left,
         operator,
         right,
-      } => {
-        let lhs = self.interpret_expression(*left)?;
-        let rhs = self.interpret_expression(*right)?;
-        match operator.token {
-          Token::Basic('+') => add(lhs, rhs, operator.info),
-          Token::Basic('-') => binary_num(lhs, rhs, operator.info, |x, y| x - y),
-          Token::Basic('*') => binary_num(lhs, rhs, operator.info, |x, y| x * y),
-          Token::Basic('/') => binary_num(lhs, rhs, operator.info, |x, y| x / y),
-          Token::Basic('<') => compare(lhs, rhs, operator.info, |x, y| x < y, |x, y| x < y),
-          Token::Basic('>') => compare(lhs, rhs, operator.info, |x, y| x > y, |x, y| x > y),
-          Token::Leq => compare(lhs, rhs, operator.info, |x, y| x <= y, |x, y| x <= y),
-          Token::Geq => compare(lhs, rhs, operator.info, |x, y| x >= y, |x, y| x >= y),
-          Token::Same => equal(lhs, rhs, operator.info),
-          Token::Different => unary_not(equal(lhs, rhs, operator.info)?, operator.info),
-          _ => panic!(),
-        }
-      }
-      Expr::UnaryExpr { operator, right } => {
-        let rhs = self.interpret_expression(*right)?;
-        match operator.token {
-          Token::Basic('-') => unary_minus(rhs, operator.info),
-          Token::Basic('!') => unary_not(rhs, operator.info),
-          _ => panic!(),
-        }
-      }
+      } => self.handle_binary_expression(*left, operator, *right),
+      Expr::UnaryExpr { operator, right } => self.handle_unary_expression(operator, *right),
     }
   }
 
@@ -190,18 +203,20 @@ impl<'src> Interpreter<'src> {
     }
   }
 
-  pub fn interpret(&mut self, ast: Stmt<'src>) -> Result<(), SourceError> {
-    match ast {
-      Stmt::VarDecl {
-        identifier,
-        id_info,
-        expression,
-      } => self.install_identifier(identifier, id_info, expression),
-      Stmt::Print { expression } => {
-        println!("{:?}", self.interpret_expression(expression)?);
-        Ok(())
+  pub fn interpret(&mut self, ast: Vec<Box<Stmt<'src>>>) -> Result<(), SourceError> {
+    for stmt in ast {
+      match *stmt {
+        Stmt::VarDecl {
+          identifier,
+          id_info,
+          expression,
+        } => self.install_identifier(identifier, id_info, expression)?,
+        Stmt::Print { expression } => {
+          println!("{:?}", self.interpret_expression(expression)?);
+        }
+        _ => {}
       }
-      _ => Ok(()),
     }
+    Ok(())
   }
 }
