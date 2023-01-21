@@ -1,5 +1,6 @@
 mod environment;
 
+use environment::*;
 use std::collections::HashMap;
 
 use crate::ast::*;
@@ -14,7 +15,7 @@ pub enum ExprValue {
   Null,
 }
 
-type ExprResult = Result<ExprValue, SourceError>;
+pub type ExprResult = Result<ExprValue, SourceError>;
 
 fn unary_minus(rhs: ExprValue, op_info: TokenInfo) -> ExprResult {
   if let ExprValue::Num(x) = rhs {
@@ -105,7 +106,7 @@ where
 }
 
 pub struct Interpreter<'src> {
-  identifiers: HashMap<&'src str, ExprValue>,
+  env: Environment<'src>,
 }
 
 pub type IntepreterResult = Result<(), SourceError>;
@@ -117,33 +118,10 @@ impl<'src> Interpreter<'src> {
     id_info: TokenInfo,
     exp_opt: Option<Expr<'src>>,
   ) -> IntepreterResult {
-    if !self.identifiers.contains_key(id) {
-      match exp_opt {
-        Some(exp) => {
-          let value = self.interpret_expression(exp)?;
-          self.identifiers.insert(id, value)
-        }
-        None => self.identifiers.insert(id, ExprValue::Null),
-      };
-      Ok(())
-    } else {
-      Err(SourceError::from_token_info(
-        id_info,
-        format!("identifier {} already declared", id),
-        SourceErrorType::Runtime,
-      ))
-    }
-  }
-
-  fn get_identifier(&self, id: &str, id_info: TokenInfo) -> ExprResult {
-    match self.identifiers.get(id) {
-      Some(value) => Ok(value.clone()),
-      None => Err(SourceError::from_token_info(
-        id_info,
-        format!("unknown identifier {}", id),
-        SourceErrorType::Runtime,
-      )),
-    }
+    let value = exp_opt
+      .map(|exp| self.interpret_expression(exp))
+      .unwrap_or(Ok(ExprValue::Null))?;
+    self.env.declare_identifier(id, id_info, value)
   }
 
   fn handle_literal_expression(&self, literal: TokenPair<'src>) -> ExprResult {
@@ -189,24 +167,6 @@ impl<'src> Interpreter<'src> {
     }
   }
 
-  fn handle_assignment(
-    &mut self,
-    name: &str,
-    info: TokenInfo<'src>,
-    value: ExprValue,
-  ) -> ExprResult {
-    if let Some(name_value) = self.identifiers.get_mut(name) {
-      *name_value = value.clone();
-      Ok(value)
-    } else {
-      Err(SourceError::from_token_info(
-        info,
-        format!("variable {} was not declared before", name),
-        SourceErrorType::Runtime,
-      ))
-    }
-  }
-
   fn interpret_expression(&mut self, exp: Expr<'src>) -> ExprResult {
     match exp {
       Expr::Literal(literal) => self.handle_literal_expression(literal),
@@ -216,21 +176,21 @@ impl<'src> Interpreter<'src> {
         right,
       } => self.handle_binary_expression(*left, operator, *right),
       Expr::UnaryExpr { operator, right } => self.handle_unary_expression(operator, *right),
-      Expr::Variable { id, id_info } => self.get_identifier(id, id_info),
+      Expr::Variable { id, id_info } => self.env.get_id_value(id, id_info),
       Expr::Assignment {
         name,
         name_info,
         value,
       } => {
         let rhs = self.interpret_expression(*value)?;
-        self.handle_assignment(name, name_info, rhs)
+        self.env.assign(name, name_info, rhs)
       }
     }
   }
 
   pub fn new() -> Self {
     Self {
-      identifiers: HashMap::new(),
+      env: Environment::new(),
     }
   }
 
