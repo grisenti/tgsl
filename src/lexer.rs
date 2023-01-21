@@ -164,7 +164,7 @@ impl<'src> Lexer<'src> {
             break;
           }
         }
-        '\t' | ' ' => {
+        '\t' | ' ' | '\r' => {
           self.advance();
         }
         _ => break,
@@ -330,7 +330,7 @@ mod test {
 
   #[test]
   fn lex_identifiers() {
-    let mut lex = Lexer::new("token t2__2\n\t  __tok4");
+    let mut lex = Lexer::new("token\r\nt2__2\n\t  __tok4");
     assert_eq!(lex.next_token(), Ok(Token::Id("token")));
     assert_eq!(lex.next_token(), Ok(Token::Id("t2__2")));
     assert_eq!(lex.next_token(), Ok(Token::Id("__tok4")));
