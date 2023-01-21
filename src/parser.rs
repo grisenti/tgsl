@@ -18,13 +18,9 @@ impl<'src> Parser<'src> {
   }
 
   fn advance(&mut self) -> Result<Token<'src>, SourceError> {
-    match self.lex.next_token() {
-      Ok(next) => {
-        self.lookahead = next.clone();
-        Ok(next)
-      }
-      Err(_) => panic!(),
-    }
+    let next = self.lex.next_token()?;
+    self.lookahead = next.clone();
+    Ok(next)
   }
 
   fn unexpected_token(&self, expected: Option<Token>) -> SourceError {
@@ -179,7 +175,7 @@ impl<'src> Parser<'src> {
   fn parse_statement(&mut self) -> StmtRes<'src> {
     match self.lookahead {
       Token::Print => self.parse_print_stmt(),
-      _ => Err(self.unexpected_token(None)),
+      _ => Ok(Stmt::ExprStmt(*self.parse_expression()?)),
     }
   }
 
