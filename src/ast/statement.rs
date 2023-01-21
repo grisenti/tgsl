@@ -1,4 +1,4 @@
-use crate::lexer::{Token, TokenInfo, TokenPair};
+use crate::lexer::TokenInfo;
 
 use super::Expr;
 

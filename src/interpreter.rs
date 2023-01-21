@@ -1,5 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
-use std::fmt::Error;
+use std::collections::HashMap;
 
 use crate::ast::*;
 use crate::errors::{SourceError, SourceErrorType};

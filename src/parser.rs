@@ -1,5 +1,3 @@
-use std::error;
-
 use super::ast::*;
 use super::errors::*;
 use super::lexer::*;
