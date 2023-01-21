@@ -183,12 +183,13 @@ impl<'src> Parser<'src> {
     assert_eq!(self.lookahead, Token::Var);
     self.advance()?;
     if let Token::Id(id) = self.lookahead {
-      self.advance()?; // read id
+      let id_info = self.lex.prev_token_info();
+      self.advance()?; // consume id
       let ret = if self.lookahead == Token::Basic('=') {
-        self.advance()?; // read '='
+        self.advance()?; // consume '='
         Stmt::VarDecl {
           identifier: id,
-          id_info: self.lex.prev_token_info(),
+          id_info: id_info,
           expression: Some(*self.parse_expression()?),
         }
       } else {
