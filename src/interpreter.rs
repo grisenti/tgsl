@@ -204,9 +204,9 @@ impl<'src> Interpreter<'src> {
     }
   }
 
-  pub fn interpret(&mut self, ast: Vec<Box<Stmt<'src>>>) -> Result<(), SourceError> {
+  pub fn interpret(&mut self, ast: Vec<Stmt<'src>>) -> Result<(), SourceError> {
     for stmt in ast {
-      match *stmt {
+      match stmt {
         Stmt::VarDecl {
           identifier,
           id_info,

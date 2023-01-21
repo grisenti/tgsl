@@ -11,7 +11,8 @@ pub struct Parser<'src> {
 
 type SrcErrVec = Vec<SourceError>;
 type TokenPairOpt<'src> = Option<TokenPair<'src>>;
-type PRes<Node> = Result<Box<Node>, SourceError>;
+type ExprRes<'src> = Result<Box<Expr<'src>>, SourceError>;
+type StmtRes<'src> = Result<Stmt<'src>, SourceError>;
 
 impl<'src> Parser<'src> {
   fn is_at_end(&self) -> bool {
@@ -72,7 +73,7 @@ impl<'src> Parser<'src> {
     Ok(errors)
   }
 
-  fn parse_primary(&mut self) -> PRes<Expr<'src>> {
+  fn parse_primary(&mut self) -> ExprRes<'src> {
     match self.lookahead {
       Token::Number(_)
       | Token::String(_)
@@ -100,7 +101,7 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_unary(&mut self) -> PRes<Expr<'src>> {
+  fn parse_unary(&mut self) -> ExprRes<'src> {
     if let Some(op) = self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')])? {
       Ok(Box::new(Expr::UnaryExpr {
         operator: op,
@@ -111,7 +112,7 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_factor(&mut self) -> PRes<Expr<'src>> {
+  fn parse_factor(&mut self) -> ExprRes<'src> {
     let mut expr = self.parse_unary()?;
     while let Some(op) = self.matches_alternatives(&[Token::Basic('*'), Token::Basic('/')])? {
       let right = self.parse_unary()?;
@@ -124,7 +125,7 @@ impl<'src> Parser<'src> {
     Ok(expr)
   }
 
-  fn parse_term(&mut self) -> PRes<Expr<'src>> {
+  fn parse_term(&mut self) -> ExprRes<'src> {
     let mut expr = self.parse_factor()?;
     while let Some(op) = self.matches_alternatives(&[Token::Basic('+'), Token::Basic('-')])? {
       let right = self.parse_factor()?;
@@ -137,7 +138,7 @@ impl<'src> Parser<'src> {
     Ok(expr)
   }
 
-  fn parse_comparison(&mut self) -> PRes<Expr<'src>> {
+  fn parse_comparison(&mut self) -> ExprRes<'src> {
     let mut expr = self.parse_term()?;
     while let Some(op) =
       self.matches_alternatives(&[Token::Leq, Token::Geq, Token::Basic('<'), Token::Basic('>')])?
@@ -152,7 +153,7 @@ impl<'src> Parser<'src> {
     Ok(expr)
   }
 
-  fn parse_equality(&mut self) -> PRes<Expr<'src>> {
+  fn parse_equality(&mut self) -> ExprRes<'src> {
     let mut expr = self.parse_comparison()?;
     while let Some(op) = self.matches_alternatives(&[Token::Same, Token::Different])? {
       let right = self.parse_comparison()?;
@@ -165,26 +166,26 @@ impl<'src> Parser<'src> {
     Ok(expr)
   }
 
-  fn parse_expression(&mut self) -> PRes<Expr<'src>> {
+  fn parse_expression(&mut self) -> ExprRes<'src> {
     self.parse_equality()
   }
 
-  fn parse_print_stmt(&mut self) -> PRes<Stmt<'src>> {
+  fn parse_print_stmt(&mut self) -> StmtRes<'src> {
     assert_eq!(self.lookahead, Token::Print);
     self.advance()?;
-    Ok(Box::new(Stmt::Print {
+    Ok(Stmt::Print {
       expression: *self.parse_expression()?,
-    }))
+    })
   }
 
-  fn parse_statement(&mut self) -> PRes<Stmt<'src>> {
+  fn parse_statement(&mut self) -> StmtRes<'src> {
     match self.lookahead {
       Token::Print => self.parse_print_stmt(),
       _ => Err(self.unexpected_token(None)),
     }
   }
 
-  fn parse_var_decl(&mut self) -> PRes<Stmt<'src>> {
+  fn parse_var_decl(&mut self) -> StmtRes<'src> {
     assert_eq!(self.lookahead, Token::Var);
     self.advance()?;
     if let Token::Id(id) = self.lookahead {
@@ -203,7 +204,7 @@ impl<'src> Parser<'src> {
           expression: None,
         }
       };
-      Ok(Box::new(ret))
+      Ok(ret)
     } else {
       Err(SourceError::from_lexer_state(
         &self.lex,
@@ -213,7 +214,7 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_decl(&mut self) -> PRes<Stmt<'src>> {
+  fn parse_decl(&mut self) -> StmtRes<'src> {
     let ret = match self.lookahead {
       Token::Var => self.parse_var_decl()?,
       _ => self.parse_statement()?,
@@ -229,7 +230,7 @@ impl<'src> Parser<'src> {
     }
   }
 
-  pub fn parse(&'src mut self) -> Result<Vec<Box<Stmt<'src>>>, SrcErrVec> {
+  pub fn parse(&'src mut self) -> Result<Vec<Stmt<'src>>, SrcErrVec> {
     let mut program = Vec::new();
     let mut errors = Vec::new();
     if let Err(e) = self.advance() {
