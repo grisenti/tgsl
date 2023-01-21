@@ -113,11 +113,14 @@ impl<'src> Interpreter<'src> {
     &mut self,
     id: &'src str,
     id_info: TokenInfo,
-    exp_opt: Option<Expr>,
+    exp_opt: Option<Expr<'src>>,
   ) -> IntepreterResult {
     if !self.identifiers.contains_key(id) {
       match exp_opt {
-        Some(exp) => self.identifiers.insert(id, self.interpret_expression(exp)?),
+        Some(exp) => {
+          let value = self.interpret_expression(exp)?;
+          self.identifiers.insert(id, value)
+        }
         None => self.identifiers.insert(id, ExprValue::Null),
       };
       Ok(())
@@ -148,13 +151,12 @@ impl<'src> Interpreter<'src> {
       Token::True => Ok(ExprValue::Boolean(true)),
       Token::False => Ok(ExprValue::Boolean(false)),
       Token::Null => Ok(ExprValue::Null),
-      Token::Id(id) => self.get_identifier(id, literal.info),
       _ => panic!(),
     }
   }
 
   fn handle_binary_expression(
-    &self,
+    &mut self,
     left: Expr<'src>,
     op: TokenPair<'src>,
     right: Expr<'src>,
@@ -176,7 +178,7 @@ impl<'src> Interpreter<'src> {
     }
   }
 
-  fn handle_unary_expression(&self, op: TokenPair<'src>, right: Expr<'src>) -> ExprResult {
+  fn handle_unary_expression(&mut self, op: TokenPair<'src>, right: Expr<'src>) -> ExprResult {
     let rhs = self.interpret_expression(right)?;
     match op.token {
       Token::Basic('-') => unary_minus(rhs, op.info),
@@ -185,15 +187,42 @@ impl<'src> Interpreter<'src> {
     }
   }
 
-  fn interpret_expression(&self, exp: Expr<'src>) -> ExprResult {
+  fn handle_assignment(
+    &mut self,
+    name: &str,
+    info: TokenInfo<'src>,
+    value: ExprValue,
+  ) -> ExprResult {
+    if let Some(name_value) = self.identifiers.get_mut(name) {
+      *name_value = value.clone();
+      Ok(value)
+    } else {
+      Err(SourceError::from_token_info(
+        info,
+        format!("variable {} was not declared before", name),
+        SourceErrorType::Runtime,
+      ))
+    }
+  }
+
+  fn interpret_expression(&mut self, exp: Expr<'src>) -> ExprResult {
     match exp {
-      Expr::Literal { literal } => self.handle_literal_expression(literal),
+      Expr::Literal(literal) => self.handle_literal_expression(literal),
       Expr::BinaryExpr {
         left,
         operator,
         right,
       } => self.handle_binary_expression(*left, operator, *right),
       Expr::UnaryExpr { operator, right } => self.handle_unary_expression(operator, *right),
+      Expr::Variable { id, id_info } => self.get_identifier(id, id_info),
+      Expr::Assignment {
+        name,
+        name_info,
+        value,
+      } => {
+        let rhs = self.interpret_expression(*value)?;
+        self.handle_assignment(name, name_info, rhs)
+      }
     }
   }
 
@@ -214,7 +243,9 @@ impl<'src> Interpreter<'src> {
         Stmt::Print { expression } => {
           println!("{:?}", self.interpret_expression(expression)?);
         }
-        _ => {}
+        Stmt::ExprStmt(expr) => {
+          self.interpret_expression(expr)?;
+        }
       }
     }
     Ok(())

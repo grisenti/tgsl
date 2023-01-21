@@ -50,7 +50,7 @@ impl NodeVisitor for ASTPrinter {
         self.change_spaces(-1);
         self.print_with_spaces(")");
       }
-      Expr::Literal { literal } => {
+      Expr::Literal(literal) => {
         self.print_with_spaces(&format!("{}", literal.token));
       }
       _ => {}

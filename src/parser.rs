@@ -69,14 +69,18 @@ impl<'src> Parser<'src> {
 
   fn parse_primary(&mut self) -> ExprRes<'src> {
     match self.lookahead {
-      Token::Number(_)
-      | Token::String(_)
-      | Token::True
-      | Token::False
-      | Token::Null
-      | Token::Id(_) => {
-        let ret = Ok(Box::new(Expr::Literal {
-          literal: TokenPair::new(self.lookahead, self.lex.prev_token_info()),
+      Token::Number(_) | Token::String(_) | Token::True | Token::False | Token::Null => {
+        let ret = Ok(Box::new(Expr::Literal(TokenPair::new(
+          self.lookahead,
+          self.lex.prev_token_info(),
+        ))));
+        self.advance()?;
+        ret
+      }
+      Token::Id(id) => {
+        let ret = Ok(Box::new(Expr::Variable {
+          id,
+          id_info: self.lex.prev_token_info(),
         }));
         self.advance()?;
         ret
@@ -160,8 +164,29 @@ impl<'src> Parser<'src> {
     Ok(expr)
   }
 
+  fn parse_assignment(&mut self) -> ExprRes<'src> {
+    let lhs = self.parse_equality()?;
+    if let Some(eq) = self.matches_alternatives(&[Token::Basic('=')])? {
+      let rhs = self.parse_assignment()?;
+      if let Expr::Variable { id, id_info } = *lhs {
+        return Ok(Box::new(Expr::Assignment {
+          name: id,
+          name_info: id_info,
+          value: rhs,
+        }));
+      } else {
+        return Err(SourceError::from_token_info(
+          eq.info,
+          "left hand side of assignment is not a valid target".to_string(),
+          SourceErrorType::Parsing,
+        ));
+      }
+    }
+    Ok(lhs)
+  }
+
   fn parse_expression(&mut self) -> ExprRes<'src> {
-    self.parse_equality()
+    self.parse_assignment()
   }
 
   fn parse_print_stmt(&mut self) -> StmtRes<'src> {
