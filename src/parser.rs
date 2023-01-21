@@ -23,6 +23,15 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn unexpected_token(&self, expected: Option<Token>) -> SourceError {
+    let msg = if let Some(tok) = expected {
+      format!("expected {}, got {}", tok, self.lookahead)
+    } else {
+      format!("unexpected token {}", self.lookahead)
+    };
+    SourceError::from_lexer_state(&self.lex, msg, SourceErrorType::Parsing)
+  }
+
   fn matches_alternatives(
     &mut self,
     alternatives: &[Token<'static>],
@@ -41,11 +50,7 @@ impl<'src> Parser<'src> {
       self.advance()?;
       Ok(())
     } else {
-      Err(SourceError::from_lexer_state(
-        &self.lex,
-        format!("expected ')' got, {}", self.lookahead),
-        SourceErrorType::Parsing,
-      ))
+      Err(self.unexpected_token(Some(token)))
     }
   }
 
@@ -145,6 +150,58 @@ impl<'src> Parser<'src> {
     self.parse_equality()
   }
 
+  fn parse_print_stmt(&mut self) -> PRes<Stmt<'src>> {
+    assert_eq!(self.lookahead, Token::Print);
+    self.advance()?;
+    Ok(Box::new(Stmt::Print {
+      expression: *self.parse_expression()?,
+    }))
+  }
+
+  fn parse_statement(&mut self) -> PRes<Stmt<'src>> {
+    match self.lookahead {
+      Token::Print => self.parse_print_stmt(),
+      _ => Err(self.unexpected_token(None)),
+    }
+  }
+
+  fn parse_var_decl(&mut self) -> PRes<Stmt<'src>> {
+    assert_eq!(self.lookahead, Token::Var);
+    self.advance()?;
+    if let Token::Id(id) = self.lookahead {
+      let ret = if self.lookahead == Token::Basic('=') {
+        Stmt::VarDecl {
+          identifier: id,
+          id_info: self.lex.prev_token_info(),
+          expression: Some(*self.parse_expression()?),
+        }
+      } else {
+        Stmt::VarDecl {
+          identifier: id,
+          id_info: self.lex.prev_token_info(),
+          expression: None,
+        }
+      };
+      self.advance()?;
+      Ok(Box::new(ret))
+    } else {
+      Err(SourceError::from_lexer_state(
+        &self.lex,
+        format!("expected identifier, got {}", self.lookahead),
+        SourceErrorType::Parsing,
+      ))
+    }
+  }
+
+  fn parse_decl(&mut self) -> PRes<Stmt<'src>> {
+    let ret = match self.lookahead {
+      Token::Var => self.parse_var_decl()?,
+      _ => self.parse_statement()?,
+    };
+    self.match_or_err(Token::Basic(';'))?;
+    Ok(ret)
+  }
+
   pub fn new(lex: Lexer<'src>) -> Self {
     Self {
       lex,
@@ -153,9 +210,9 @@ impl<'src> Parser<'src> {
     }
   }
 
-  pub fn parse(&'src mut self) -> PRes<Expr<'src>> {
+  pub fn parse(&'src mut self) -> PRes<Stmt<'src>> {
     self.errors.clear();
     self.advance()?;
-    self.parse_expression()
+    self.parse_decl()
   }
 }
