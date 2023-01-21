@@ -114,12 +114,13 @@ impl<'src> Interpreter<'src> {
     &mut self,
     id: &'src str,
     id_info: TokenInfo,
-    exp: Option<Expr>,
+    exp_opt: Option<Expr>,
   ) -> IntepreterResult {
     if !self.identifiers.contains_key(id) {
-      self
-        .identifiers
-        .insert(id, self.interpret_expression(exp.unwrap())?);
+      match exp_opt {
+        Some(exp) => self.identifiers.insert(id, self.interpret_expression(exp)?),
+        None => self.identifiers.insert(id, ExprValue::Null),
+      };
       Ok(())
     } else {
       Err(SourceError::from_token_info(
