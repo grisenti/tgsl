@@ -1,3 +1,5 @@
+use std::error;
+
 use super::ast::*;
 use super::errors::*;
 use super::lexer::*;
@@ -5,14 +7,17 @@ use super::lexer::*;
 pub struct Parser<'src> {
   lex: Lexer<'src>,
   lookahead: Token<'src>,
-  errors: Vec<SourceError>,
 }
 
-type CompErrVec = Vec<SourceError>;
+type SrcErrVec = Vec<SourceError>;
 type TokenPairOpt<'src> = Option<TokenPair<'src>>;
 type PRes<Node> = Result<Box<Node>, SourceError>;
 
 impl<'src> Parser<'src> {
+  fn is_at_end(&self) -> bool {
+    self.lookahead == Token::EndOfFile
+  }
+
   fn advance(&mut self) -> Result<Token<'src>, SourceError> {
     match self.lex.next_token() {
       Ok(next) => {
@@ -54,13 +59,27 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn syncronize(&mut self) {
-    todo!();
+  fn syncronize_or_errors(&mut self, mut errors: SrcErrVec) -> Result<SrcErrVec, SrcErrVec> {
+    loop {
+      if let Err(e) = self.advance() {
+        errors.push(e);
+        return Err(errors);
+      }
+      if self.lookahead != Token::Basic(';') {
+        break;
+      }
+    }
+    Ok(errors)
   }
 
   fn parse_primary(&mut self) -> PRes<Expr<'src>> {
     match self.lookahead {
-      Token::Number(_) | Token::String(_) | Token::True | Token::False | Token::Null => {
+      Token::Number(_)
+      | Token::String(_)
+      | Token::True
+      | Token::False
+      | Token::Null
+      | Token::Id(_) => {
         let ret = Ok(Box::new(Expr::Literal {
           literal: TokenPair::new(self.lookahead, self.lex.prev_token_info()),
         }));
@@ -169,7 +188,9 @@ impl<'src> Parser<'src> {
     assert_eq!(self.lookahead, Token::Var);
     self.advance()?;
     if let Token::Id(id) = self.lookahead {
+      self.advance()?; // read id
       let ret = if self.lookahead == Token::Basic('=') {
+        self.advance()?; // read '='
         Stmt::VarDecl {
           identifier: id,
           id_info: self.lex.prev_token_info(),
@@ -182,7 +203,6 @@ impl<'src> Parser<'src> {
           expression: None,
         }
       };
-      self.advance()?;
       Ok(Box::new(ret))
     } else {
       Err(SourceError::from_lexer_state(
@@ -206,13 +226,28 @@ impl<'src> Parser<'src> {
     Self {
       lex,
       lookahead: Token::EndOfFile,
-      errors: Vec::new(),
     }
   }
 
-  pub fn parse(&'src mut self) -> PRes<Stmt<'src>> {
-    self.errors.clear();
-    self.advance()?;
-    self.parse_decl()
+  pub fn parse(&'src mut self) -> Result<Vec<Box<Stmt<'src>>>, SrcErrVec> {
+    let mut program = Vec::new();
+    let mut errors = Vec::new();
+    if let Err(e) = self.advance() {
+      errors.push(e)
+    }
+    while !self.is_at_end() {
+      match self.parse_decl() {
+        Ok(stmt) => program.push(stmt),
+        Err(err) => {
+          errors.push(err);
+          errors = self.syncronize_or_errors(errors)?;
+        }
+      }
+    }
+    if errors.is_empty() {
+      Ok(program)
+    } else {
+      Err(errors)
+    }
   }
 }
