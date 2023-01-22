@@ -1,5 +1,5 @@
 use super::*;
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, ops::Not};
 
 pub struct Environment<'src> {
   scopes: Vec<HashMap<&'src str, ExprValue>>,
@@ -17,16 +17,20 @@ impl<'src> Environment<'src> {
     id_info: TokenInfo,
     value: ExprValue,
   ) -> Result<(), SourceError> {
-    if !self.innermost().contains_key(id) {
-      self.innermost().insert(id, value);
-      Ok(())
-    } else {
-      Err(SourceError::from_token_info(
-        id_info,
-        format!("identifier {} already declared in the current scope", id),
-        SourceErrorType::Runtime,
-      ))
-    }
+    self
+      .innermost()
+      .contains_key(id)
+      .not()
+      .then(|| {
+        self.innermost().insert(id, value);
+      })
+      .ok_or_else(|| {
+        SourceError::from_token_info(
+          id_info,
+          format!("identifier '{}' already declared in the current scope", id),
+          SourceErrorType::Runtime,
+        )
+      })
   }
 
   pub fn get_id_value(&self, id: &str, id_info: TokenInfo) -> ExprResult {
