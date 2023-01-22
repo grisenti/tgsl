@@ -23,7 +23,7 @@ impl<'src> Environment<'src> {
     } else {
       Err(SourceError::from_token_info(
         id_info,
-        format!("identifier {} already declared", id),
+        format!("identifier {} already declared in the current scope", id),
         SourceErrorType::Runtime,
       ))
     }
