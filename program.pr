@@ -1,0 +1,13 @@
+var π = 3.14159;
+var hello = "hello";
+var world = "world";
+var x = 2;
+{
+var x = 1;
+print x + 1;
+var x = 2;
+print hello + " " + world;
+print π + 10 * 34;
+hello = "not hello";
+print hello;
+}

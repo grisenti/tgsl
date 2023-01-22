@@ -4,12 +4,25 @@ mod interpreter;
 mod lexer;
 mod parser;
 
+use std::fs;
+
+use interpreter::*;
 use lexer::*;
+use parser::*;
 
 fn main() {
-  let mut lex = Lexer::new("hello how are you");
-  println!("{:?}", lex.next_token());
-  println!("{:?}", lex.next_token());
-  println!("{:?}", lex.next_token());
-  println!("{:?}", lex.next_token());
+  let program = fs::read_to_string("program.pr").unwrap();
+  let mut parser = Parser::new(Lexer::new(&program));
+  let mut interpreter = Interpreter::new();
+  match parser.parse() {
+    Ok(ast) => match interpreter.interpret(ast) {
+      Err(err) => print!("{}", err),
+      _ => {}
+    },
+    Err(errs) => {
+      for err in errs {
+        print!("{}", err);
+      }
+    }
+  }
 }
