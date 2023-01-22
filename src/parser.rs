@@ -192,9 +192,11 @@ impl<'src> Parser<'src> {
   fn parse_print_stmt(&mut self) -> StmtRes<'src> {
     assert_eq!(self.lookahead, Token::Print);
     self.advance()?;
-    Ok(Stmt::Print {
+    let ret = Ok(Stmt::Print {
       expression: *self.parse_expression()?,
-    })
+    });
+    self.match_or_err(Token::Basic(';'))?;
+    ret
   }
 
   fn parse_block(&mut self) -> StmtRes<'src> {
@@ -204,15 +206,21 @@ impl<'src> Parser<'src> {
     while self.lookahead != Token::Basic('}') && !self.is_at_end() {
       statements.push(self.parse_decl()?);
     }
-    self.match_or_err(Token::Basic('}'));
+    self.match_or_err(Token::Basic('}'))?;
     Ok(Stmt::Block(statements))
+  }
+
+  fn parse_expr_stmt(&mut self) -> StmtRes<'src> {
+    let ret = Stmt::ExprStmt(*self.parse_expression()?);
+    self.match_or_err(Token::Basic(';'))?;
+    Ok(ret)
   }
 
   fn parse_statement(&mut self) -> StmtRes<'src> {
     match self.lookahead {
       Token::Print => self.parse_print_stmt(),
       Token::Basic('{') => self.parse_block(),
-      _ => Ok(Stmt::ExprStmt(*self.parse_expression()?)),
+      _ => self.parse_expr_stmt(),
     }
   }
 
@@ -236,6 +244,7 @@ impl<'src> Parser<'src> {
           expression: None,
         }
       };
+      self.match_or_err(Token::Basic(';'))?;
       Ok(ret)
     } else {
       Err(SourceError::from_lexer_state(
@@ -251,7 +260,6 @@ impl<'src> Parser<'src> {
       Token::Var => self.parse_var_decl()?,
       _ => self.parse_statement()?,
     };
-    self.match_or_err(Token::Basic(';'))?;
     Ok(ret)
   }
 
