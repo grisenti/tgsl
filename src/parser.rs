@@ -197,9 +197,21 @@ impl<'src> Parser<'src> {
     })
   }
 
+  fn parse_block(&mut self) -> StmtRes<'src> {
+    assert_eq!(self.lookahead, Token::Basic('{'));
+    self.advance()?;
+    let mut statements = Vec::new();
+    while self.lookahead != Token::Basic('}') && !self.is_at_end() {
+      statements.push(self.parse_decl()?);
+    }
+    self.match_or_err(Token::Basic('}'));
+    Ok(Stmt::Block(statements))
+  }
+
   fn parse_statement(&mut self) -> StmtRes<'src> {
     match self.lookahead {
       Token::Print => self.parse_print_stmt(),
+      Token::Basic('{') => self.parse_block(),
       _ => Ok(Stmt::ExprStmt(*self.parse_expression()?)),
     }
   }

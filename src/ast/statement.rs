@@ -12,4 +12,5 @@ pub enum Stmt<'src> {
   Print {
     expression: Expr<'src>,
   },
+  Block(Vec<Stmt<'src>>),
 }

@@ -207,6 +207,11 @@ impl<'src> Interpreter<'src> {
         Stmt::ExprStmt(expr) => {
           self.interpret_expression(expr)?;
         }
+        Stmt::Block(stmts) => {
+          self.env.push();
+          self.interpret(stmts)?;
+          self.env.pop();
+        }
       }
     }
     Ok(())
