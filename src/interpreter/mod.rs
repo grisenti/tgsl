@@ -1,7 +1,6 @@
 mod environment;
 
 use environment::*;
-use std::collections::HashMap;
 
 use crate::ast::*;
 use crate::errors::{SourceError, SourceErrorType};
@@ -190,7 +189,7 @@ impl<'src> Interpreter<'src> {
 
   pub fn new() -> Self {
     Self {
-      env: Environment::new(),
+      env: Environment::global(),
     }
   }
 

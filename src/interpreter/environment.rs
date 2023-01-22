@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 pub struct Environment<'src> {
   identifiers: HashMap<&'src str, ExprValue>,
+  enclosing: Option<Box<Environment<'src>>>,
 }
 
 impl<'src> Environment<'src> {
@@ -25,13 +26,18 @@ impl<'src> Environment<'src> {
   }
 
   pub fn get_id_value(&self, id: &str, id_info: TokenInfo) -> ExprResult {
-    match self.identifiers.get(id) {
-      Some(value) => Ok(value.clone()),
-      None => Err(SourceError::from_token_info(
-        id_info,
-        format!("unknown identifier {}", id),
-        SourceErrorType::Runtime,
-      )),
+    if let Some(value) = self.identifiers.get(id) {
+      Ok(value.clone())
+    } else {
+      self
+        .enclosing
+        .as_ref()
+        .map(|parent| parent.get_id_value(id, id_info))
+        .unwrap_or(Err(SourceError::from_token_info(
+          id_info,
+          format!("unknown identifier {}", id),
+          SourceErrorType::Runtime,
+        )))
     }
   }
 
@@ -48,9 +54,21 @@ impl<'src> Environment<'src> {
     }
   }
 
-  pub fn new() -> Self {
+  pub fn global() -> Self {
     Self {
       identifiers: HashMap::new(),
+      enclosing: None,
     }
+  }
+
+  pub fn sub(parent: Environment<'src>) -> Self {
+    Self {
+      identifiers: HashMap::new(),
+      enclosing: Some(Box::new(parent)),
+    }
+  }
+
+  pub fn pop(self) -> Self {
+    *self.enclosing.unwrap()
   }
 }
