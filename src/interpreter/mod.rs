@@ -187,30 +187,73 @@ impl<'src> Interpreter<'src> {
     }
   }
 
+  fn interpret_if_branch(
+    &mut self,
+    condition: Expr<'src>,
+    true_branch: Stmt<'src>,
+    false_branch: Option<Stmt<'src>>,
+  ) -> Result<(), SourceError> {
+    if let ExprValue::Boolean(value) = self.interpret_expression(condition)? {
+      if value {
+        self.interpret_statement(true_branch)
+      } else if let Some(branch) = false_branch {
+        self.interpret_statement(branch)
+      } else {
+        Ok(())
+      }
+    } else {
+      panic!()
+    }
+  }
+
+  fn interpret_statement(&mut self, stmt: Stmt<'src>) -> Result<(), SourceError> {
+    match stmt {
+      Stmt::VarDecl {
+        identifier,
+        id_info,
+        expression,
+      } => self.install_identifier(identifier, id_info, expression)?,
+      Stmt::Print { expression } => {
+        println!("{:?}", self.interpret_expression(expression)?);
+      }
+      Stmt::ExprStmt(expr) => {
+        self.interpret_expression(expr)?;
+      }
+      Stmt::Block(stmts) => {
+        self.env.push();
+        for stmt in stmts {
+          self.interpret_statement(stmt)?;
+        }
+        self.env.pop();
+      }
+      Stmt::IfBranch {
+        condition,
+        true_branch,
+        else_branch,
+      } => {
+        self.interpret_if_branch(
+          condition,
+          *true_branch,
+          else_branch.and_then(|branch| Some(*branch)),
+        )?;
+      }
+    };
+    Ok(())
+  }
+
   pub fn new() -> Self {
     Self {
       env: Environment::global(),
     }
   }
 
-  pub fn interpret(&mut self, ast: Vec<Stmt<'src>>) -> Result<(), SourceError> {
-    for stmt in ast {
-      match stmt {
-        Stmt::VarDecl {
-          identifier,
-          id_info,
-          expression,
-        } => self.install_identifier(identifier, id_info, expression)?,
-        Stmt::Print { expression } => {
-          println!("{:?}", self.interpret_expression(expression)?);
-        }
-        Stmt::ExprStmt(expr) => {
-          self.interpret_expression(expr)?;
-        }
-        Stmt::Block(stmts) => {
-          self.env.push();
-          self.interpret(stmts)?;
-          self.env.pop();
+  pub fn interpret(&mut self, program: ASTNode<'src>) -> Result<(), SourceError> {
+    match program {
+      ASTNode::Expr(exp) => print!("{:?}", self.interpret_expression(exp)?),
+      ASTNode::Stmt(stmt) => self.interpret_statement(stmt)?,
+      ASTNode::Program(stmts) => {
+        for s in stmts {
+          self.interpret_statement(s)?;
         }
       }
     }

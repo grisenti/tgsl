@@ -216,10 +216,30 @@ impl<'src> Parser<'src> {
     Ok(ret)
   }
 
+  fn parse_if_stmt(&mut self) -> StmtRes<'src> {
+    assert_eq!(self.lookahead, Token::If);
+    self.advance()?;
+    self.match_or_err(Token::Basic('('))?;
+    let condition = *self.parse_expression()?;
+    self.match_or_err(Token::Basic(')'))?;
+    let true_branch = Box::new(self.parse_statement()?);
+    let else_branch = if let Some(_) = self.matches_alternatives(&[Token::Else])? {
+      Some(Box::new(self.parse_statement()?))
+    } else {
+      None
+    };
+    Ok(Stmt::IfBranch {
+      condition,
+      true_branch,
+      else_branch,
+    })
+  }
+
   fn parse_statement(&mut self) -> StmtRes<'src> {
     match self.lookahead {
       Token::Print => self.parse_print_stmt(),
       Token::Basic('{') => self.parse_block(),
+      Token::If => self.parse_if_stmt(),
       _ => self.parse_expr_stmt(),
     }
   }
@@ -270,7 +290,7 @@ impl<'src> Parser<'src> {
     }
   }
 
-  pub fn parse(&'src mut self) -> Result<Vec<Stmt<'src>>, SrcErrVec> {
+  pub fn parse(&'src mut self) -> Result<ASTNode<'src>, SrcErrVec> {
     let mut program = Vec::new();
     let mut errors = Vec::new();
     if let Err(e) = self.advance() {
@@ -286,7 +306,7 @@ impl<'src> Parser<'src> {
       }
     }
     if errors.is_empty() {
-      Ok(program)
+      Ok(ASTNode::Program(program))
     } else {
       Err(errors)
     }

@@ -13,4 +13,9 @@ pub enum Stmt<'src> {
     expression: Expr<'src>,
   },
   Block(Vec<Stmt<'src>>),
+  IfBranch {
+    condition: Expr<'src>,
+    true_branch: Box<Stmt<'src>>,
+    else_branch: Option<Box<Stmt<'src>>>,
+  },
 }
