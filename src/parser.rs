@@ -223,7 +223,7 @@ impl<'src> Parser<'src> {
     let condition = *self.parse_expression()?;
     self.match_or_err(Token::Basic(')'))?;
     let true_branch = Box::new(self.parse_statement()?);
-    let else_branch = if let Some(_) = self.matches_alternatives(&[Token::Else])? {
+    let else_branch = if (self.matches_alternatives(&[Token::Else])?).is_some() {
       Some(Box::new(self.parse_statement()?))
     } else {
       None

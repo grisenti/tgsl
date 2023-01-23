@@ -39,7 +39,7 @@ impl<'src> Environment<'src> {
       .iter()
       .rev()
       .find_map(|scope| scope.get(id))
-      .and_then(|value| Some(value.clone()))
+      .cloned()
       .ok_or_else(|| {
         SourceError::from_token_info(
           id_info,
@@ -55,9 +55,9 @@ impl<'src> Environment<'src> {
       .iter_mut()
       .rev()
       .find_map(|scope| scope.get_mut(name))
-      .and_then(|var_value| {
+      .map(|var_value| {
         *var_value = value.clone();
-        Some(value)
+        value
       })
       .ok_or_else(|| {
         SourceError::from_token_info(
