@@ -14,6 +14,7 @@ pub enum Stmt<'src> {
   },
   Block(Vec<Stmt<'src>>),
   IfBranch {
+    if_info: TokenInfo<'src>,
     condition: Expr<'src>,
     true_branch: Box<Stmt<'src>>,
     else_branch: Option<Box<Stmt<'src>>>,

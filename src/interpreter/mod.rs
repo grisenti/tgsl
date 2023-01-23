@@ -189,6 +189,7 @@ impl<'src> Interpreter<'src> {
 
   fn interpret_if_branch(
     &mut self,
+    if_info: TokenInfo,
     condition: Expr<'src>,
     true_branch: Stmt<'src>,
     false_branch: Option<Stmt<'src>>,
@@ -202,7 +203,11 @@ impl<'src> Interpreter<'src> {
         Ok(())
       }
     } else {
-      panic!()
+      Err(SourceError::from_token_info(
+        if_info,
+        "if condition has to evaluate to boolean".to_string(),
+        SourceErrorType::Runtime,
+      ))
     }
   }
 
@@ -227,11 +232,13 @@ impl<'src> Interpreter<'src> {
         self.env.pop();
       }
       Stmt::IfBranch {
+        if_info,
         condition,
         true_branch,
         else_branch,
       } => {
         self.interpret_if_branch(
+          if_info,
           condition,
           *true_branch,
           else_branch.and_then(|branch| Some(*branch)),

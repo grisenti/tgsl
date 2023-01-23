@@ -218,6 +218,7 @@ impl<'src> Parser<'src> {
 
   fn parse_if_stmt(&mut self) -> StmtRes<'src> {
     assert_eq!(self.lookahead, Token::If);
+    let if_info = self.lex.prev_token_info();
     self.advance()?;
     self.match_or_err(Token::Basic('('))?;
     let condition = *self.parse_expression()?;
@@ -229,6 +230,7 @@ impl<'src> Parser<'src> {
       None
     };
     Ok(Stmt::IfBranch {
+      if_info,
       condition,
       true_branch,
       else_branch,
