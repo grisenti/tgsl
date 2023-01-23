@@ -171,11 +171,26 @@ mod test {
 
   #[test]
   fn operator_precedece() {
-    let mut parser = create_parser("1 * 1 + 2");
-    let tree = *parser.parse_expression().unwrap();
-    assert!(
-      matches!(tree, Expr::BinaryExpr{left: _, operator, right: _} if operator.token == Token::Basic('+'))
-    );
+    let mut parser = create_parser("1 * 1 + 1 < 1 == 1");
+    let operators = [
+      Token::Same,
+      Token::Basic('<'),
+      Token::Basic('+'),
+      Token::Basic('*'),
+    ];
+    let mut binexp = *parser.parse_expression().unwrap();
+    for op in operators {
+      match binexp {
+        Expr::BinaryExpr {
+          left,
+          operator,
+          right,
+        } if operator.token == op => {
+          binexp = *left;
+        }
+        _ => panic!("wrong precedence"),
+      }
+    }
   }
 
   #[test]
