@@ -8,7 +8,7 @@ pub enum Stmt<'src> {
     id_info: TokenInfo<'src>,
     expression: Option<Expr<'src>>,
   },
-  ExprStmt(Expr<'src>),
+  Expr(Expr<'src>),
   Print {
     expression: Expr<'src>,
   },

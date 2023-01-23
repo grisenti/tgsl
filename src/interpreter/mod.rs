@@ -216,7 +216,7 @@ impl<'src> Interpreter<'src> {
       Stmt::Print { expression } => {
         println!("{:?}", self.interpret_expression(expression)?);
       }
-      Stmt::ExprStmt(expr) => {
+      Stmt::Expr(expr) => {
         self.interpret_expression(expr)?;
       }
       Stmt::Block(stmts) => {

@@ -211,7 +211,7 @@ impl<'src> Parser<'src> {
   }
 
   fn parse_expr_stmt(&mut self) -> StmtRes<'src> {
-    let ret = Stmt::ExprStmt(*self.parse_expression()?);
+    let ret = Stmt::Expr(*self.parse_expression()?);
     self.match_or_err(Token::Basic(';'))?;
     Ok(ret)
   }
