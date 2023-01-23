@@ -31,7 +31,7 @@ pub enum Token<'src> {
   EndOfFile,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct TokenInfo<'src> {
   pub line_no: u32,
   pub line: &'src str,
@@ -39,7 +39,7 @@ pub struct TokenInfo<'src> {
   pub end: usize,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct TokenPair<'src> {
   pub token: Token<'src>,
   pub info: TokenInfo<'src>,
