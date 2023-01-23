@@ -44,7 +44,13 @@ impl SourceError {
 
 impl Display for SourceError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let spaces = self.line_str[0..self.token_start]
+    let spaces = self
+      .line_no
+      .to_string()
+      .chars()
+      .map(|_| ' ')
+      .collect::<String>();
+    let underline_spaces = self.line_str[0..self.token_start]
       .char_indices()
       .map(|_| ' ')
       .collect::<String>();
@@ -54,8 +60,15 @@ impl Display for SourceError {
       .collect::<String>();
     write!(
       f,
-      "{:?} error: {}\n  | \n{} | {}\n  | {}{}\n",
-      self.kind, self.error_msg, self.line_no, self.line_str, spaces, underlines
+      "{:?} error: {}\n{} |\n{} | {}\n{} | {}{}\n",
+      self.kind,
+      self.error_msg,
+      spaces,
+      self.line_no,
+      self.line_str,
+      spaces,
+      underline_spaces,
+      underlines
     )
   }
 }
