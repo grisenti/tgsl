@@ -1,7 +1,13 @@
 use crate::lexer::{TokenInfo, TokenPair};
 
+#[derive(Debug)]
 pub enum Expr<'src> {
   BinaryExpr {
+    left: DynExpr<'src>,
+    operator: TokenPair<'src>,
+    right: DynExpr<'src>,
+  },
+  Logical {
     left: DynExpr<'src>,
     operator: TokenPair<'src>,
     right: DynExpr<'src>,

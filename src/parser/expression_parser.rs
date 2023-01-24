@@ -98,8 +98,34 @@ impl<'src> Parser<'src> {
     Ok(expr)
   }
 
+  fn parse_logical_and(&mut self) -> ExprRes<'src> {
+    let mut lhs = self.parse_equality()?;
+    while let Some(and) = self.matches_alternatives(&[Token::And])? {
+      let rhs = self.parse_equality()?;
+      lhs = Box::new(Expr::Logical {
+        left: lhs,
+        operator: and,
+        right: rhs,
+      });
+    }
+    Ok(lhs)
+  }
+
+  fn parse_logical_or(&mut self) -> ExprRes<'src> {
+    let mut lhs = self.parse_logical_and()?;
+    while let Some(or) = self.matches_alternatives(&[Token::Or])? {
+      let rhs = self.parse_logical_and()?;
+      lhs = Box::new(Expr::Logical {
+        left: lhs,
+        operator: or,
+        right: rhs,
+      });
+    }
+    Ok(lhs)
+  }
+
   fn parse_assignment(&mut self) -> ExprRes<'src> {
-    let lhs = self.parse_equality()?;
+    let lhs = self.parse_logical_or()?;
     if let Some(eq) = self.matches_alternatives(&[Token::Basic('=')])? {
       let rhs = self.parse_assignment()?;
       if let Expr::Variable { id, id_info } = *lhs {
@@ -171,8 +197,10 @@ mod test {
 
   #[test]
   fn operator_precedece() {
-    let mut parser = create_parser("1 * 1 + 1 < 1 == 1");
+    let mut parser = create_parser("1 * 1 + 1 < 1 == 1 and 1 or 1");
     let operators = [
+      Token::Or,
+      Token::And,
       Token::Same,
       Token::Basic('<'),
       Token::Basic('+'),
@@ -184,7 +212,14 @@ mod test {
         Expr::BinaryExpr {
           left,
           operator,
-          right,
+          right: _,
+        } if operator.token == op => {
+          binexp = *left;
+        }
+        Expr::Logical {
+          left,
+          operator,
+          right: _,
         } if operator.token == op => {
           binexp = *left;
         }

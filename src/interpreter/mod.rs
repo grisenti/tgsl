@@ -104,6 +104,21 @@ where
   }
 }
 
+fn check_bool(val: ExprValue, info: TokenInfo) -> Result<bool, SourceError> {
+  if let ExprValue::Boolean(value) = val {
+    Ok(value)
+  } else {
+    Err(SourceError::from_token_info(
+      info,
+      format!(
+        "binary operation cannot be applied to type {:?}, only to booleans",
+        val
+      ),
+      SourceErrorType::Runtime,
+    ))
+  }
+}
+
 pub struct Interpreter<'src> {
   env: Environment<'src>,
 }
@@ -157,6 +172,24 @@ impl<'src> Interpreter<'src> {
     }
   }
 
+  fn handle_logical_expression(
+    &mut self,
+    left: Expr<'src>,
+    op: TokenPair<'src>,
+    right: Expr<'src>,
+  ) -> ExprResult {
+    let lhs = check_bool(self.interpret_expression(left)?, op.info)?;
+    match op.token {
+      Token::And => Ok(ExprValue::Boolean(
+        lhs && check_bool(self.interpret_expression(right)?, op.info)?,
+      )),
+      Token::Or => Ok(ExprValue::Boolean(
+        lhs || check_bool(self.interpret_expression(right)?, op.info)?,
+      )),
+      _ => panic!(),
+    }
+  }
+
   fn handle_unary_expression(&mut self, op: TokenPair<'src>, right: Expr<'src>) -> ExprResult {
     let rhs = self.interpret_expression(right)?;
     match op.token {
@@ -174,6 +207,11 @@ impl<'src> Interpreter<'src> {
         operator,
         right,
       } => self.handle_binary_expression(*left, operator, *right),
+      Expr::Logical {
+        left,
+        operator,
+        right,
+      } => self.handle_logical_expression(*left, operator, *right),
       Expr::UnaryExpr { operator, right } => self.handle_unary_expression(operator, *right),
       Expr::Variable { id, id_info } => self.env.get_id_value(id, id_info),
       Expr::Assignment {
