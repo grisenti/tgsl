@@ -35,7 +35,11 @@ impl SourceError {
       line_no: info.line_no,
       token_start: info.start,
       token_end: info.end,
-      line_str: info.line.to_string(),
+      line_str: info
+        .line
+        .char_indices()
+        .map(|(_, c)| if c == '\t' { ' ' } else { c })
+        .collect(),
       error_msg,
       kind,
     }
