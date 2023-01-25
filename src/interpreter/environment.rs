@@ -14,7 +14,7 @@ impl<'src> Environment<'src> {
   pub fn declare_identifier(
     &mut self,
     id: &'src str,
-    id_info: TokenInfo,
+    id_info: &TokenInfo,
     value: ExprValue,
   ) -> Result<(), SourceError> {
     self
@@ -33,7 +33,7 @@ impl<'src> Environment<'src> {
       })
   }
 
-  pub fn get_id_value(&self, id: &str, id_info: TokenInfo) -> ExprResult {
+  pub fn get_id_value(&self, id: &str, id_info: &TokenInfo) -> ExprResult {
     self
       .scopes
       .iter()
@@ -42,14 +42,14 @@ impl<'src> Environment<'src> {
       .cloned()
       .ok_or_else(|| {
         SourceError::from_token_info(
-          id_info,
+          &id_info,
           format!("unknown identifier {}", id),
           SourceErrorType::Runtime,
         )
       })
   }
 
-  pub fn assign(&mut self, name: &str, info: TokenInfo<'src>, value: ExprValue) -> ExprResult {
+  pub fn assign(&mut self, name: &str, info: &TokenInfo<'src>, value: ExprValue) -> ExprResult {
     self
       .scopes
       .iter_mut()

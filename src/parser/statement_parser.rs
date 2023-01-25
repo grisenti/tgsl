@@ -49,11 +49,27 @@ impl<'src> Parser<'src> {
     })
   }
 
+  fn parse_while_stmt(&mut self) -> StmtRes<'src> {
+    assert_eq!(self.lookahead, Token::While);
+    let info = self.lex.prev_token_info();
+    self.advance()?; // consume while
+    self.match_or_err(Token::Basic('('))?;
+    let condition = *self.parse_expression()?;
+    self.match_or_err(Token::Basic(')'))?;
+    let loop_body = Box::new(self.parse_statement()?);
+    Ok(Stmt::While {
+      info,
+      condition,
+      loop_body,
+    })
+  }
+
   fn parse_statement(&mut self) -> StmtRes<'src> {
     match self.lookahead {
       Token::Print => self.parse_print_stmt(),
       Token::Basic('{') => self.parse_block(),
       Token::If => self.parse_if_stmt(),
+      Token::While => self.parse_while_stmt(),
       _ => self.parse_expr_stmt(),
     }
   }

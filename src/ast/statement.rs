@@ -19,4 +19,9 @@ pub enum Stmt<'src> {
     true_branch: Box<Stmt<'src>>,
     else_branch: Option<Box<Stmt<'src>>>,
   },
+  While {
+    info: TokenInfo<'src>,
+    condition: Expr<'src>,
+    loop_body: Box<Stmt<'src>>,
+  },
 }

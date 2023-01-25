@@ -136,7 +136,7 @@ impl<'src> Parser<'src> {
         }));
       } else {
         return Err(SourceError::from_token_info(
-          eq.info,
+          &eq.info,
           "left hand side of assignment is not a valid target".to_string(),
           SourceErrorType::Parsing,
         ));

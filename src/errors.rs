@@ -30,7 +30,7 @@ impl SourceError {
     }
   }
 
-  pub fn from_token_info(info: TokenInfo, error_msg: String, kind: SourceErrorType) -> Self {
+  pub fn from_token_info(info: &TokenInfo, error_msg: String, kind: SourceErrorType) -> Self {
     Self {
       line_no: info.line_no,
       token_start: info.start,

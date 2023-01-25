@@ -27,6 +27,8 @@ pub enum Token<'src> {
   Return,
   Var,
   Print,
+  While,
+  For,
 
   EndOfFile,
 }
@@ -64,6 +66,8 @@ fn indentifier_token(input: &str) -> Token {
     "ret" => Token::Return,
     "var" => Token::Var,
     "print" => Token::Print,
+    "while" => Token::While,
+    "for" => Token::For,
     _ => Token::Id(input),
   }
 }
