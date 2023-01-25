@@ -84,7 +84,7 @@ impl<'src> Parser<'src> {
         self.advance()?; // consume '='
         Stmt::VarDecl {
           identifier: id,
-          id_info: id_info,
+          id_info,
           expression: Some(*self.parse_expression()?),
         }
       } else {

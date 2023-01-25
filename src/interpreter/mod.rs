@@ -314,7 +314,7 @@ impl<'src> Interpreter<'src> {
         condition,
         loop_body,
       } => {
-        self.interpret_while_loop(info, condition, loop_body);
+        self.interpret_while_loop(info, condition, loop_body)?;
       }
     };
     Ok(())
