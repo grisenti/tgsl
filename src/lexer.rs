@@ -222,6 +222,7 @@ impl<'src> Lexer<'src> {
           }
         }
         '\\' => escaped = true,
+        '\n' => break,
         _ => {}
       }
       self.advance();
@@ -398,5 +399,25 @@ mod test {
     assert_eq!(lex.prev_token_start(), 0);
     lex.next_token();
     assert_eq!(lex.prev_token_start(), 4);
+  }
+
+  #[test]
+  fn error_for_multiline_strings() {
+    let mut lex = Lexer::new("\"hello\n\"");
+    if lex.next_token().is_err() {
+      let _ = &lex.line()[lex.prev_token_start()..lex.prev_token_end()]; // does not go out of bounds
+    } else {
+      panic!("no error for multiline string");
+    }
+  }
+
+  #[test]
+  fn error_for_incomplete_strings() {
+    let mut lex = Lexer::new("\"hello");
+    if lex.next_token().is_err() {
+      let _ = &lex.line()[lex.prev_token_start()..lex.prev_token_end()]; // does not go out of bounds
+    } else {
+      panic!("no error for incomplete string");
+    }
   }
 }
