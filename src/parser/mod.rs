@@ -57,14 +57,15 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn syncronize_or_errors(&mut self, mut errors: SrcErrVec) -> Result<SrcErrVec, SrcErrVec> {
-    loop {
+  fn syncronize_or_errors(&mut self, mut errors: SrcErrVec) -> Result<SrcErrVec, SourceError> {
+    let mut found = false;
+    while !found {
+      if self.lookahead == Token::Basic(';') || self.is_at_end() {
+        found = true;
+      }
       if let Err(e) = self.advance() {
         errors.push(e);
-        return Err(errors);
-      }
-      if self.lookahead != Token::Basic(';') {
-        break;
+        return Err(SourceError::from_err_vec(errors));
       }
     }
     Ok(errors)
@@ -77,7 +78,7 @@ impl<'src> Parser<'src> {
     }
   }
 
-  pub fn parse(&'src mut self) -> Result<ASTNode<'src>, SrcErrVec> {
+  pub fn parse(&'src mut self) -> Result<ASTNode<'src>, SourceError> {
     let mut program = Vec::new();
     let mut errors = Vec::new();
     if let Err(e) = self.advance() {
@@ -95,7 +96,7 @@ impl<'src> Parser<'src> {
     if errors.is_empty() {
       Ok(ASTNode::Program(program))
     } else {
-      Err(errors)
+      Err(SourceError::from_err_vec(errors))
     }
   }
 }

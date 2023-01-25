@@ -9,18 +9,21 @@ pub enum SourceErrorType {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct SourceError {
-  line_no: u32,
-  token_start: usize,
-  token_end: usize,
-  line_str: String,
-  error_msg: String,
-  kind: SourceErrorType,
+pub enum SourceError {
+  One {
+    line_no: u32,
+    token_start: usize,
+    token_end: usize,
+    line_str: String,
+    error_msg: String,
+    kind: SourceErrorType,
+  },
+  Many(Vec<SourceError>),
 }
 
 impl SourceError {
   pub fn from_lexer_state(lex: &Lexer, error_msg: String, kind: SourceErrorType) -> Self {
-    Self {
+    Self::One {
       line_no: lex.line_no(),
       token_start: lex.prev_token_start(),
       token_end: lex.prev_token_end(),
@@ -31,7 +34,7 @@ impl SourceError {
   }
 
   pub fn from_token_info(info: &TokenInfo, error_msg: String, kind: SourceErrorType) -> Self {
-    Self {
+    Self::One {
       line_no: info.line_no,
       token_start: info.start,
       token_end: info.end,
@@ -44,35 +47,48 @@ impl SourceError {
       kind,
     }
   }
+
+  pub fn from_err_vec(errs: Vec<SourceError>) -> Self {
+    Self::Many(errs)
+  }
+
+  fn print_long(&self) -> String {
+    match self {
+      Self::One {
+        line_no,
+        token_start,
+        token_end,
+        line_str,
+        error_msg,
+        kind,
+      } => {
+        let spaces = line_no.to_string().chars().map(|_| ' ').collect::<String>();
+        let underline_spaces = line_str[0..*token_start]
+          .char_indices()
+          .map(|_| ' ')
+          .collect::<String>();
+        let underlines = line_str[*token_start..*token_end]
+          .char_indices()
+          .map(|_| '~')
+          .collect::<String>();
+        format!(
+          "{:?} error: {}\n{} |\n{} | {}\n{} | {}{}\n",
+          kind, error_msg, spaces, line_no, line_str, spaces, underline_spaces, underlines
+        )
+      }
+      Self::Many(others) => {
+        let mut res = String::new();
+        for err in others {
+          res += &err.print_long();
+        }
+        res
+      }
+    }
+  }
 }
 
 impl Display for SourceError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let spaces = self
-      .line_no
-      .to_string()
-      .chars()
-      .map(|_| ' ')
-      .collect::<String>();
-    let underline_spaces = self.line_str[0..self.token_start]
-      .char_indices()
-      .map(|_| ' ')
-      .collect::<String>();
-    let underlines = self.line_str[self.token_start..self.token_end]
-      .char_indices()
-      .map(|_| '~')
-      .collect::<String>();
-    write!(
-      f,
-      "{:?} error: {}\n{} |\n{} | {}\n{} | {}{}\n",
-      self.kind,
-      self.error_msg,
-      spaces,
-      self.line_no,
-      self.line_str,
-      spaces,
-      underline_spaces,
-      underlines
-    )
+    write!(f, "{}", self.print_long())
   }
 }

@@ -15,11 +15,22 @@ impl<'src> Parser<'src> {
     assert_eq!(self.lookahead, Token::Basic('{'));
     self.advance()?;
     let mut statements = Vec::new();
+    let mut errors = Vec::new();
     while self.lookahead != Token::Basic('}') && !self.is_at_end() {
-      statements.push(self.parse_decl()?);
+      match self.parse_decl() {
+        Ok(stmt) => statements.push(stmt),
+        Err(err) => {
+          errors.push(err);
+          errors = self.syncronize_or_errors(errors)?;
+        }
+      }
     }
     self.match_or_err(Token::Basic('}'))?;
-    Ok(Stmt::Block(statements))
+    if errors.is_empty() {
+      Ok(Stmt::Block(statements))
+    } else {
+      Err(SourceError::from_err_vec(errors))
+    }
   }
 
   fn parse_expr_stmt(&mut self) -> StmtRes<'src> {

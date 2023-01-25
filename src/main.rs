@@ -20,9 +20,7 @@ fn main() {
       _ => {}
     },
     Err(errs) => {
-      for err in errs {
-        print!("{}", err);
-      }
+      print!("{}", errs);
     }
   }
 }
