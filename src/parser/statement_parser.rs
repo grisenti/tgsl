@@ -75,12 +75,34 @@ impl<'src> Parser<'src> {
     })
   }
 
+  fn parse_for_stmt(&mut self) -> StmtRes<'src> {
+    assert_eq!(self.lookahead, Token::For);
+    let info = self.lex.prev_token_info();
+    self.advance()?; //consume for
+    self.match_or_err(Token::Basic('('))?;
+    let init = self.parse_decl()?;
+    let condition = self.parse_expression()?;
+    self.match_or_err(Token::Basic(';'))?;
+    let after = self.parse_expression()?;
+    self.match_or_err(Token::Basic(')'))?;
+    let body = self.parse_statement()?;
+    Ok(Stmt::Block(vec![
+      init,
+      Stmt::While {
+        info,
+        condition: *condition,
+        loop_body: Box::new(Stmt::Block(vec![body, Stmt::Expr(*after)])),
+      },
+    ]))
+  }
+
   fn parse_statement(&mut self) -> StmtRes<'src> {
     match self.lookahead {
       Token::Print => self.parse_print_stmt(),
       Token::Basic('{') => self.parse_block(),
       Token::If => self.parse_if_stmt(),
       Token::While => self.parse_while_stmt(),
+      Token::For => self.parse_for_stmt(),
       _ => self.parse_expr_stmt(),
     }
   }
