@@ -6,6 +6,7 @@ mod parser;
 
 use std::fs;
 
+use ast::codegen::desugar;
 use interpreter::*;
 use lexer::*;
 use parser::*;
@@ -15,10 +16,12 @@ fn main() {
   let mut parser = Parser::new(Lexer::new(&program));
   let mut interpreter = Interpreter::new();
   match parser.parse() {
-    Ok(ast) => match interpreter.interpret(ast) {
-      Err(err) => print!("{}", err),
-      _ => {}
-    },
+    Ok(ast) => {
+      print!("{}", desugar(&ast));
+      if let Err(errs) = interpreter.interpret(ast) {
+        print!("{}", errs);
+      }
+    }
     Err(errs) => {
       print!("{}", errs);
     }
