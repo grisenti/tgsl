@@ -58,11 +58,19 @@ impl<'src> Parser<'src> {
   }
 
   fn syncronize_or_errors(&mut self, mut errors: SrcErrVec) -> Result<SrcErrVec, SourceError> {
-    let mut found = false;
-    while !found {
-      if self.lookahead == Token::Basic(';') || self.is_at_end() {
-        found = true;
+    let mut advance = false;
+    loop {
+      match self.lookahead {
+        Token::Basic(';') => {
+          advance = true;
+        }
+        Token::Basic('}') | Token::EndOfFile => {
+          break;
+        }
+        _ => {}
       }
+    }
+    if advance {
       if let Err(e) = self.advance() {
         errors.push(e);
         return Err(SourceError::from_err_vec(errors));
