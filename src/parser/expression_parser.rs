@@ -33,14 +33,53 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn parse_call(&mut self) -> ExprRes<'src> {
+    let mut expr = self.parse_primary()?;
+    let mut too_many_arguments = None;
+    loop {
+      match self.lookahead {
+        Token::Basic('(') => {
+          self.advance()?;
+          let call_start = self.lex.prev_token_info();
+          let mut arguments = Vec::new();
+          loop {
+            if arguments.len() == 255 {
+              too_many_arguments = Some(SourceError::from_token_info(
+                &call_start,
+                "function cannot have more than 255 arguments".to_string(),
+                SourceErrorType::Runtime,
+              ));
+            }
+            arguments.push(*self.parse_expression()?);
+            if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
+              break;
+            }
+          }
+          self.match_or_err(Token::Basic(')'))?;
+          expr = Box::new(Expr::FnCall {
+            func: expr,
+            call_start,
+            arguments,
+          })
+        }
+        _ => break,
+      }
+    }
+    if let Some(err) = too_many_arguments {
+      Err(err)
+    } else {
+      Ok(expr)
+    }
+  }
+
   fn parse_unary(&mut self) -> ExprRes<'src> {
     if let Some(op) = self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')])? {
       Ok(Box::new(Expr::UnaryExpr {
         operator: op,
-        right: self.parse_primary()?,
+        right: self.parse_call()?,
       }))
     } else {
-      Ok(self.parse_primary()?)
+      Ok(self.parse_call()?)
     }
   }
 

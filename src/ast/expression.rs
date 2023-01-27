@@ -26,6 +26,11 @@ pub enum Expr<'src> {
     name_info: TokenInfo<'src>,
     value: DynExpr<'src>,
   },
+  FnCall {
+    func: DynExpr<'src>,
+    call_start: TokenInfo<'src>,
+    arguments: Vec<Expr<'src>>,
+  },
 }
 
 type DynExpr<'src> = Box<Expr<'src>>;

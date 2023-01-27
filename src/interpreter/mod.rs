@@ -1,16 +1,56 @@
 mod environment;
 
+use std::fmt::Debug;
+
 use environment::*;
 
 use crate::ast::*;
 use crate::errors::{SourceError, SourceErrorType};
 use crate::lexer::{Token, TokenInfo, TokenPair};
 
+pub trait ClonableFn: Fn(&mut Interpreter, Vec<ExprValue>) -> ExprResult {
+  fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
+  where
+    Self: 'a;
+}
+
+impl<T> ClonableFn for T
+where
+  T: Fn(&mut Interpreter, Vec<ExprValue>) -> ExprResult + Clone,
+{
+  fn clone_box<'a>(&self) -> Box<dyn 'a + ClonableFn>
+  where
+    Self: 'a,
+  {
+    Box::new(self.clone())
+  }
+}
+
+impl Clone for Box<dyn ClonableFn> {
+  fn clone(&self) -> Self {
+    ClonableFn::clone_box(&**self) // passing self directly causes and infinite loop
+  }
+}
+
+#[derive(Clone)]
+pub struct InterpreterFn {
+  pub arity: u32,
+  pub name: String,
+  pub callable: Box<dyn ClonableFn>,
+}
+
+impl Debug for InterpreterFn {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.name)
+  }
+}
+
 #[derive(Debug, Clone)]
 pub enum ExprValue {
   Str(String),
   Num(f64),
   Boolean(bool),
+  Func(InterpreterFn),
   Null,
 }
 
@@ -141,7 +181,7 @@ impl<'src> Interpreter<'src> {
       .as_ref()
       .map(|exp| self.interpret_expression(exp))
       .unwrap_or(Ok(ExprValue::Null))?;
-    self.env.declare_identifier(id, &id_info, value)
+    self.env.declare_source_identifier(id, &id_info, value)
   }
 
   fn handle_literal_expression(&self, literal: &TokenPair<'src>) -> ExprResult {
@@ -227,6 +267,39 @@ impl<'src> Interpreter<'src> {
       } => {
         let rhs = self.interpret_expression(value)?;
         self.env.assign(name, name_info, rhs)
+      }
+      Expr::FnCall {
+        func,
+        call_start,
+        arguments,
+      } => {
+        let mut argument_values = Vec::new();
+        for arg in arguments {
+          argument_values.push(self.interpret_expression(arg)?);
+        }
+        let func_val = self.interpret_expression(func)?;
+        if let ExprValue::Func(func) = func_val {
+          if func.arity as usize == argument_values.len() {
+            (func.callable)(self, argument_values)
+          } else {
+            Err(SourceError::from_token_info(
+              &call_start,
+              format!(
+                "too many arguments ({}) for function {} (arity: {})",
+                argument_values.len(),
+                func.name,
+                func.arity
+              ),
+              SourceErrorType::Runtime,
+            ))
+          }
+        } else {
+          Err(SourceError::from_token_info(
+            &call_start,
+            format!("cannot call {:?}, only functions", func_val),
+            SourceErrorType::Runtime,
+          ))
+        }
       }
     }
   }
@@ -350,5 +423,11 @@ impl<'src> Interpreter<'src> {
       }
     }
     Ok(())
+  }
+
+  pub fn add_native_function(&mut self, name: &'src str, func: InterpreterFn) {
+    self
+      .env
+      .declare_native_identifier(name, ExprValue::Func(func));
   }
 }

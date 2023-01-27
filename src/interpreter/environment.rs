@@ -11,7 +11,7 @@ impl<'src> Environment<'src> {
     self.scopes.last_mut().unwrap()
   }
 
-  pub fn declare_identifier(
+  pub fn declare_source_identifier(
     &mut self,
     id: &'src str,
     id_info: &TokenInfo,
@@ -31,6 +31,10 @@ impl<'src> Environment<'src> {
           SourceErrorType::Runtime,
         )
       })
+  }
+
+  pub fn declare_native_identifier(&mut self, id: &'src str, value: ExprValue) {
+    self.scopes.first_mut().unwrap().insert(id, value);
   }
 
   pub fn get_id_value(&self, id: &str, id_info: &TokenInfo) -> ExprResult {

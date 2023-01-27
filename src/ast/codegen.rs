@@ -32,6 +32,18 @@ pub fn desugar_expr(expr: &Expr) -> String {
       name_info: _,
       value,
     } => format!("{} = {}", name, desugar_expr(value)),
+    Expr::FnCall {
+      func,
+      call_start: _,
+      arguments,
+    } => format!(
+      "{}({})",
+      desugar_expr(func),
+      arguments
+        .iter()
+        .map(|arg| format!(", {}", desugar_expr(arg)))
+        .collect::<String>()
+    ),
   }
 }
 
