@@ -34,7 +34,7 @@ pub fn desugar_expr(expr: &Expr) -> String {
     } => format!("{} = {}", name, desugar_expr(value)),
     Expr::FnCall {
       func,
-      call_start: _,
+      call_info: _,
       arguments,
     } => format!(
       "{}({})",

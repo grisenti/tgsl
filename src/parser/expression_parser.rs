@@ -39,8 +39,8 @@ impl<'src> Parser<'src> {
     loop {
       match self.lookahead {
         Token::Basic('(') => {
-          self.advance()?;
           let call_start = self.lex.prev_token_info();
+          self.advance()?;
           let mut arguments = Vec::new();
           loop {
             if arguments.len() == 255 {
@@ -55,10 +55,11 @@ impl<'src> Parser<'src> {
               break;
             }
           }
+          let call_end = self.lex.prev_token_info();
           self.match_or_err(Token::Basic(')'))?;
           expr = Box::new(Expr::FnCall {
             func: expr,
-            call_start,
+            call_info: TokenInfo::union(call_start, call_end),
             arguments,
           })
         }

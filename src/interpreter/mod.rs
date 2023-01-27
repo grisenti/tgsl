@@ -8,7 +8,7 @@ use crate::ast::*;
 use crate::errors::{SourceError, SourceErrorType};
 use crate::lexer::{Token, TokenInfo, TokenPair};
 
-pub trait ClonableFn: Fn(&mut Interpreter, Vec<ExprValue>) -> ExprResult {
+pub trait ClonableFn: Fn(&mut Interpreter, Vec<ExprValue>) -> InterpreterFnResult {
   fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
   where
     Self: 'a;
@@ -16,7 +16,7 @@ pub trait ClonableFn: Fn(&mut Interpreter, Vec<ExprValue>) -> ExprResult {
 
 impl<T> ClonableFn for T
 where
-  T: Fn(&mut Interpreter, Vec<ExprValue>) -> ExprResult + Clone,
+  T: Fn(&mut Interpreter, Vec<ExprValue>) -> InterpreterFnResult + Clone,
 {
   fn clone_box<'a>(&self) -> Box<dyn 'a + ClonableFn>
   where
@@ -55,6 +55,7 @@ pub enum ExprValue {
 }
 
 pub type ExprResult = Result<ExprValue, SourceError>;
+pub type InterpreterFnResult = Result<ExprValue, ()>;
 
 fn unary_minus(rhs: ExprValue, op_info: TokenInfo) -> ExprResult {
   if let ExprValue::Num(x) = rhs {
@@ -270,7 +271,7 @@ impl<'src> Interpreter<'src> {
       }
       Expr::FnCall {
         func,
-        call_start,
+        call_info: call_start,
         arguments,
       } => {
         let mut argument_values = Vec::new();
@@ -280,7 +281,13 @@ impl<'src> Interpreter<'src> {
         let func_val = self.interpret_expression(func)?;
         if let ExprValue::Func(func) = func_val {
           if func.arity as usize == argument_values.len() {
-            (func.callable)(self, argument_values)
+            (func.callable)(self, argument_values).or_else(|_| {
+              Err(SourceError::from_token_info(
+                &call_start,
+                format!("function call error"),
+                SourceErrorType::Runtime,
+              ))
+            })
           } else {
             Err(SourceError::from_token_info(
               &call_start,

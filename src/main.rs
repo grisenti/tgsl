@@ -12,8 +12,11 @@ use interpreter::*;
 use lexer::*;
 use parser::*;
 
-fn add(_: &mut Interpreter, _: Vec<ExprValue>) -> ExprResult {
-  Ok(ExprValue::Str("no".to_string()))
+fn add(_: &mut Interpreter, args: Vec<ExprValue>) -> InterpreterFnResult {
+  match (args[0].clone(), args[1].clone()) {
+    (ExprValue::Num(a), ExprValue::Num(b)) => Ok(ExprValue::Num(a + b)),
+    _ => Err(()),
+  }
 }
 
 fn main() -> Result<(), SourceError> {

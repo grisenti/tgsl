@@ -42,6 +42,22 @@ pub struct TokenInfo<'src> {
   pub end: usize,
 }
 
+impl<'src> TokenInfo<'src> {
+  pub fn union(start: TokenInfo<'src>, end: TokenInfo<'src>) -> Self {
+    assert!(start.line_no <= end.line_no);
+    Self {
+      line_no: start.line_no,
+      line: start.line,
+      start: start.start,
+      end: if start.line_no < end.line_no {
+        start.line.len()
+      } else {
+        end.end
+      },
+    }
+  }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct TokenPair<'src> {
   pub token: Token<'src>,
