@@ -42,17 +42,19 @@ impl<'src> Parser<'src> {
           let call_start = self.lex.prev_token_info();
           self.advance()?;
           let mut arguments = Vec::new();
-          loop {
-            if arguments.len() == 255 {
-              too_many_arguments = Some(SourceError::from_token_info(
-                &call_start,
-                "function cannot have more than 255 arguments".to_string(),
-                SourceErrorType::Runtime,
-              ));
-            }
-            arguments.push(*self.parse_expression()?);
-            if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
-              break;
+          if self.lookahead != Token::Basic(')') {
+            loop {
+              if arguments.len() == 255 {
+                too_many_arguments = Some(SourceError::from_token_info(
+                  &call_start,
+                  "function cannot have more than 255 arguments".to_string(),
+                  SourceErrorType::Runtime,
+                ));
+              }
+              arguments.push(*self.parse_expression()?);
+              if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
+                break;
+              }
             }
           }
           let call_end = self.lex.prev_token_info();
