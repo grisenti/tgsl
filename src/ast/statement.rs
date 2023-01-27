@@ -24,4 +24,5 @@ pub enum Stmt<'src> {
     condition: Expr<'src>,
     loop_body: Box<Stmt<'src>>,
   },
+  Break,
 }

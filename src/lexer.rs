@@ -29,6 +29,7 @@ pub enum Token<'src> {
   Print,
   While,
   For,
+  Break,
 
   EndOfFile,
 }
@@ -68,6 +69,7 @@ fn indentifier_token(input: &str) -> Token {
     "print" => Token::Print,
     "while" => Token::While,
     "for" => Token::For,
+    "break" => Token::Break,
     _ => Token::Id(input),
   }
 }

@@ -91,6 +91,7 @@ pub fn desugar_stmt(stmt: &Stmt) -> String {
         desugar_stmt(loop_body)
       )
     }
+    Stmt::Break => result = "break;\n".to_string(),
     _ => panic!(),
   }
   result

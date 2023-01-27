@@ -123,8 +123,12 @@ pub struct Interpreter<'src> {
   env: Environment<'src>,
 }
 
+enum EarlyOut {
+  Break,
+}
+
 pub type IntepreterResult = Result<(), SourceError>;
-type StmtRes = Result<(), SourceError>;
+type StmtRes = Result<Option<EarlyOut>, SourceError>;
 
 impl<'src> Interpreter<'src> {
   fn install_identifier(
@@ -240,7 +244,7 @@ impl<'src> Interpreter<'src> {
       } else if let Some(branch) = false_branch {
         self.interpret_statement(branch)
       } else {
-        Ok(())
+        Ok(None)
       }
     } else {
       Err(SourceError::from_token_info(
@@ -261,7 +265,9 @@ impl<'src> Interpreter<'src> {
       match self.interpret_expression(condition)? {
         ExprValue::Boolean(val) => {
           if val {
-            self.interpret_statement(body)?;
+            if let Some(EarlyOut::Break) = self.interpret_statement(body)? {
+              break;
+            }
           } else {
             break;
           }
@@ -278,10 +284,10 @@ impl<'src> Interpreter<'src> {
         }
       }
     }
-    Ok(())
+    Ok(None)
   }
 
-  fn interpret_statement(&mut self, stmt: &Stmt<'src>) -> Result<(), SourceError> {
+  fn interpret_statement(&mut self, stmt: &Stmt<'src>) -> StmtRes {
     match stmt {
       Stmt::VarDecl {
         identifier,
@@ -297,7 +303,10 @@ impl<'src> Interpreter<'src> {
       Stmt::Block(stmts) => {
         self.env.push();
         for stmt in stmts {
-          self.interpret_statement(stmt)?;
+          let res = self.interpret_statement(stmt)?;
+          if res.is_some() {
+            return Ok(res);
+          }
         }
         self.env.pop();
       }
@@ -316,8 +325,10 @@ impl<'src> Interpreter<'src> {
       } => {
         self.interpret_while_loop(info, condition, loop_body)?;
       }
+      Stmt::Break => return Ok(Some(EarlyOut::Break)),
+      _ => panic!(),
     };
-    Ok(())
+    Ok(None)
   }
 
   pub fn new() -> Self {
@@ -329,7 +340,9 @@ impl<'src> Interpreter<'src> {
   pub fn interpret(&mut self, program: ASTNode<'src>) -> Result<(), SourceError> {
     match program {
       ASTNode::Expr(exp) => print!("{:?}", self.interpret_expression(&exp)?),
-      ASTNode::Stmt(stmt) => self.interpret_statement(&stmt)?,
+      ASTNode::Stmt(stmt) => {
+        self.interpret_statement(&stmt)?;
+      }
       ASTNode::Program(stmts) => {
         for s in stmts {
           self.interpret_statement(&s)?;

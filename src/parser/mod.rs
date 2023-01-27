@@ -69,8 +69,6 @@ impl<'src> Parser<'src> {
         }
         _ => {}
       }
-    }
-    if advance {
       if let Err(e) = self.advance() {
         errors.push(e);
         return Err(SourceError::from_err_vec(errors));
@@ -93,7 +91,7 @@ impl<'src> Parser<'src> {
       errors.push(e)
     }
     while !self.is_at_end() {
-      match self.parse_decl() {
+      match self.parse_decl(false) {
         Ok(stmt) => program.push(stmt),
         Err(err) => {
           errors.push(err);
