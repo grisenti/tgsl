@@ -8,7 +8,7 @@ pub enum SourceErrorType {
   Runtime,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum SourceError {
   One {
     line_no: u32,
@@ -72,8 +72,7 @@ impl SourceError {
           .map(|_| '~')
           .collect::<String>();
         format!(
-          "{:?} error: {}\n{} |\n{} | {}\n{} | {}{}\n",
-          kind, error_msg, spaces, line_no, line_str, spaces, underline_spaces, underlines
+          "{kind:?} error: {error_msg}\n{spaces} |\n{line_no} | {line_str}\n{spaces} | {underline_spaces}{underlines}\n"
         )
       }
       Self::Many(others) => {
@@ -88,6 +87,12 @@ impl SourceError {
 }
 
 impl Display for SourceError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.print_long())
+  }
+}
+
+impl std::fmt::Debug for SourceError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self.print_long())
   }

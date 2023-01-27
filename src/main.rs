@@ -4,26 +4,23 @@ mod interpreter;
 mod lexer;
 mod parser;
 
-use std::fs;
+use std::{
+  fs,
+  process::{ExitCode, Termination},
+};
 
 use ast::codegen::desugar;
+use errors::SourceError;
 use interpreter::*;
 use lexer::*;
 use parser::*;
 
-fn main() {
+fn main() -> Result<(), SourceError> {
   let program = fs::read_to_string("program.pr").unwrap();
   let mut parser = Parser::new(Lexer::new(&program));
   let mut interpreter = Interpreter::new();
-  match parser.parse() {
-    Ok(ast) => {
-      print!("{}", desugar(&ast));
-      if let Err(errs) = interpreter.interpret(ast) {
-        print!("{}", errs);
-      }
-    }
-    Err(errs) => {
-      print!("{}", errs);
-    }
-  }
+  let ast = parser.parse()?;
+  print!("{}", desugar(&ast));
+  interpreter.interpret(ast)?;
+  Ok(())
 }
