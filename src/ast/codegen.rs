@@ -35,7 +35,7 @@ pub fn desugar_expr(expr: &Expr) -> String {
   }
 }
 
-pub fn desugar_stmt(stmt: &Stmt) -> String {
+pub fn desugar_stmt(stmt: &Stmt, spaces: String) -> String {
   let mut result = String::new();
   match stmt {
     Stmt::VarDecl {
@@ -44,7 +44,8 @@ pub fn desugar_stmt(stmt: &Stmt) -> String {
       expression,
     } => {
       result = format!(
-        "var {}{};\n",
+        "{}var {}{};\n",
+        &spaces,
         identifier,
         if let Some(exp) = expression {
           format!(" = {}", desugar_expr(exp))
@@ -53,14 +54,16 @@ pub fn desugar_stmt(stmt: &Stmt) -> String {
         }
       );
     }
-    Stmt::Expr(exp) => result = format!("{};\n", desugar_expr(exp)),
-    Stmt::Print { expression } => result = format!("print {};\n", desugar_expr(expression)),
+    Stmt::Expr(exp) => result = format!("{}{};\n", spaces, desugar_expr(exp)),
+    Stmt::Print { expression } => {
+      result = format!("{}print {};\n", spaces, desugar_expr(expression))
+    }
     Stmt::Block(stmts) => {
-      result += "{\n";
+      result += &format!("{}{{\n", &spaces);
       for s in stmts {
-        result += &format!("{}", desugar_stmt(s));
+        result += &format!("{}", desugar_stmt(s, format!("{}  ", &spaces)));
       }
-      result += "}\n";
+      result += &format!("{}}}\n", &spaces);
     }
     Stmt::IfBranch {
       if_info: _,
@@ -69,14 +72,15 @@ pub fn desugar_stmt(stmt: &Stmt) -> String {
       else_branch,
     } => {
       let else_branch_string = if let Some(stmt) = else_branch {
-        format!("else\n{}", desugar_stmt(stmt))
+        format!("{}else\n{}", &spaces, desugar_stmt(stmt, spaces.clone()))
       } else {
         String::new()
       };
       result = format!(
-        "if ({})\n{}\n{}",
+        "{}if ({})\n{}{}",
+        &spaces,
         desugar_expr(condition),
-        desugar_stmt(true_branch),
+        desugar_stmt(true_branch, spaces.clone()),
         else_branch_string
       )
     }
@@ -86,12 +90,13 @@ pub fn desugar_stmt(stmt: &Stmt) -> String {
       loop_body,
     } => {
       result = format!(
-        "while ({})\n{}",
+        "{}while ({})\n{}",
+        &spaces,
         desugar_expr(condition),
-        desugar_stmt(loop_body)
+        desugar_stmt(loop_body, spaces.clone())
       )
     }
-    Stmt::Break => result = "break;\n".to_string(),
+    Stmt::Break => result = format!("{}break;\n", &spaces),
     _ => panic!(),
   }
   result
@@ -102,11 +107,11 @@ pub fn desugar(root: &ASTNode) -> String {
   match root {
     ASTNode::Program(prog) => {
       for stmt in prog {
-        result += &desugar_stmt(stmt);
+        result += &desugar_stmt(stmt, "".to_string());
       }
     }
     ASTNode::Stmt(stmt) => {
-      result = desugar_stmt(stmt);
+      result = desugar_stmt(stmt, "".to_string());
     }
     ASTNode::Expr(expr) => {
       result = desugar_expr(expr);
