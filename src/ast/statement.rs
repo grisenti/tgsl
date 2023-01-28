@@ -24,5 +24,11 @@ pub enum Stmt<'src> {
     condition: Expr<'src>,
     loop_body: Box<Stmt<'src>>,
   },
+  Function {
+    name: &'src str,
+    name_info: TokenInfo<'src>,
+    parameters: Vec<&'src str>,
+    body: Vec<Stmt<'src>>,
+  },
   Break,
 }

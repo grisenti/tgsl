@@ -109,6 +109,22 @@ pub fn desugar_stmt(stmt: &Stmt, spaces: String) -> String {
       )
     }
     Stmt::Break => result = format!("{}break;\n", &spaces),
+    Stmt::Function {
+      name,
+      name_info,
+      parameters,
+      body,
+    } => {
+      result = format!("{spaces}fun {name} (");
+      for p in parameters {
+        result += &format!(", {p}");
+      }
+      result += &format!(")\n{spaces}{{\n");
+      for stmt in body {
+        result += &desugar_stmt(stmt, format!("  {spaces}")).to_string()
+      }
+      result += &format!("{spaces}}}\n");
+    }
     _ => panic!(),
   }
   result

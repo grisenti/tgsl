@@ -104,7 +104,7 @@ impl Display for Token<'_> {
       Self::String(s) => write!(f, "\"{}\"", s),
       Self::Number(num) => write!(f, "{}", num),
       Self::Id(id) => write!(f, "{}", id),
-      Self::Basic(c) => write!(f, "'{}'", c),
+      Self::Basic(c) => write!(f, "{}", c),
       _ => write!(f, "{:?}", self),
     }
   }

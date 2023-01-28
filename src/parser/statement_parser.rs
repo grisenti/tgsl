@@ -1,6 +1,20 @@
 use super::*;
 
 impl<'src> Parser<'src> {
+  fn match_id_or_err(&mut self) -> Result<(&'src str, TokenInfo<'src>), SourceError> {
+    if let Token::Id(id) = self.lookahead {
+      let info = self.lex.prev_token_info();
+      self.advance();
+      Ok((id, info))
+    } else {
+      Err(SourceError::from_lexer_state(
+        &self.lex,
+        format!("expected identifier, got {}", self.lookahead),
+        SourceErrorType::Parsing,
+      ))
+    }
+  }
+
   fn parse_print_stmt(&mut self) -> StmtRes<'src> {
     assert_eq!(self.lookahead, Token::Print);
     self.advance()?;
@@ -123,37 +137,70 @@ impl<'src> Parser<'src> {
   fn parse_var_decl(&mut self) -> StmtRes<'src> {
     assert_eq!(self.lookahead, Token::Var);
     self.advance()?;
-    if let Token::Id(id) = self.lookahead {
-      let id_info = self.lex.prev_token_info();
-      self.advance()?; // consume id
-      let ret = if self.lookahead == Token::Basic('=') {
-        self.advance()?; // consume '='
-        Stmt::VarDecl {
-          identifier: id,
-          id_info,
-          expression: Some(*self.parse_expression()?),
-        }
-      } else {
-        Stmt::VarDecl {
-          identifier: id,
-          id_info: self.lex.prev_token_info(),
-          expression: None,
-        }
-      };
-      self.match_or_err(Token::Basic(';'))?;
-      Ok(ret)
+    let (identifier, id_info) = self.match_id_or_err()?;
+    let ret = if self.lookahead == Token::Basic('=') {
+      self.advance()?; // consume '='
+      Stmt::VarDecl {
+        identifier,
+        id_info,
+        expression: Some(*self.parse_expression()?),
+      }
     } else {
-      Err(SourceError::from_lexer_state(
-        &self.lex,
-        format!("expected identifier, got {}", self.lookahead),
-        SourceErrorType::Parsing,
-      ))
+      Stmt::VarDecl {
+        identifier,
+        id_info,
+        expression: None,
+      }
+    };
+    self.match_or_err(Token::Basic(';'))?;
+    Ok(ret)
+  }
+
+  fn parse_fun_decl(&mut self) -> StmtRes<'src> {
+    assert_eq!(self.lookahead, Token::Fun);
+    self.advance()?; // consume fun
+    let (function_name, name_info) = self.match_id_or_err()?;
+    let mut too_many_arguments = None;
+    let call_start = self.lex.prev_token_info();
+    let mut parameters = Vec::new();
+    self.match_or_err(Token::Basic('('))?;
+    if self.lookahead != Token::Basic(')') {
+      loop {
+        if parameters.len() == 255 {
+          too_many_arguments = Some(SourceError::from_token_info(
+            &call_start,
+            "function cannot have more than 255 parameters".to_string(),
+            SourceErrorType::Parsing,
+          ));
+        }
+        parameters.push(self.match_id_or_err()?.0);
+        if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
+          break;
+        }
+      }
+    }
+    let call_end = self.lex.prev_token_info();
+    self.match_or_err(Token::Basic(')'))?;
+    if self.lookahead == Token::Basic('{') {
+      if let Stmt::Block(body) = self.parse_block(false)? {
+        Ok(Stmt::Function {
+          name: function_name,
+          name_info,
+          parameters,
+          body,
+        })
+      } else {
+        panic!()
+      }
+    } else {
+      Err(self.unexpected_token(Some(Token::Basic('{'))))
     }
   }
 
   pub(super) fn parse_decl(&mut self, in_loop: bool) -> StmtRes<'src> {
     let ret = match self.lookahead {
       Token::Var => self.parse_var_decl()?,
+      Token::Fun => self.parse_fun_decl()?,
       _ => self.parse_statement(in_loop)?,
     };
     Ok(ret)
