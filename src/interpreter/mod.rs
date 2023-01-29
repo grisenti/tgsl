@@ -444,6 +444,7 @@ impl Interpreter {
     }
     for stmt in body.iter().cloned() {
       if let Some(EarlyOut::Return(val)) = self.interpret_statement(stmt).or(Err(()))? {
+        self.env.pop();
         return Ok(val);
       };
     }
