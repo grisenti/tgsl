@@ -4,7 +4,7 @@ impl<'src> Parser<'src> {
   fn match_id_or_err(&mut self) -> Result<(StrHandle, SourceInfoHandle), SourceError> {
     if let Token::Id(id) = self.lookahead {
       let info = self.last_token_info();
-      self.advance();
+      self.advance()?;
       Ok((self.ast.add_str(id), info))
     } else {
       Err(SourceError::from_lexer_state(
@@ -162,30 +162,39 @@ impl<'src> Parser<'src> {
     Ok(self.ast.add_statement(ret))
   }
 
+  fn parse_function_params(
+    &mut self,
+    call_start: SourceInfo,
+  ) -> Result<Vec<StrHandle>, SourceError> {
+    let mut parameters = Vec::new();
+    loop {
+      parameters.push(self.match_id_or_err()?.0);
+      if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
+        break;
+      }
+    }
+    if parameters.len() > 255 {
+      Err(SourceError::from_token_info(
+        &call_start,
+        "function cannot have more than 255 parameters".to_string(),
+        SourceErrorType::Parsing,
+      ))
+    } else {
+      Ok(parameters)
+    }
+  }
+
   fn parse_fun_decl(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::Fun);
     self.advance()?; // consume fun
     let (function_name, name_info) = self.match_id_or_err()?;
-    let mut too_many_arguments = None;
     let call_start = self.lex.prev_token_info();
-    let mut parameters = Vec::new();
     self.match_or_err(Token::Basic('('))?;
-    if self.lookahead != Token::Basic(')') {
-      loop {
-        if parameters.len() == 255 {
-          too_many_arguments = Some(SourceError::from_token_info(
-            &call_start,
-            "function cannot have more than 255 parameters".to_string(),
-            SourceErrorType::Parsing,
-          ));
-        }
-        parameters.push(self.match_id_or_err()?.0);
-        if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
-          break;
-        }
-      }
-    }
-    let call_end = self.lex.prev_token_info();
+    let parameters = if self.lookahead != Token::Basic(')') {
+      self.parse_function_params(call_start)
+    } else {
+      Ok(Vec::new())
+    };
     self.match_or_err(Token::Basic(')'))?;
     if self.lookahead == Token::Basic('{') {
       let block = self.parse_block()?;
@@ -193,7 +202,7 @@ impl<'src> Parser<'src> {
         Ok(self.ast.add_statement(Stmt::Function {
           name: function_name,
           name_info,
-          parameters,
+          parameters: parameters?,
           body,
         }))
       } else {
