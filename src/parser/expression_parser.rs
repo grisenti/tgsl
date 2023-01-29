@@ -203,9 +203,9 @@ impl<'src> Parser<'src> {
 #[cfg(test)]
 mod test {
   use crate::{
-    ast::Expr,
-    lexer::{Lexer, Token, TokenPair},
-    parser::{self, Parser},
+    ast::{Expr, Literal, Operator},
+    lexer::Lexer,
+    parser::Parser,
   };
 
   fn create_parser(input: &str) -> Parser {
@@ -216,32 +216,47 @@ mod test {
   }
 
   #[test]
-  fn parse_literals() {
-    let literals = [
-      ("1", Token::Number(1.0)),
-      ("\"string\"", Token::String("string")),
-      ("true", Token::True),
-    ];
-    for (src, tok) in literals {
-      let mut parser = create_parser(src);
-      let literal = *parser.parse_expression().unwrap();
-      assert!(matches!(literal, Expr::Literal(TokenPair{token, info: _ }) if token == tok));
-    }
+  fn parse_literal_num() {
+    let mut parser = create_parser("1");
+    let literal = parser.parse_expression().unwrap();
+    assert!(matches!(
+      parser.ast.get_expression(literal),
+      Expr::Literal {
+        literal: Literal::Number(n),
+        info: _
+      } if n == 1.0
+    ))
   }
 
   #[test]
-  fn parse_identifier() {
-    let mut parser = create_parser("id");
-    let literal = *parser.parse_expression().unwrap();
-    assert!(matches!(literal, Expr::Variable{id, id_info: _} if id == "id"));
+  fn parse_literal_string() {
+    let mut parser = create_parser("\"str\"");
+    let literal = parser.parse_expression().unwrap();
+    assert!(matches!(
+      parser.ast.get_expression(literal),
+      Expr::Literal {
+        literal: Literal::String(s),
+        info: _
+      } if parser.ast.get_str(s.clone()) == "str"
+    ))
+  }
+
+  #[test]
+  fn parse_literal_identifier() {
+    let mut parser = create_parser("identifier");
+    let literal = parser.parse_expression().unwrap();
+    match parser.ast.get_expression(literal) {
+      Expr::Variable { id, id_info: _ } if parser.ast.get_str(id.clone()) == "identifier" => {}
+      a => panic!("expected literal, got {a:?}"),
+    }
   }
 
   #[test]
   fn binary_op() {
     let mut parser = create_parser("1 + 1");
-    let binexp = *parser.parse_expression().unwrap();
+    let binexp = parser.parse_expression().unwrap();
     assert!(
-      matches!(binexp, Expr::BinaryExpr{left: _, operator, right: _} if operator.token == Token::Basic('+'))
+      matches!(parser.ast.get_expression(binexp), Expr::BinaryExpr{left: _, operator, right: _} if operator.op == Operator::Basic('+'))
     );
   }
 
@@ -249,29 +264,29 @@ mod test {
   fn operator_precedece() {
     let mut parser = create_parser("1 * 1 + 1 < 1 == 1 and 1 or 1");
     let operators = [
-      Token::Or,
-      Token::And,
-      Token::Same,
-      Token::Basic('<'),
-      Token::Basic('+'),
-      Token::Basic('*'),
+      Operator::Or,
+      Operator::And,
+      Operator::Same,
+      Operator::Basic('<'),
+      Operator::Basic('+'),
+      Operator::Basic('*'),
     ];
-    let mut binexp = *parser.parse_expression().unwrap();
+    let mut binexp = parser.parse_expression().unwrap();
     for op in operators {
-      match binexp {
+      match parser.ast.get_expression(binexp) {
         Expr::BinaryExpr {
           left,
           operator,
           right: _,
-        } if operator.token == op => {
-          binexp = *left;
+        } if operator.op == op => {
+          binexp = left;
         }
         Expr::Logical {
           left,
           operator,
           right: _,
-        } if operator.token == op => {
-          binexp = *left;
+        } if operator.op == op => {
+          binexp = left;
         }
         _ => panic!("wrong precedence"),
       }
@@ -288,9 +303,9 @@ mod test {
   #[test]
   fn assign_to_rvalue() {
     let mut parser = create_parser("id = 2");
-    let assignment = *parser.parse_expression().unwrap();
+    let assignment = parser.parse_expression().unwrap();
     assert!(matches!(
-      assignment,
+      parser.ast.get_expression(assignment),
       Expr::Assignment {
         name: _,
         name_info: _,

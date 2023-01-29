@@ -399,9 +399,9 @@ mod test {
     lex.next_token();
     assert_eq!(lex.prev_token_start(), 6);
     lex.next_token();
-    assert_eq!(lex.prev_token_start(), 0);
+    assert_eq!(lex.prev_token_start(), 10);
     lex.next_token();
-    assert_eq!(lex.prev_token_start(), 4);
+    assert_eq!(lex.prev_token_start(), 14);
   }
 
   #[test]
