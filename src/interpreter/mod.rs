@@ -89,7 +89,7 @@ fn unary_minus(rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
   } else {
     Err(SourceError::from_token_info(
       &op_info,
-      format!("unary - cannot be applyed to operand {:?}", rhs),
+      format!("unary - cannot be applyed to operand {rhs:?}"),
       SourceErrorType::Runtime,
     ))
   }
@@ -101,7 +101,7 @@ fn unary_not(rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
   } else {
     Err(SourceError::from_token_info(
       &op_info,
-      format!("unary ! cannot be applyed to operand {:?}", rhs),
+      format!("unary ! cannot be applyed to operand {rhs:?}"),
       SourceErrorType::Runtime,
     ))
   }
@@ -115,10 +115,7 @@ where
     (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Num(op(l, r))),
     (lhs, rhs) => Err(SourceError::from_token_info(
       &op_info,
-      format!(
-        "operation only works for numbers, not supported for operands {:?} {:?}",
-        lhs, rhs
-      ),
+      format!("operation only works for numbers, not supported for operands {lhs:?} {rhs:?}"),
       SourceErrorType::Runtime,
     )),
   }
@@ -130,7 +127,7 @@ fn add(lhs: ExprValue, rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
     (ExprValue::Str(l), ExprValue::Str(r)) => Ok(ExprValue::Str(l + &r)),
     (lhs, rhs) => Err(SourceError::from_token_info(
       &op_info,
-      format!("cannot add {:?} and {:?}", lhs, rhs),
+      format!("cannot add {lhs:?} and {rhs:?}"),
       SourceErrorType::Runtime,
     )),
   }
@@ -143,7 +140,7 @@ fn equal(lhs: ExprValue, rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
     (ExprValue::Boolean(l), ExprValue::Boolean(r)) => Ok(ExprValue::Boolean(l == r)),
     (lhs, rhs) => Err(SourceError::from_token_info(
       &op_info,
-      format!("cannot determine if {:?} and {:?} are equal", lhs, rhs),
+      format!("cannot determine if {lhs:?} and {rhs:?} are equal"),
       SourceErrorType::Runtime,
     )),
   }

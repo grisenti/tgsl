@@ -27,7 +27,7 @@ impl Environment {
       .ok_or_else(|| {
         SourceError::from_token_info(
           id_info,
-          format!("identifier '{}' already declared in the current scope", id),
+          format!("identifier '{id}' already declared in the current scope"),
           SourceErrorType::Runtime,
         )
       })
@@ -46,8 +46,8 @@ impl Environment {
       .cloned()
       .ok_or_else(|| {
         SourceError::from_token_info(
-          &id_info,
-          format!("unknown identifier {}", id),
+          id_info,
+          format!("unknown identifier {id}"),
           SourceErrorType::Runtime,
         )
       })
@@ -66,7 +66,7 @@ impl Environment {
       .ok_or_else(|| {
         SourceError::from_token_info(
           &info,
-          format!("variable {} was not declared before", name),
+          format!("variable {name} was not declared before"),
           SourceErrorType::Runtime,
         )
       })

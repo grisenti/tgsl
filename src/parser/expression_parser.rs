@@ -176,7 +176,7 @@ impl<'src> Parser<'src> {
 
   fn parse_assignment(&mut self) -> ExprRes {
     let lhs = self.parse_logical_or()?;
-    if let Some((eq, eq_src_info)) = self.matches_alternative(Token::Basic('='))? {
+    if let Some((_, eq_src_info)) = self.matches_alternative(Token::Basic('='))? {
       let rhs = self.parse_assignment()?;
       if let Expr::Variable { id, id_info } = self.ast.get_expression(lhs) {
         return Ok(self.ast.add_expression(Expr::Assignment {

@@ -19,7 +19,7 @@ fn add(_: &mut Interpreter, args: Vec<ExprValue>) -> InterpreterFnResult {
   }
 }
 */
-fn test(program: &String) -> Result<(), SourceError> {
+fn test(program: &str) -> Result<(), SourceError> {
   let parser = Parser::new(Lexer::new(program));
   let ast = parser.parse()?;
   print!("{}", desugar(&ast));

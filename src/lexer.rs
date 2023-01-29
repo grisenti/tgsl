@@ -97,11 +97,11 @@ fn is_first_id_charachter(c: char) -> bool {
 impl Display for Token<'_> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::String(s) => write!(f, "\"{}\"", s),
-      Self::Number(num) => write!(f, "{}", num),
-      Self::Id(id) => write!(f, "{}", id),
-      Self::Basic(c) => write!(f, "'{}'", c),
-      _ => write!(f, "{:?}", self),
+      Self::String(s) => write!(f, "\"{s}\""),
+      Self::Number(num) => write!(f, "{num}"),
+      Self::Id(id) => write!(f, "{id}"),
+      Self::Basic(c) => write!(f, "'{c}'"),
+      _ => write!(f, "{self:?}"),
     }
   }
 }
@@ -133,7 +133,7 @@ impl<'src> Lexer<'src> {
 
   fn match_wide_or_single_operator(&mut self, alternatives: &[(char, Token<'src>)]) -> Token<'src> {
     if let Some((_, ch)) = self.current.clone().next() {
-      if let Some((_, kind)) = alternatives.into_iter().find(|(c, _)| *c == ch) {
+      if let Some((_, kind)) = alternatives.iter().find(|(c, _)| *c == ch) {
         self.advance();
         self.advance();
         return *kind;

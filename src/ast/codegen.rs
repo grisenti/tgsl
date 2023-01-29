@@ -117,7 +117,7 @@ pub fn desugar_stmt(ast: &AST, stmt: StmtHandle, spaces: String) -> String {
     Stmt::Return(expr) => result = format!("{}return {};\n", &spaces, desugar_expr(ast, expr)),
     Stmt::Function {
       name,
-      name_info,
+      name_info: _,
       parameters,
       body,
     } => {

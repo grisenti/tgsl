@@ -1,5 +1,4 @@
 use crate::{lexer::SourceInfo, Lexer};
-use std::fmt::Display;
 
 #[derive(Debug, PartialEq)]
 pub enum SourceErrorType {
