@@ -1,5 +1,6 @@
 mod environment;
 
+use std::clone;
 use std::fmt::Debug;
 
 use environment::*;
@@ -8,10 +9,12 @@ use crate::ast::*;
 use crate::errors::{SourceError, SourceErrorType};
 use crate::lexer::{SourceInfo, Token, TokenPair};
 
-pub trait ClonableFn: Fn(&mut Interpreter, Vec<ExprValue>) -> InterpreterFnResult {
+pub trait ClonableFn {
   fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
   where
     Self: 'a;
+
+  fn call(&self, interpreter: &mut Interpreter, arguments: Vec<ExprValue>) -> InterpreterFnResult;
 }
 
 impl<T> ClonableFn for T
@@ -24,11 +27,34 @@ where
   {
     Box::new(self.clone())
   }
+
+  fn call(&self, interpreter: &mut Interpreter, arguments: Vec<ExprValue>) -> InterpreterFnResult {
+    self(interpreter, arguments)
+  }
 }
 
 impl Clone for Box<dyn ClonableFn> {
   fn clone(&self) -> Self {
     ClonableFn::clone_box(&**self) // passing self directly causes and infinite loop
+  }
+}
+
+#[derive(Clone)]
+struct NativeFn {
+  body: Vec<StmtHandle>,
+  parameters: Vec<StrHandle>,
+}
+
+impl ClonableFn for NativeFn {
+  fn call(&self, interpreter: &mut Interpreter, arguments: Vec<ExprValue>) -> InterpreterFnResult {
+    interpreter.interpret_function(&self.parameters, &self.body, arguments)
+  }
+
+  fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
+  where
+    Self: 'a,
+  {
+    Box::new(self.clone())
   }
 }
 
@@ -162,6 +188,7 @@ fn check_bool(val: ExprValue, info: SourceInfo) -> Result<bool, SourceError> {
 
 pub struct Interpreter {
   env: Environment,
+  ast: AST,
 }
 
 enum EarlyOut {
@@ -174,24 +201,23 @@ type StmtRes = Result<Option<EarlyOut>, SourceError>;
 impl Interpreter {
   fn install_identifier(
     &mut self,
-    ast: &AST,
     id: &str,
     id_info: SourceInfoHandle,
     exp_opt: Option<ExprHandle>,
   ) -> IntepreterResult {
     let value = exp_opt
       .as_ref()
-      .map(|exp| self.interpret_expression(ast, exp.clone()))
+      .map(|exp| self.interpret_expression(exp.clone()))
       .unwrap_or(Ok(ExprValue::Null))?;
     self
       .env
-      .declare_source_identifier(id, &ast.get_source_info(id_info), value)
+      .declare_source_identifier(id, &self.ast.get_source_info(id_info), value)
   }
 
   fn handle_literal_expression(&self, ast: &AST, literal: Literal) -> ExprResult {
     match literal {
       Literal::Number(num) => Ok(ExprValue::Num(num)),
-      Literal::String(s) => Ok(ExprValue::Str(ast.get_str(s).to_string())),
+      Literal::String(s) => Ok(ExprValue::Str(self.ast.get_str(s).to_string())),
       Literal::True => Ok(ExprValue::Boolean(true)),
       Literal::False => Ok(ExprValue::Boolean(false)),
       Literal::Null => Ok(ExprValue::Null),
@@ -201,14 +227,13 @@ impl Interpreter {
 
   fn handle_binary_expression(
     &mut self,
-    ast: &AST,
     left: ExprHandle,
     op: Operator,
     op_src_info: SourceInfo,
     right: ExprHandle,
   ) -> ExprResult {
-    let lhs = self.interpret_expression(ast, left)?;
-    let rhs = self.interpret_expression(ast, right)?;
+    let lhs = self.interpret_expression(left)?;
+    let rhs = self.interpret_expression(right)?;
     match op {
       Operator::Basic('+') => add(lhs, rhs, op_src_info),
       Operator::Basic('-') => binary_num(lhs, rhs, op_src_info, |x, y| x - y),
@@ -226,19 +251,18 @@ impl Interpreter {
 
   fn handle_logical_expression(
     &mut self,
-    ast: &AST,
     left: ExprHandle,
     op: Operator,
     op_src_info: SourceInfo,
     right: ExprHandle,
   ) -> ExprResult {
-    let lhs = check_bool(self.interpret_expression(ast, left)?, op_src_info)?;
+    let lhs = check_bool(self.interpret_expression(left)?, op_src_info)?;
     match op {
       Operator::And => Ok(ExprValue::Boolean(
-        lhs && check_bool(self.interpret_expression(ast, right)?, op_src_info)?,
+        lhs && check_bool(self.interpret_expression(right)?, op_src_info)?,
       )),
       Operator::Or => Ok(ExprValue::Boolean(
-        lhs || check_bool(self.interpret_expression(ast, right)?, op_src_info)?,
+        lhs || check_bool(self.interpret_expression(right)?, op_src_info)?,
       )),
       _ => panic!(),
     }
@@ -246,12 +270,11 @@ impl Interpreter {
 
   fn handle_unary_expression(
     &mut self,
-    ast: &AST,
     op: Operator,
     op_src_info: SourceInfo,
     right: ExprHandle,
   ) -> ExprResult {
-    let rhs = self.interpret_expression(ast, right)?;
+    let rhs = self.interpret_expression(right)?;
     match op {
       Operator::Basic('-') => unary_minus(rhs, op_src_info),
       Operator::Basic('!') => unary_not(rhs, op_src_info),
@@ -259,18 +282,17 @@ impl Interpreter {
     }
   }
 
-  fn interpret_expression(&mut self, ast: &AST, exp: ExprHandle) -> ExprResult {
-    match ast.get_expression(exp) {
-      Expr::Literal { literal, info: _ } => self.handle_literal_expression(ast, literal),
+  fn interpret_expression(&mut self, exp: ExprHandle) -> ExprResult {
+    match self.ast.get_expression(exp) {
+      Expr::Literal { literal, info: _ } => self.handle_literal_expression(&self.ast, literal),
       Expr::BinaryExpr {
         left,
         operator,
         right,
       } => self.handle_binary_expression(
-        ast,
         left,
         operator.op,
-        ast.get_source_info(operator.src_info),
+        self.ast.get_source_info(operator.src_info),
         right,
       ),
       Expr::Logical {
@@ -278,30 +300,30 @@ impl Interpreter {
         operator,
         right,
       } => self.handle_logical_expression(
-        ast,
         left,
         operator.op,
-        ast.get_source_info(operator.src_info),
+        self.ast.get_source_info(operator.src_info),
         right,
       ),
       Expr::UnaryExpr { operator, right } => self.handle_unary_expression(
-        ast,
         operator.op,
-        ast.get_source_info(operator.src_info),
+        self.ast.get_source_info(operator.src_info),
         right,
       ),
       Expr::Variable { id, id_info } => self
         .env
-        .get_id_value(ast.get_str(id), &ast.get_source_info(id_info)),
+        .get_id_value(self.ast.get_str(id), &self.ast.get_source_info(id_info)),
       Expr::Assignment {
         name,
         name_info,
         value,
       } => {
-        let rhs = self.interpret_expression(ast, value)?;
-        self
-          .env
-          .assign(ast.get_str(name), ast.get_source_info(name_info), rhs)
+        let rhs = self.interpret_expression(value)?;
+        self.env.assign(
+          self.ast.get_str(name),
+          self.ast.get_source_info(name_info),
+          rhs,
+        )
       }
       Expr::FnCall {
         func,
@@ -310,21 +332,21 @@ impl Interpreter {
       } => {
         let mut argument_values = Vec::new();
         for arg in arguments {
-          argument_values.push(self.interpret_expression(ast, arg)?);
+          argument_values.push(self.interpret_expression(arg)?);
         }
-        let func_val = self.interpret_expression(ast, func)?;
+        let func_val = self.interpret_expression(func)?;
         if let ExprValue::Func(func) = func_val {
           if func.arity as usize == argument_values.len() {
-            (func.callable)(self, argument_values).or_else(|_| {
+            func.callable.call(self, argument_values).or_else(|_| {
               Err(SourceError::from_token_info(
-                &ast.get_source_info(call_start),
+                &self.ast.get_source_info(call_start),
                 format!("function call error"),
                 SourceErrorType::Runtime,
               ))
             })
           } else {
             Err(SourceError::from_token_info(
-              &ast.get_source_info(call_start),
+              &self.ast.get_source_info(call_start),
               format!(
                 "too many arguments ({}) for function {} (arity: {})",
                 argument_values.len(),
@@ -336,7 +358,7 @@ impl Interpreter {
           }
         } else {
           Err(SourceError::from_token_info(
-            &ast.get_source_info(call_start),
+            &self.ast.get_source_info(call_start),
             format!("cannot call {:?}, only functions", func_val),
             SourceErrorType::Runtime,
           ))
@@ -347,23 +369,22 @@ impl Interpreter {
 
   fn interpret_if_branch(
     &mut self,
-    ast: &AST,
     if_info: SourceInfoHandle,
     condition: ExprHandle,
     true_branch: StmtHandle,
     false_branch: Option<StmtHandle>,
   ) -> StmtRes {
-    if let ExprValue::Boolean(value) = self.interpret_expression(ast, condition)? {
+    if let ExprValue::Boolean(value) = self.interpret_expression(condition)? {
       if value {
-        self.interpret_statement(ast, true_branch)
+        self.interpret_statement(true_branch)
       } else if let Some(branch) = false_branch {
-        self.interpret_statement(ast, branch)
+        self.interpret_statement(branch)
       } else {
         Ok(None)
       }
     } else {
       Err(SourceError::from_token_info(
-        &ast.get_source_info(if_info),
+        &self.ast.get_source_info(if_info),
         "if condition has to evaluate to boolean".to_string(),
         SourceErrorType::Runtime,
       ))
@@ -372,16 +393,15 @@ impl Interpreter {
 
   fn interpret_while_loop(
     &mut self,
-    ast: &AST,
     info: SourceInfoHandle,
     condition: ExprHandle,
     body: StmtHandle,
   ) -> StmtRes {
     loop {
-      match self.interpret_expression(ast, condition.clone())? {
+      match self.interpret_expression(condition.clone())? {
         ExprValue::Boolean(val) => {
           if val {
-            if let Some(EarlyOut::Break) = self.interpret_statement(ast, body.clone())? {
+            if let Some(EarlyOut::Break) = self.interpret_statement(body.clone())? {
               break;
             }
           } else {
@@ -390,7 +410,7 @@ impl Interpreter {
         }
         val => {
           return Err(SourceError::from_token_info(
-            &ast.get_source_info(info),
+            &self.ast.get_source_info(info),
             format!("while condition has to evaluate to a boolean, got {val:?}"),
             SourceErrorType::Runtime,
           ))
@@ -400,23 +420,55 @@ impl Interpreter {
     Ok(None)
   }
 
-  fn interpret_statement(&mut self, ast: &AST, stmt: StmtHandle) -> StmtRes {
-    match ast.get_statement(stmt) {
+  fn interpret_function(
+    &mut self,
+    parameters: &[StrHandle],
+    body: &[StmtHandle],
+    arguments: Vec<ExprValue>,
+  ) -> InterpreterFnResult {
+    self.env.push();
+    for (param, arg) in parameters.iter().zip(arguments) {
+      self
+        .env
+        .declare_source_identifier(
+          self.ast.get_str(param.clone()),
+          &SourceInfo {
+            line_no: 0,
+            line_start: 0,
+            start: 0,
+            end: 0,
+          },
+          arg,
+        )
+        .or(Err(()))?;
+    }
+    for stmt in body.iter().cloned() {
+      self.interpret_statement(stmt).or(Err(()))?;
+    }
+    self.env.pop();
+    Ok(ExprValue::Null)
+  }
+
+  fn interpret_statement(&mut self, stmt: StmtHandle) -> StmtRes {
+    match self.ast.get_statement(stmt) {
       Stmt::VarDecl {
         identifier,
         id_info,
         expression,
-      } => self.install_identifier(ast, ast.get_str(identifier), id_info, expression)?,
+      } => {
+        let id = self.ast.get_str(identifier).to_string();
+        self.install_identifier(&id, id_info, expression)?
+      }
       Stmt::Print(expression) => {
-        println!("{:?}", self.interpret_expression(ast, expression)?);
+        println!("{:?}", self.interpret_expression(expression)?);
       }
       Stmt::Expr(expr) => {
-        self.interpret_expression(ast, expr)?;
+        self.interpret_expression(expr)?;
       }
       Stmt::Block(stmts) => {
         self.env.push();
         for stmt in stmts {
-          let res = self.interpret_statement(ast, stmt)?;
+          let res = self.interpret_statement(stmt)?;
           if res.is_some() {
             return Ok(res);
           }
@@ -429,30 +481,47 @@ impl Interpreter {
         true_branch,
         else_branch,
       } => {
-        self.interpret_if_branch(ast, if_info, condition, true_branch, else_branch)?;
+        self.interpret_if_branch(if_info, condition, true_branch, else_branch)?;
       }
       Stmt::While {
         info,
         condition,
         loop_body,
       } => {
-        self.interpret_while_loop(ast, info, condition, loop_body)?;
+        self.interpret_while_loop(info, condition, loop_body)?;
       }
       Stmt::Break => return Ok(Some(EarlyOut::Break)),
+      Stmt::Function {
+        name,
+        name_info,
+        parameters,
+        body,
+      } => {
+        let arity = parameters.len() as u32;
+        let func = NativeFn { body, parameters };
+        let interpreter_fn = InterpreterFn {
+          arity,
+          name: self.ast.get_str(name.clone()).to_string(),
+          callable: Box::new(func),
+        };
+        self.env.declare_source_identifier(
+          self.ast.get_str(name),
+          &self.ast.get_source_info(name_info),
+          ExprValue::Func(interpreter_fn),
+        )?;
+      }
       _ => panic!(),
     };
     Ok(None)
   }
 
-  pub fn new() -> Self {
-    Self {
+  pub fn interpret(ast: AST) -> Result<(), SourceError> {
+    let mut interpreter = Self {
       env: Environment::global(),
-    }
-  }
-
-  pub fn interpret(&mut self, ast: &AST) -> Result<(), SourceError> {
-    for stmt in ast.get_program() {
-      self.interpret_statement(ast, stmt.clone())?;
+      ast,
+    };
+    for stmt in interpreter.ast.get_program().clone() {
+      interpreter.interpret_statement(stmt.clone())?;
     }
     Ok(())
   }
