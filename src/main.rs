@@ -11,28 +11,26 @@ use errors::SourceError;
 use interpreter::*;
 use lexer::*;
 use parser::*;
-
+/*
 fn add(_: &mut Interpreter, args: Vec<ExprValue>) -> InterpreterFnResult {
   match (args[0].clone(), args[1].clone()) {
     (ExprValue::Num(a), ExprValue::Num(b)) => Ok(ExprValue::Num(a + b)),
     _ => Err(()),
   }
 }
-
-fn main() -> Result<(), SourceError> {
-  let program = fs::read_to_string("program.pr").unwrap();
-  let mut parser = Parser::new(Lexer::new(&program));
-  let mut interpreter = Interpreter::new();
+*/
+fn test(program: &String) -> Result<(), SourceError> {
+  let parser = Parser::new(Lexer::new(program));
   let ast = parser.parse()?;
   print!("{}", desugar(&ast));
-  interpreter.add_native_function(
-    "add",
-    InterpreterFn {
-      arity: 2,
-      name: "add".to_string(),
-      callable: Box::new(add),
-    },
-  );
-  interpreter.interpret(ast)?;
+  let mut int = Interpreter::new();
+  int.interpret(&ast)?;
   Ok(())
+}
+
+fn main() {
+  let program = fs::read_to_string("program.pr").unwrap();
+  if let Err(err) = test(&program) {
+    println!("{}", err.print_long(&program));
+  }
 }

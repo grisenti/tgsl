@@ -1,21 +1,19 @@
 use super::*;
 
 impl<'src> Parser<'src> {
-  fn parse_primary(&mut self) -> ExprRes<'src> {
+  fn parse_primary(&mut self) -> ExprRes {
     match self.lookahead {
       Token::Number(_) | Token::String(_) | Token::True | Token::False | Token::Null => {
-        let ret = Ok(Box::new(Expr::Literal(TokenPair::new(
-          self.lookahead,
-          self.lex.prev_token_info(),
-        ))));
+        let literal = literal_from_token(self.lookahead, &mut self.ast);
+        let info = self.last_token_info();
+        let ret = Ok(self.ast.add_expression(Expr::Literal { literal, info }));
         self.advance()?;
         ret
       }
       Token::Id(id) => {
-        let ret = Ok(Box::new(Expr::Variable {
-          id,
-          id_info: self.lex.prev_token_info(),
-        }));
+        let id = self.ast.add_str(id);
+        let id_info = self.last_token_info();
+        let ret = Ok(self.ast.add_expression(Expr::Variable { id, id_info }));
         self.advance()?;
         ret
       }
@@ -33,7 +31,7 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_call(&mut self) -> ExprRes<'src> {
+  fn parse_call(&mut self) -> ExprRes {
     let mut expr = self.parse_primary()?;
     let mut too_many_arguments = None;
     loop {
@@ -51,7 +49,7 @@ impl<'src> Parser<'src> {
                   SourceErrorType::Runtime,
                 ));
               }
-              arguments.push(*self.parse_expression()?);
+              arguments.push(self.parse_expression()?);
               if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
                 break;
               }
@@ -59,9 +57,12 @@ impl<'src> Parser<'src> {
           }
           let call_end = self.lex.prev_token_info();
           self.match_or_err(Token::Basic(')'))?;
-          expr = Box::new(Expr::FnCall {
+          let call_info = self
+            .ast
+            .add_source_info(SourceInfo::union(call_start, call_end));
+          expr = self.ast.add_expression(Expr::FnCall {
             func: expr,
-            call_info: TokenInfo::union(call_start, call_end),
+            call_info,
             arguments,
           })
         }
@@ -75,110 +76,117 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_unary(&mut self) -> ExprRes<'src> {
-    if let Some(op) = self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')])? {
-      Ok(Box::new(Expr::UnaryExpr {
-        operator: op,
-        right: self.parse_call()?,
+  fn parse_unary(&mut self) -> ExprRes {
+    if let Some((op, src_info)) =
+      self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')])?
+    {
+      let right = self.parse_call()?;
+      Ok(self.ast.add_expression(Expr::UnaryExpr {
+        operator: OperatorPair::new(to_operator(op), src_info),
+        right,
       }))
     } else {
       Ok(self.parse_call()?)
     }
   }
 
-  fn parse_factor(&mut self) -> ExprRes<'src> {
+  fn parse_factor(&mut self) -> ExprRes {
     let mut expr = self.parse_unary()?;
-    while let Some(op) = self.matches_alternatives(&[Token::Basic('*'), Token::Basic('/')])? {
+    while let Some((op, src_info)) =
+      self.matches_alternatives(&[Token::Basic('*'), Token::Basic('/')])?
+    {
       let right = self.parse_unary()?;
-      expr = Box::new(Expr::BinaryExpr {
+      expr = self.ast.add_expression(Expr::BinaryExpr {
         left: expr,
-        operator: op,
+        operator: OperatorPair::new(to_operator(op), src_info),
         right,
       })
     }
     Ok(expr)
   }
 
-  fn parse_term(&mut self) -> ExprRes<'src> {
+  fn parse_term(&mut self) -> ExprRes {
     let mut expr = self.parse_factor()?;
-    while let Some(op) = self.matches_alternatives(&[Token::Basic('+'), Token::Basic('-')])? {
+    while let Some((op, src_info)) =
+      self.matches_alternatives(&[Token::Basic('+'), Token::Basic('-')])?
+    {
       let right = self.parse_factor()?;
-      expr = Box::new(Expr::BinaryExpr {
+      expr = self.ast.add_expression(Expr::BinaryExpr {
         left: expr,
-        operator: op,
+        operator: OperatorPair::new(to_operator(op), src_info),
         right,
       })
     }
     Ok(expr)
   }
 
-  fn parse_comparison(&mut self) -> ExprRes<'src> {
+  fn parse_comparison(&mut self) -> ExprRes {
     let mut expr = self.parse_term()?;
-    while let Some(op) =
+    while let Some((op, src_info)) =
       self.matches_alternatives(&[Token::Leq, Token::Geq, Token::Basic('<'), Token::Basic('>')])?
     {
       let right = self.parse_term()?;
-      expr = Box::new(Expr::BinaryExpr {
+      expr = self.ast.add_expression(Expr::BinaryExpr {
         left: expr,
-        operator: op,
+        operator: OperatorPair::new(to_operator(op), src_info),
         right,
       })
     }
     Ok(expr)
   }
 
-  fn parse_equality(&mut self) -> ExprRes<'src> {
+  fn parse_equality(&mut self) -> ExprRes {
     let mut expr = self.parse_comparison()?;
-    while let Some(op) = self.matches_alternatives(&[Token::Same, Token::Different])? {
+    while let Some((op, src_info)) = self.matches_alternatives(&[Token::Same, Token::Different])? {
       let right = self.parse_comparison()?;
-      expr = Box::new(Expr::BinaryExpr {
+      expr = self.ast.add_expression(Expr::BinaryExpr {
         left: expr,
-        operator: op,
+        operator: OperatorPair::new(to_operator(op), src_info),
         right,
       })
     }
     Ok(expr)
   }
 
-  fn parse_logical_and(&mut self) -> ExprRes<'src> {
+  fn parse_logical_and(&mut self) -> ExprRes {
     let mut lhs = self.parse_equality()?;
-    while let Some(and) = self.matches_alternatives(&[Token::And])? {
+    while let Some((_, src_info)) = self.matches_alternative(Token::And)? {
       let rhs = self.parse_equality()?;
-      lhs = Box::new(Expr::Logical {
+      lhs = self.ast.add_expression(Expr::Logical {
         left: lhs,
-        operator: and,
+        operator: OperatorPair::new(Operator::And, src_info),
         right: rhs,
       });
     }
     Ok(lhs)
   }
 
-  fn parse_logical_or(&mut self) -> ExprRes<'src> {
+  fn parse_logical_or(&mut self) -> ExprRes {
     let mut lhs = self.parse_logical_and()?;
-    while let Some(or) = self.matches_alternatives(&[Token::Or])? {
+    while let Some((_, src_info)) = self.matches_alternative(Token::Or)? {
       let rhs = self.parse_logical_and()?;
-      lhs = Box::new(Expr::Logical {
+      lhs = self.ast.add_expression(Expr::Logical {
         left: lhs,
-        operator: or,
+        operator: OperatorPair::new(Operator::Or, src_info),
         right: rhs,
       });
     }
     Ok(lhs)
   }
 
-  fn parse_assignment(&mut self) -> ExprRes<'src> {
+  fn parse_assignment(&mut self) -> ExprRes {
     let lhs = self.parse_logical_or()?;
-    if let Some(eq) = self.matches_alternatives(&[Token::Basic('=')])? {
+    if let Some((eq, eq_src_info)) = self.matches_alternative(Token::Basic('='))? {
       let rhs = self.parse_assignment()?;
-      if let Expr::Variable { id, id_info } = *lhs {
-        return Ok(Box::new(Expr::Assignment {
+      if let Expr::Variable { id, id_info } = self.ast.get_expression(lhs) {
+        return Ok(self.ast.add_expression(Expr::Assignment {
           name: id,
           name_info: id_info,
           value: rhs,
         }));
       } else {
         return Err(SourceError::from_token_info(
-          &eq.info,
+          &self.ast.get_source_info(eq_src_info),
           "left hand side of assignment is not a valid target".to_string(),
           SourceErrorType::Parsing,
         ));
@@ -187,7 +195,7 @@ impl<'src> Parser<'src> {
     Ok(lhs)
   }
 
-  pub(super) fn parse_expression(&mut self) -> ExprRes<'src> {
+  pub(super) fn parse_expression(&mut self) -> ExprRes {
     self.parse_assignment()
   }
 }

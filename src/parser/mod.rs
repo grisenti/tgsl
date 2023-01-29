@@ -8,16 +8,21 @@ use super::lexer::*;
 pub struct Parser<'src> {
   lex: Lexer<'src>,
   lookahead: Token<'src>,
+  ast: AST,
 }
 
 type SrcErrVec = Vec<SourceError>;
-type TokenPairOpt<'src> = Option<TokenPair<'src>>;
-type ExprRes<'src> = Result<Box<Expr<'src>>, SourceError>;
-type StmtRes<'src> = Result<Stmt<'src>, SourceError>;
+type TokenPairOpt<'src> = Option<(Token<'src>, SourceInfoHandle)>;
+type ExprRes = Result<ExprHandle, SourceError>;
+type StmtRes = Result<StmtHandle, SourceError>;
 
 impl<'src> Parser<'src> {
   fn is_at_end(&self) -> bool {
     self.lookahead == Token::EndOfFile
+  }
+
+  fn last_token_info(&mut self) -> SourceInfoHandle {
+    self.ast.add_source_info(self.lex.prev_token_info())
   }
 
   fn advance(&mut self) -> Result<Token<'src>, SourceError> {
@@ -40,12 +45,19 @@ impl<'src> Parser<'src> {
     alternatives: &[Token<'static>],
   ) -> Result<TokenPairOpt<'src>, SourceError> {
     if alternatives.contains(&self.lookahead) {
-      let res = TokenPair::new(self.lookahead, self.lex.prev_token_info());
+      let res = (self.lookahead, self.last_token_info());
       self.advance()?;
       Ok(Some(res))
     } else {
       Ok(None)
     }
+  }
+
+  fn matches_alternative(
+    &mut self,
+    tok: Token<'static>,
+  ) -> Result<TokenPairOpt<'src>, SourceError> {
+    self.matches_alternatives(&[tok])
   }
 
   fn match_or_err(&mut self, token: Token) -> Result<(), SourceError> {
@@ -81,18 +93,18 @@ impl<'src> Parser<'src> {
     Self {
       lex,
       lookahead: Token::EndOfFile,
+      ast: AST::new(),
     }
   }
 
-  pub fn parse(&'src mut self) -> Result<ASTNode<'src>, SourceError> {
-    let mut program = Vec::new();
+  pub fn parse(mut self) -> Result<AST, SourceError> {
     let mut errors = Vec::new();
     if let Err(e) = self.advance() {
       errors.push(e)
     }
     while !self.is_at_end() {
       match self.parse_decl(false) {
-        Ok(stmt) => program.push(stmt),
+        Ok(stmt) => self.ast.program_push(stmt),
         Err(err) => {
           errors.push(err);
           errors = self.syncronize_or_errors(errors)?;
@@ -100,7 +112,7 @@ impl<'src> Parser<'src> {
       }
     }
     if errors.is_empty() {
-      Ok(ASTNode::Program(program))
+      Ok(self.ast)
     } else {
       Err(SourceError::from_err_vec(errors))
     }

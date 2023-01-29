@@ -35,25 +35,21 @@ pub enum Token<'src> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct TokenInfo<'src> {
+pub struct SourceInfo {
   pub line_no: u32,
-  pub line: &'src str,
+  pub line_start: usize, // TODO: remove for efficency
   pub start: usize,
   pub end: usize,
 }
 
-impl<'src> TokenInfo<'src> {
-  pub fn union(start: TokenInfo<'src>, end: TokenInfo<'src>) -> Self {
+impl SourceInfo {
+  pub fn union(start: SourceInfo, end: SourceInfo) -> Self {
     assert!(start.line_no <= end.line_no);
     Self {
       line_no: start.line_no,
-      line: start.line,
+      line_start: start.line_start,
       start: start.start,
-      end: if start.line_no < end.line_no {
-        start.line.len()
-      } else {
-        end.end
-      },
+      end: end.end,
     }
   }
 }
@@ -61,11 +57,11 @@ impl<'src> TokenInfo<'src> {
 #[derive(Clone, Copy, Debug)]
 pub struct TokenPair<'src> {
   pub token: Token<'src>,
-  pub info: TokenInfo<'src>,
+  pub info: SourceInfo,
 }
 
 impl<'src> TokenPair<'src> {
-  pub fn new(token: Token<'src>, info: TokenInfo<'src>) -> Self {
+  pub fn new(token: Token<'src>, info: SourceInfo) -> Self {
     Self { token, info }
   }
 }
@@ -104,7 +100,7 @@ impl Display for Token<'_> {
       Self::String(s) => write!(f, "\"{}\"", s),
       Self::Number(num) => write!(f, "{}", num),
       Self::Id(id) => write!(f, "{}", id),
-      Self::Basic(c) => write!(f, "{}", c),
+      Self::Basic(c) => write!(f, "'{}'", c),
       _ => write!(f, "{:?}", self),
     }
   }
@@ -288,7 +284,7 @@ impl<'src> Lexer<'src> {
 
   pub fn next_token(&mut self) -> Result<Token<'src>, SourceError> {
     self.skip_unused()?;
-    self.prev_token_start = self.total_offset - self.line_start_offset;
+    self.prev_token_start = self.total_offset;
     if self.is_at_end() {
       return Ok(Token::EndOfFile);
     }
@@ -323,15 +319,19 @@ impl<'src> Lexer<'src> {
   }
 
   pub fn prev_token_end(&self) -> usize {
-    self.total_offset - self.line_start_offset
+    self.total_offset
   }
 
-  pub fn prev_token_info(&self) -> TokenInfo<'src> {
-    TokenInfo {
+  pub fn prev_token_line_start(&self) -> usize {
+    self.line_start_offset
+  }
+
+  pub fn prev_token_info(&self) -> SourceInfo {
+    SourceInfo {
       line_no: self.line_no,
-      line: self.line(),
+      line_start: self.line_start_offset,
       start: self.prev_token_start,
-      end: self.prev_token_end(),
+      end: self.total_offset,
     }
   }
 }

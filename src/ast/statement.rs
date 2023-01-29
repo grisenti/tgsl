@@ -1,34 +1,31 @@
-use crate::lexer::TokenInfo;
+use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle};
 
-use super::Expr;
-
-pub enum Stmt<'src> {
+#[derive(Debug, Clone)]
+pub enum Stmt {
   VarDecl {
-    identifier: &'src str,
-    id_info: TokenInfo<'src>,
-    expression: Option<Expr<'src>>,
+    identifier: StrHandle,
+    id_info: SourceInfoHandle,
+    expression: Option<ExprHandle>,
   },
-  Expr(Expr<'src>),
-  Print {
-    expression: Expr<'src>,
-  },
-  Block(Vec<Stmt<'src>>),
+  Expr(ExprHandle),
+  Print(ExprHandle),
+  Block(Vec<StmtHandle>),
   IfBranch {
-    if_info: TokenInfo<'src>,
-    condition: Expr<'src>,
-    true_branch: Box<Stmt<'src>>,
-    else_branch: Option<Box<Stmt<'src>>>,
+    if_info: SourceInfoHandle,
+    condition: ExprHandle,
+    true_branch: StmtHandle,
+    else_branch: Option<StmtHandle>,
   },
   While {
-    info: TokenInfo<'src>,
-    condition: Expr<'src>,
-    loop_body: Box<Stmt<'src>>,
+    info: SourceInfoHandle,
+    condition: ExprHandle,
+    loop_body: StmtHandle,
   },
   Function {
-    name: &'src str,
-    name_info: TokenInfo<'src>,
-    parameters: Vec<&'src str>,
-    body: Vec<Stmt<'src>>,
+    name: StrHandle,
+    name_info: SourceInfoHandle,
+    parameters: Vec<StrHandle>,
+    body: Vec<StmtHandle>,
   },
   Break,
 }

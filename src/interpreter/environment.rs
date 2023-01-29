@@ -1,20 +1,20 @@
 use super::*;
 use std::{collections::HashMap, ops::Not};
 
-pub struct Environment<'src> {
-  scopes: Vec<HashMap<&'src str, ExprValue>>,
+pub struct Environment {
+  scopes: Vec<HashMap<String, ExprValue>>,
 }
 
-impl<'src> Environment<'src> {
-  fn innermost(&mut self) -> &mut HashMap<&'src str, ExprValue> {
+impl Environment {
+  fn innermost(&mut self) -> &mut HashMap<String, ExprValue> {
     // we are always guaranteed the global scope so unwrapping is safe
     self.scopes.last_mut().unwrap()
   }
 
   pub fn declare_source_identifier(
     &mut self,
-    id: &'src str,
-    id_info: &TokenInfo,
+    id: &str,
+    id_info: &SourceInfo,
     value: ExprValue,
   ) -> Result<(), SourceError> {
     self
@@ -22,7 +22,7 @@ impl<'src> Environment<'src> {
       .contains_key(id)
       .not()
       .then(|| {
-        self.innermost().insert(id, value);
+        self.innermost().insert(id.to_string(), value);
       })
       .ok_or_else(|| {
         SourceError::from_token_info(
@@ -33,11 +33,11 @@ impl<'src> Environment<'src> {
       })
   }
 
-  pub fn declare_native_identifier(&mut self, id: &'src str, value: ExprValue) {
+  pub fn declare_native_identifier(&mut self, id: String, value: ExprValue) {
     self.scopes.first_mut().unwrap().insert(id, value);
   }
 
-  pub fn get_id_value(&self, id: &str, id_info: &TokenInfo) -> ExprResult {
+  pub fn get_id_value(&self, id: &str, id_info: &SourceInfo) -> ExprResult {
     self
       .scopes
       .iter()
@@ -53,7 +53,7 @@ impl<'src> Environment<'src> {
       })
   }
 
-  pub fn assign(&mut self, name: &str, info: &TokenInfo<'src>, value: ExprValue) -> ExprResult {
+  pub fn assign(&mut self, name: &str, info: SourceInfo, value: ExprValue) -> ExprResult {
     self
       .scopes
       .iter_mut()
@@ -65,7 +65,7 @@ impl<'src> Environment<'src> {
       })
       .ok_or_else(|| {
         SourceError::from_token_info(
-          info,
+          &info,
           format!("variable {} was not declared before", name),
           SourceErrorType::Runtime,
         )
