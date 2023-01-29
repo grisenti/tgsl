@@ -52,18 +52,6 @@ impl SourceInfo {
   }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct TokenPair<'src> {
-  pub token: Token<'src>,
-  pub info: SourceInfo,
-}
-
-impl<'src> TokenPair<'src> {
-  pub fn new(token: Token<'src>, info: SourceInfo) -> Self {
-    Self { token, info }
-  }
-}
-
 fn indentifier_token(input: &str) -> Token {
   match input {
     "and" => Token::And,

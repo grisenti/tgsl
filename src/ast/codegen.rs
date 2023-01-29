@@ -1,5 +1,3 @@
-use crate::lexer::TokenPair;
-
 use super::{Expr, ExprHandle, Stmt, StmtHandle, AST};
 
 pub fn desugar_expr(ast: &AST, expr: ExprHandle) -> String {

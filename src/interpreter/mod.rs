@@ -1,13 +1,12 @@
 mod environment;
 
-use std::clone;
 use std::fmt::Debug;
 
 use environment::*;
 
 use crate::ast::*;
 use crate::errors::{SourceError, SourceErrorType};
-use crate::lexer::{SourceInfo, Token, TokenPair};
+use crate::lexer::SourceInfo;
 
 pub trait ClonableFn {
   fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
