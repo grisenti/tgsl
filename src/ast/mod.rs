@@ -4,7 +4,7 @@ mod expression;
 mod statement;
 
 use core::panic;
-use std::marker::PhantomData;
+use std::{default::Default, marker::PhantomData};
 
 pub use expression::*;
 pub use statement::*;
@@ -53,6 +53,7 @@ pub enum ASTNode {
   Stmt(Stmt),
 }
 
+#[derive(Default)]
 pub struct AST {
   strings: String,
   nodes: Vec<ASTNode>,
@@ -62,12 +63,7 @@ pub struct AST {
 
 impl AST {
   pub fn new() -> Self {
-    Self {
-      strings: String::new(),
-      nodes: Vec::new(),
-      source_ptrs: Vec::new(),
-      program: Vec::new(),
-    }
+    Self::default()
   }
 
   pub fn get_statement(&self, handle: StmtHandle) -> Stmt {
