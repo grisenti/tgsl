@@ -37,7 +37,6 @@ pub enum Token<'src> {
 #[derive(Clone, Copy, Debug)]
 pub struct SourceInfo {
   pub line_no: u32,
-  pub line_start: usize, // TODO: remove for efficency
   pub start: usize,
   pub end: usize,
 }
@@ -47,7 +46,6 @@ impl SourceInfo {
     assert!(start.line_no <= end.line_no);
     Self {
       line_no: start.line_no,
-      line_start: start.line_start,
       start: start.start,
       end: end.end,
     }
@@ -329,7 +327,6 @@ impl<'src> Lexer<'src> {
   pub fn prev_token_info(&self) -> SourceInfo {
     SourceInfo {
       line_no: self.line_no,
-      line_start: self.line_start_offset,
       start: self.prev_token_start,
       end: self.total_offset,
     }

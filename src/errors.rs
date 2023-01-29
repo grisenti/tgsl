@@ -7,11 +7,10 @@ pub enum SourceErrorType {
   Runtime,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum SourceError {
   One {
     line_no: u32,
-    line_start: usize,
     start: usize,
     end: usize,
     error_msg: String,
@@ -20,11 +19,25 @@ pub enum SourceError {
   Many(Vec<SourceError>),
 }
 
+fn line_str(source: &str, start: usize) -> (usize, String) {
+  let line_start = source
+    .char_indices()
+    .rev()
+    .find(|(offset, c)| *c == '\n' && *offset <= start)
+    .map(|(offset, _)| offset + 1) // the +1 skips \n which is 1 byte wide
+    .unwrap_or(0);
+  let line = source[line_start..]
+    .char_indices()
+    .map(|(_, c)| c)
+    .take_while(|c| *c != '\n')
+    .collect();
+  (line_start, line)
+}
+
 impl SourceError {
   pub fn from_lexer_state(lex: &Lexer, error_msg: String, kind: SourceErrorType) -> Self {
     Self::One {
       line_no: lex.line_no(),
-      line_start: lex.prev_token_line_start(),
       start: lex.prev_token_start(),
       end: lex.prev_token_end(),
       error_msg,
@@ -35,7 +48,6 @@ impl SourceError {
   pub fn from_token_info(info: &SourceInfo, error_msg: String, kind: SourceErrorType) -> Self {
     Self::One {
       line_no: info.line_no,
-      line_start: info.line_start,
       start: info.start,
       end: info.end,
       error_msg,
@@ -51,23 +63,24 @@ impl SourceError {
     match self {
       Self::One {
         line_no,
-        line_start,
         start,
         end,
         error_msg,
         kind,
       } => {
-        let line_str: String = source[*line_start..]
-          .char_indices()
-          .map(|(_, c)| c)
-          .take_while(|c| *c != '\n')
-          .collect();
+        let (line_start, line_str) = line_str(source, *start);
+        let end = if line_str.len() < (*end - line_start) {
+          line_str.len()
+        } else {
+          *end - line_start
+        };
+        let start = *start - line_start;
         let spaces = line_no.to_string().chars().map(|_| ' ').collect::<String>();
-        let underline_spaces = line_str[0..*start - *line_start]
+        let underline_spaces = line_str[0..start]
           .char_indices()
           .map(|_| ' ')
           .collect::<String>();
-        let underlines = line_str[*start - line_start..*end - line_start]
+        let underlines = line_str[start..end]
           .char_indices()
           .map(|_| '~')
           .collect::<String>();
