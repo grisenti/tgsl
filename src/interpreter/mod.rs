@@ -435,7 +435,6 @@ impl Interpreter {
           self.ast.get_str(param.clone()),
           &SourceInfo {
             line_no: 0,
-            line_start: 0,
             start: 0,
             end: 0,
           },
@@ -519,13 +518,16 @@ impl Interpreter {
     Ok(None)
   }
 
-  pub fn interpret(ast: AST) -> Result<(), SourceError> {
-    let mut interpreter = Self {
+  pub fn new(ast: AST) -> Self {
+    Self {
       env: Environment::global(),
       ast,
-    };
-    for stmt in interpreter.ast.get_program().clone() {
-      interpreter.interpret_statement(stmt.clone())?;
+    }
+  }
+
+  pub fn interpret(&mut self) -> Result<(), SourceError> {
+    for stmt in self.ast.get_program().clone() {
+      self.interpret_statement(stmt.clone())?;
     }
     Ok(())
   }

@@ -23,7 +23,8 @@ fn test(program: &str) -> Result<(), SourceError> {
   let parser = Parser::new(Lexer::new(program));
   let ast = parser.parse()?;
   print!("{}", desugar(&ast));
-  Interpreter::interpret(ast)?;
+  let mut interpreter = Interpreter::new(ast);
+  interpreter.interpret()?;
   Ok(())
 }
 
