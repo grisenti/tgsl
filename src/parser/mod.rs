@@ -53,10 +53,7 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn matches_alternative(
-    &mut self,
-    tok: Token<'static>,
-  ) -> Result<TokenPairOpt<'src>, SourceError> {
+  fn match_next(&mut self, tok: Token<'static>) -> Result<TokenPairOpt<'src>, SourceError> {
     self.matches_alternatives(&[tok])
   }
 

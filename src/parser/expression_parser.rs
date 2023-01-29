@@ -150,7 +150,7 @@ impl<'src> Parser<'src> {
 
   fn parse_logical_and(&mut self) -> ExprRes {
     let mut lhs = self.parse_equality()?;
-    while let Some((_, src_info)) = self.matches_alternative(Token::And)? {
+    while let Some((_, src_info)) = self.match_next(Token::And)? {
       let rhs = self.parse_equality()?;
       lhs = self.ast.add_expression(Expr::Logical {
         left: lhs,
@@ -163,7 +163,7 @@ impl<'src> Parser<'src> {
 
   fn parse_logical_or(&mut self) -> ExprRes {
     let mut lhs = self.parse_logical_and()?;
-    while let Some((_, src_info)) = self.matches_alternative(Token::Or)? {
+    while let Some((_, src_info)) = self.match_next(Token::Or)? {
       let rhs = self.parse_logical_and()?;
       lhs = self.ast.add_expression(Expr::Logical {
         left: lhs,
@@ -176,7 +176,7 @@ impl<'src> Parser<'src> {
 
   fn parse_assignment(&mut self) -> ExprRes {
     let lhs = self.parse_logical_or()?;
-    if let Some((_, eq_src_info)) = self.matches_alternative(Token::Basic('='))? {
+    if let Some((_, eq_src_info)) = self.match_next(Token::Basic('='))? {
       let rhs = self.parse_assignment()?;
       if let Expr::Variable { id, id_info } = self.ast.get_expression(lhs) {
         return Ok(self.ast.add_expression(Expr::Assignment {
