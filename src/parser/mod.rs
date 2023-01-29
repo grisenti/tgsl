@@ -103,7 +103,7 @@ impl<'src> Parser<'src> {
       errors.push(e)
     }
     while !self.is_at_end() {
-      match self.parse_decl(false) {
+      match self.parse_decl() {
         Ok(stmt) => self.ast.program_push(stmt),
         Err(err) => {
           errors.push(err);

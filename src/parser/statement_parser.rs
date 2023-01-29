@@ -24,13 +24,13 @@ impl<'src> Parser<'src> {
     ret
   }
 
-  fn parse_block(&mut self, in_loop: bool) -> StmtRes {
+  fn parse_block(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::Basic('{'));
     self.advance()?;
     let mut statements = Vec::new();
     let mut errors = Vec::new();
     while self.lookahead != Token::Basic('}') && !self.is_at_end() {
-      match self.parse_decl(in_loop) {
+      match self.parse_decl() {
         Ok(stmt) => statements.push(stmt),
         Err(err) => {
           errors.push(err);
@@ -53,16 +53,16 @@ impl<'src> Parser<'src> {
     Ok(ret)
   }
 
-  fn parse_if_stmt(&mut self, in_loop: bool) -> StmtRes {
+  fn parse_if_stmt(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::If);
     let if_info = self.last_token_info();
     self.advance()?;
     self.match_or_err(Token::Basic('('))?;
     let condition = self.parse_expression()?;
     self.match_or_err(Token::Basic(')'))?;
-    let true_branch = self.parse_statement(in_loop)?;
+    let true_branch = self.parse_statement()?;
     let else_branch = if (self.matches_alternatives(&[Token::Else])?).is_some() {
-      Some(self.parse_statement(in_loop)?)
+      Some(self.parse_statement()?)
     } else {
       None
     };
@@ -81,7 +81,7 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic('('))?;
     let condition = self.parse_expression()?;
     self.match_or_err(Token::Basic(')'))?;
-    let loop_body = self.parse_statement(true)?;
+    let loop_body = self.parse_statement()?;
     Ok(self.ast.add_statement(Stmt::While {
       info,
       condition,
@@ -94,12 +94,12 @@ impl<'src> Parser<'src> {
     let info = self.last_token_info();
     self.advance()?; //consume for
     self.match_or_err(Token::Basic('('))?;
-    let init = self.parse_decl(false)?;
+    let init = self.parse_decl()?;
     let condition = self.parse_expression()?;
     self.match_or_err(Token::Basic(';'))?;
     let after = self.parse_expression()?;
     self.match_or_err(Token::Basic(')'))?;
-    let body = self.parse_statement(true)?;
+    let body = self.parse_statement()?;
     let while_finally = self.ast.add_statement(Stmt::Expr(after));
     let while_body = self
       .ast
@@ -127,18 +127,13 @@ impl<'src> Parser<'src> {
     Ok(self.ast.add_statement(Stmt::Return(expr)))
   }
 
-  fn parse_statement(&mut self, in_loop: bool) -> StmtRes {
+  fn parse_statement(&mut self) -> StmtRes {
     match self.lookahead {
       Token::Print => self.parse_print_stmt(),
-      Token::Basic('{') => self.parse_block(in_loop),
-      Token::If => self.parse_if_stmt(in_loop),
+      Token::Basic('{') => self.parse_block(),
+      Token::If => self.parse_if_stmt(),
       Token::While => self.parse_while_stmt(),
       Token::For => self.parse_for_stmt(),
-      Token::Break if !in_loop => Err(SourceError::from_lexer_state(
-        &self.lex,
-        format!("cannot use {:?} outside of loops", self.lookahead),
-        SourceErrorType::Parsing,
-      )),
       Token::Break => self.parse_loop_early_out(Stmt::Break),
       Token::Return => self.parse_function_return(),
       _ => self.parse_expr_stmt(),
@@ -193,7 +188,7 @@ impl<'src> Parser<'src> {
     let call_end = self.lex.prev_token_info();
     self.match_or_err(Token::Basic(')'))?;
     if self.lookahead == Token::Basic('{') {
-      let block = self.parse_block(false)?;
+      let block = self.parse_block()?;
       if let Stmt::Block(body) = self.ast.get_statement(block) {
         Ok(self.ast.add_statement(Stmt::Function {
           name: function_name,
@@ -209,11 +204,11 @@ impl<'src> Parser<'src> {
     }
   }
 
-  pub(super) fn parse_decl(&mut self, in_loop: bool) -> StmtRes {
+  pub(super) fn parse_decl(&mut self) -> StmtRes {
     let ret = match self.lookahead {
       Token::Var => self.parse_var_decl()?,
       Token::Fun => self.parse_fun_decl()?,
-      _ => self.parse_statement(in_loop)?,
+      _ => self.parse_statement()?,
     };
     Ok(ret)
   }
