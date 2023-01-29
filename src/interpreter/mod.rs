@@ -165,7 +165,7 @@ where
     (ExprValue::Str(l), ExprValue::Str(r)) => Ok(ExprValue::Boolean(str_cmp(&l, &r))),
     (lhs, rhs) => Err(SourceError::from_token_info(
       &op_info,
-      format!("operation not supported for operands {:?}, {:?}", lhs, rhs),
+      format!("operation not supported for operands {lhs:?}, {rhs:?}"),
       SourceErrorType::Runtime,
     )),
   }
@@ -177,10 +177,7 @@ fn check_bool(val: ExprValue, info: SourceInfo) -> Result<bool, SourceError> {
   } else {
     Err(SourceError::from_token_info(
       &info,
-      format!(
-        "binary operation cannot be applied to type {:?}, only to booleans",
-        val
-      ),
+      format!("binary operation cannot be applied to type {val:?}, only to booleans"),
       SourceErrorType::Runtime,
     ))
   }
@@ -193,6 +190,7 @@ pub struct Interpreter {
 
 enum EarlyOut {
   Break,
+  Return(ExprValue),
 }
 
 pub type IntepreterResult = Result<(), SourceError>;
@@ -282,6 +280,47 @@ impl Interpreter {
     }
   }
 
+  fn handle_function_call(
+    &mut self,
+    func: ExprHandle,
+    call_info: SourceInfoHandle,
+    arguments: Vec<ExprHandle>,
+  ) -> ExprResult {
+    let mut argument_values = Vec::new();
+    for arg in arguments {
+      argument_values.push(self.interpret_expression(arg)?);
+    }
+    let func_val = self.interpret_expression(func)?;
+    if let ExprValue::Func(func) = func_val {
+      if func.arity as usize == argument_values.len() {
+        func.callable.call(self, argument_values).map_err(|_| {
+          SourceError::from_token_info(
+            &self.ast.get_source_info(call_info),
+            "function call error".to_string(),
+            SourceErrorType::Runtime,
+          )
+        })
+      } else {
+        Err(SourceError::from_token_info(
+          &self.ast.get_source_info(call_info),
+          format!(
+            "incorrect number of arguments ({}) for function {} (arity: {})",
+            argument_values.len(),
+            func.name,
+            func.arity
+          ),
+          SourceErrorType::Runtime,
+        ))
+      }
+    } else {
+      Err(SourceError::from_token_info(
+        &self.ast.get_source_info(call_info),
+        format!("cannot call {func_val:?}, only functions"),
+        SourceErrorType::Runtime,
+      ))
+    }
+  }
+
   fn interpret_expression(&mut self, exp: ExprHandle) -> ExprResult {
     match self.ast.get_expression(exp) {
       Expr::Literal { literal, info: _ } => self.handle_literal_expression(&self.ast, literal),
@@ -327,43 +366,9 @@ impl Interpreter {
       }
       Expr::FnCall {
         func,
-        call_info: call_start,
+        call_info,
         arguments,
-      } => {
-        let mut argument_values = Vec::new();
-        for arg in arguments {
-          argument_values.push(self.interpret_expression(arg)?);
-        }
-        let func_val = self.interpret_expression(func)?;
-        if let ExprValue::Func(func) = func_val {
-          if func.arity as usize == argument_values.len() {
-            func.callable.call(self, argument_values).or_else(|_| {
-              Err(SourceError::from_token_info(
-                &self.ast.get_source_info(call_start),
-                format!("function call error"),
-                SourceErrorType::Runtime,
-              ))
-            })
-          } else {
-            Err(SourceError::from_token_info(
-              &self.ast.get_source_info(call_start),
-              format!(
-                "too many arguments ({}) for function {} (arity: {})",
-                argument_values.len(),
-                func.name,
-                func.arity
-              ),
-              SourceErrorType::Runtime,
-            ))
-          }
-        } else {
-          Err(SourceError::from_token_info(
-            &self.ast.get_source_info(call_start),
-            format!("cannot call {:?}, only functions", func_val),
-            SourceErrorType::Runtime,
-          ))
-        }
-      }
+      } => self.handle_function_call(func, call_info, arguments),
     }
   }
 
@@ -443,7 +448,9 @@ impl Interpreter {
         .or(Err(()))?;
     }
     for stmt in body.iter().cloned() {
-      self.interpret_statement(stmt).or(Err(()))?;
+      if let Some(EarlyOut::Return(val)) = self.interpret_statement(stmt).or(Err(()))? {
+        return Ok(val);
+      };
     }
     self.env.pop();
     Ok(ExprValue::Null)
@@ -510,6 +517,7 @@ impl Interpreter {
           ExprValue::Func(interpreter_fn),
         )?;
       }
+      Stmt::Return(expr) => return Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?))),
       _ => panic!(),
     };
     Ok(None)

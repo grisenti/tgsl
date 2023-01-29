@@ -119,6 +119,14 @@ impl<'src> Parser<'src> {
     Ok(self.ast.add_statement(kind))
   }
 
+  fn parse_function_return(&mut self) -> StmtRes {
+    assert!(matches!(self.lookahead, Token::Return));
+    self.advance()?;
+    let expr = self.parse_expression()?;
+    self.match_or_err(Token::Basic(';'))?;
+    Ok(self.ast.add_statement(Stmt::Return(expr)))
+  }
+
   fn parse_statement(&mut self, in_loop: bool) -> StmtRes {
     match self.lookahead {
       Token::Print => self.parse_print_stmt(),
@@ -132,6 +140,7 @@ impl<'src> Parser<'src> {
         SourceErrorType::Parsing,
       )),
       Token::Break => self.parse_loop_early_out(Stmt::Break),
+      Token::Return => self.parse_function_return(),
       _ => self.parse_expr_stmt(),
     }
   }

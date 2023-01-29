@@ -28,4 +28,5 @@ pub enum Stmt {
     body: Vec<StmtHandle>,
   },
   Break,
+  Return(ExprHandle),
 }
