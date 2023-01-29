@@ -31,30 +31,37 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn parse_arguments(&mut self, call_start: SourceInfo) -> Result<Vec<ExprHandle>, SourceError> {
+    let mut arguments = Vec::new();
+    loop {
+      arguments.push(self.parse_expression()?);
+      if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
+        break;
+      }
+    }
+    if arguments.len() >= 255 {
+      Err(SourceError::from_token_info(
+        &call_start,
+        "function cannot have more than 255 arguments".to_string(),
+        SourceErrorType::Runtime,
+      ))
+    } else {
+      Ok(arguments)
+    }
+  }
+
   fn parse_call(&mut self) -> ExprRes {
     let mut expr = self.parse_primary()?;
-    let mut too_many_arguments = None;
     loop {
       match self.lookahead {
         Token::Basic('(') => {
           let call_start = self.lex.prev_token_info();
           self.advance()?;
-          let mut arguments = Vec::new();
-          if self.lookahead != Token::Basic(')') {
-            loop {
-              if arguments.len() == 255 {
-                too_many_arguments = Some(SourceError::from_token_info(
-                  &call_start,
-                  "function cannot have more than 255 arguments".to_string(),
-                  SourceErrorType::Runtime,
-                ));
-              }
-              arguments.push(self.parse_expression()?);
-              if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
-                break;
-              }
-            }
-          }
+          let arguments = if self.lookahead != Token::Basic(')') {
+            self.parse_arguments(call_start)
+          } else {
+            Ok(Vec::new())
+          };
           let call_end = self.lex.prev_token_info();
           self.match_or_err(Token::Basic(')'))?;
           let call_info = self
@@ -63,17 +70,13 @@ impl<'src> Parser<'src> {
           expr = self.ast.add_expression(Expr::FnCall {
             func: expr,
             call_info,
-            arguments,
+            arguments: arguments?,
           })
         }
         _ => break,
       }
     }
-    if let Some(err) = too_many_arguments {
-      Err(err)
-    } else {
-      Ok(expr)
-    }
+    Ok(expr)
   }
 
   fn parse_unary(&mut self) -> ExprRes {
