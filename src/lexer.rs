@@ -97,9 +97,7 @@ pub struct Lexer<'src> {
   current: CharIndices<'src>,
   lookahead: char,
   total_offset: usize,
-  line_start: CharIndices<'src>,
   line_no: u32,
-  line_start_offset: usize,
   prev_token_start: usize,
 }
 
@@ -159,8 +157,6 @@ impl<'src> Lexer<'src> {
       match self.lookahead {
         '\n' => {
           self.line_no += 1;
-          self.line_start_offset = self.total_offset + 1;
-          self.line_start = self.current.clone();
           self.advance();
         }
         '/' => {
@@ -249,9 +245,7 @@ impl<'src> Lexer<'src> {
         current: start.clone(),
         total_offset: offset,
         lookahead: ch,
-        line_start: source.char_indices(),
         line_no: 1,
-        line_start_offset: 0,
         prev_token_start: 0,
       }
     } else {
@@ -260,9 +254,7 @@ impl<'src> Lexer<'src> {
         current: source.char_indices(),
         total_offset: 0,
         lookahead: '\0',
-        line_start: source.char_indices(),
         line_no: 0,
-        line_start_offset: 0,
         prev_token_start: 0,
       }
     }
@@ -286,16 +278,6 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  /// line of the last token
-  pub fn line(&self) -> &'src str {
-    let mut start = self.line_start.clone();
-    if let Some((end, _)) = start.find(|(_, c)| *c == '\n') {
-      &self.line_start.as_str()[..(end - self.line_start_offset)]
-    } else {
-      self.line_start.as_str()
-    }
-  }
-
   pub fn line_no(&self) -> u32 {
     self.line_no
   }
@@ -306,10 +288,6 @@ impl<'src> Lexer<'src> {
 
   pub fn prev_token_end(&self) -> usize {
     self.total_offset
-  }
-
-  pub fn prev_token_line_start(&self) -> usize {
-    self.line_start_offset
   }
 
   pub fn prev_token_info(&self) -> SourceInfo {
@@ -324,17 +302,6 @@ impl<'src> Lexer<'src> {
 #[cfg(test)]
 mod test {
   use super::*;
-
-  #[test]
-  fn get_line() {
-    let mut lex = Lexer::new("first\nsecond\nthird");
-    assert_eq!(lex.line(), "first");
-    assert_eq!(lex.next_token(), Ok(Token::Id("first")));
-    assert_eq!(lex.next_token(), Ok(Token::Id("second")));
-    assert_eq!(lex.line(), "second");
-    assert_eq!(lex.next_token(), Ok(Token::Id("third")));
-    assert_eq!(lex.line(), "third");
-  }
 
   #[test]
   fn lex_identifiers() {
@@ -407,20 +374,12 @@ mod test {
   #[test]
   fn error_for_multiline_strings() {
     let mut lex = Lexer::new("\"hello\n\"");
-    if lex.next_token().is_err() {
-      let _ = &lex.line()[lex.prev_token_start()..lex.prev_token_end()]; // does not go out of bounds
-    } else {
-      panic!("no error for multiline string");
-    }
+    assert!(lex.next_token().is_err());
   }
 
   #[test]
   fn error_for_incomplete_strings() {
     let mut lex = Lexer::new("\"hello");
-    if lex.next_token().is_err() {
-      let _ = &lex.line()[lex.prev_token_start()..lex.prev_token_end()]; // does not go out of bounds
-    } else {
-      panic!("no error for incomplete string");
-    }
+    assert!(lex.next_token().is_err());
   }
 }
