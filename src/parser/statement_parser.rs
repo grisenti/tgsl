@@ -96,13 +96,13 @@ impl<'src> Parser<'src> {
     let info = self.last_token_info();
     self.advance()?; //consume for
     self.match_or_err(Token::Basic('('))?;
-    self.env.push(); // Defer pop
+    self.env.push(); // for statement scope
     let init = self.parse_decl()?;
     let condition = self.parse_expression()?;
     self.match_or_err(Token::Basic(';'))?;
     let after = self.parse_expression()?;
     self.match_or_err(Token::Basic(')'))?;
-    self.env.push(); // defer pop
+    self.env.push(); // loop-body scope
     let body = self.parse_statement()?;
     let while_finally = self.ast.add_statement(Stmt::Expr(after));
     let while_body = self
@@ -113,8 +113,8 @@ impl<'src> Parser<'src> {
       condition,
       loop_body: while_body,
     });
-    self.env.pop();
-    self.env.pop();
+    self.env.pop(); // loop-body scope
+    self.env.pop(); // for statement scope
     Ok(self.ast.add_statement(Stmt::Block(vec![init, while_loop])))
   }
 
