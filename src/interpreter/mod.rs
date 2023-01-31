@@ -227,18 +227,32 @@ impl Interpreter {
     right: ExprHandle,
   ) -> ExprResult {
     let lhs = self.interpret_expression(left)?;
-    let rhs = self.interpret_expression(right)?;
     match op {
-      Operator::Basic('+') => add(lhs, rhs, op_src_info),
-      Operator::Basic('-') => binary_num(lhs, rhs, op_src_info, |x, y| x - y),
-      Operator::Basic('*') => binary_num(lhs, rhs, op_src_info, |x, y| x * y),
-      Operator::Basic('/') => binary_num(lhs, rhs, op_src_info, |x, y| x / y),
-      Operator::Basic('<') => compare(lhs, rhs, op_src_info, |x, y| x < y, |x, y| x < y),
-      Operator::Basic('>') => compare(lhs, rhs, op_src_info, |x, y| x > y, |x, y| x > y),
-      Operator::Leq => compare(lhs, rhs, op_src_info, |x, y| x <= y, |x, y| x <= y),
-      Operator::Geq => compare(lhs, rhs, op_src_info, |x, y| x >= y, |x, y| x >= y),
-      Operator::Same => equal(lhs, rhs, op_src_info),
-      Operator::Different => unary_not(equal(lhs, rhs, op_src_info)?, op_src_info),
+      Operator::And => Ok(ExprValue::Boolean(
+        check_bool(lhs, op_src_info)?
+          && check_bool(self.interpret_expression(right)?, op_src_info)?,
+      )),
+      Operator::Or => Ok(ExprValue::Boolean(
+        check_bool(lhs, op_src_info)?
+          || check_bool(self.interpret_expression(right)?, op_src_info)?,
+      )),
+      other => {
+        let rhs = self.interpret_expression(right)?;
+        match other {
+          Operator::Basic('+') => add(lhs, rhs, op_src_info),
+          Operator::Basic('-') => binary_num(lhs, rhs, op_src_info, |x, y| x - y),
+          Operator::Basic('*') => binary_num(lhs, rhs, op_src_info, |x, y| x * y),
+          Operator::Basic('/') => binary_num(lhs, rhs, op_src_info, |x, y| x / y),
+          Operator::Basic('<') => compare(lhs, rhs, op_src_info, |x, y| x < y, |x, y| x < y),
+          Operator::Basic('>') => compare(lhs, rhs, op_src_info, |x, y| x > y, |x, y| x > y),
+          Operator::Leq => compare(lhs, rhs, op_src_info, |x, y| x <= y, |x, y| x <= y),
+          Operator::Geq => compare(lhs, rhs, op_src_info, |x, y| x >= y, |x, y| x >= y),
+          Operator::Same => equal(lhs, rhs, op_src_info),
+          Operator::Different => unary_not(equal(lhs, rhs, op_src_info)?, op_src_info),
+          _ => unreachable!(),
+        }
+      }
+
       _ => panic!(),
     }
   }

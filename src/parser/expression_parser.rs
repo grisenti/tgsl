@@ -1,5 +1,16 @@
 use super::*;
 
+const MAX_PRECEDENCE: usize = 6;
+
+const BIN_OP_PRECEDENCE: [[Token<'_>; 2]; MAX_PRECEDENCE] = [
+  [Token::Or, Token::Or],
+  [Token::And, Token::And],
+  [Token::Same, Token::Different],
+  [Token::Basic('<'), Token::Basic('>')],
+  [Token::Basic('+'), Token::Basic('-')],
+  [Token::Basic('*'), Token::Basic('/')],
+];
+
 impl<'src> Parser<'src> {
   fn parse_primary(&mut self) -> ExprRes {
     match self.lookahead {
@@ -93,94 +104,27 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_factor(&mut self) -> ExprRes {
-    let mut expr = self.parse_unary()?;
-    while let Some((op, src_info)) =
-      self.matches_alternatives(&[Token::Basic('*'), Token::Basic('/')])?
-    {
-      let right = self.parse_unary()?;
-      expr = self.ast.add_expression(Expr::BinaryExpr {
-        left: expr,
-        operator: OperatorPair::new(to_operator(op), src_info),
-        right,
-      })
+  fn parse_binary_operation(&mut self, prec: usize) -> ExprRes {
+    if prec == MAX_PRECEDENCE {
+      self.parse_unary()
+    } else {
+      let mut expr = self.parse_binary_operation(prec + 1)?;
+      while let Some((op, src_info)) = self.matches_alternatives(&BIN_OP_PRECEDENCE[prec])? {
+        let right = self.parse_binary_operation(prec + 1)?;
+        expr = self.ast.add_expression(Expr::BinaryExpr {
+          left: expr,
+          operator: OperatorPair::new(to_operator(op), src_info),
+          right,
+        })
+      }
+      Ok(expr)
     }
-    Ok(expr)
-  }
-
-  fn parse_term(&mut self) -> ExprRes {
-    let mut expr = self.parse_factor()?;
-    while let Some((op, src_info)) =
-      self.matches_alternatives(&[Token::Basic('+'), Token::Basic('-')])?
-    {
-      let right = self.parse_factor()?;
-      expr = self.ast.add_expression(Expr::BinaryExpr {
-        left: expr,
-        operator: OperatorPair::new(to_operator(op), src_info),
-        right,
-      })
-    }
-    Ok(expr)
-  }
-
-  fn parse_comparison(&mut self) -> ExprRes {
-    let mut expr = self.parse_term()?;
-    while let Some((op, src_info)) =
-      self.matches_alternatives(&[Token::Leq, Token::Geq, Token::Basic('<'), Token::Basic('>')])?
-    {
-      let right = self.parse_term()?;
-      expr = self.ast.add_expression(Expr::BinaryExpr {
-        left: expr,
-        operator: OperatorPair::new(to_operator(op), src_info),
-        right,
-      })
-    }
-    Ok(expr)
-  }
-
-  fn parse_equality(&mut self) -> ExprRes {
-    let mut expr = self.parse_comparison()?;
-    while let Some((op, src_info)) = self.matches_alternatives(&[Token::Same, Token::Different])? {
-      let right = self.parse_comparison()?;
-      expr = self.ast.add_expression(Expr::BinaryExpr {
-        left: expr,
-        operator: OperatorPair::new(to_operator(op), src_info),
-        right,
-      })
-    }
-    Ok(expr)
-  }
-
-  fn parse_logical_and(&mut self) -> ExprRes {
-    let mut lhs = self.parse_equality()?;
-    while let Some((_, src_info)) = self.match_next(Token::And)? {
-      let rhs = self.parse_equality()?;
-      lhs = self.ast.add_expression(Expr::Logical {
-        left: lhs,
-        operator: OperatorPair::new(Operator::And, src_info),
-        right: rhs,
-      });
-    }
-    Ok(lhs)
-  }
-
-  fn parse_logical_or(&mut self) -> ExprRes {
-    let mut lhs = self.parse_logical_and()?;
-    while let Some((_, src_info)) = self.match_next(Token::Or)? {
-      let rhs = self.parse_logical_and()?;
-      lhs = self.ast.add_expression(Expr::Logical {
-        left: lhs,
-        operator: OperatorPair::new(Operator::Or, src_info),
-        right: rhs,
-      });
-    }
-    Ok(lhs)
   }
 
   fn parse_assignment(&mut self) -> ExprRes {
-    let lhs = self.parse_logical_or()?;
+    let lhs = self.parse_binary_operation(0)?;
     if let Some((_, eq_src_info)) = self.match_next(Token::Basic('='))? {
-      let rhs = self.parse_assignment()?;
+      let rhs = self.parse_binary_operation(0)?;
       if let Expr::Variable { id, id_info } = self.ast.get_expression(lhs) {
         return Ok(self.ast.add_expression(Expr::Assignment {
           name: id,
