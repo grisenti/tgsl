@@ -96,11 +96,6 @@ pub enum Expr {
     operator: OperatorPair,
     right: ExprHandle,
   },
-  Logical {
-    left: ExprHandle,
-    operator: OperatorPair,
-    right: ExprHandle,
-  },
   UnaryExpr {
     operator: OperatorPair,
     right: ExprHandle,

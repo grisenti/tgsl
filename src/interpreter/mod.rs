@@ -257,25 +257,6 @@ impl Interpreter {
     }
   }
 
-  fn handle_logical_expression(
-    &mut self,
-    left: ExprHandle,
-    op: Operator,
-    op_src_info: SourceInfo,
-    right: ExprHandle,
-  ) -> ExprResult {
-    let lhs = check_bool(self.interpret_expression(left)?, op_src_info)?;
-    match op {
-      Operator::And => Ok(ExprValue::Boolean(
-        lhs && check_bool(self.interpret_expression(right)?, op_src_info)?,
-      )),
-      Operator::Or => Ok(ExprValue::Boolean(
-        lhs || check_bool(self.interpret_expression(right)?, op_src_info)?,
-      )),
-      _ => panic!(),
-    }
-  }
-
   fn handle_unary_expression(
     &mut self,
     op: Operator,
@@ -339,16 +320,6 @@ impl Interpreter {
         operator,
         right,
       } => self.handle_binary_expression(
-        left,
-        operator.op,
-        self.ast.get_source_info(operator.src_info),
-        right,
-      ),
-      Expr::Logical {
-        left,
-        operator,
-        right,
-      } => self.handle_logical_expression(
         left,
         operator.op,
         self.ast.get_source_info(operator.src_info),

@@ -12,16 +12,6 @@ pub fn desugar_expr(ast: &AST, expr: ExprHandle) -> String {
       operator.op,
       desugar_expr(ast, right)
     ),
-    Expr::Logical {
-      left,
-      operator,
-      right,
-    } => format!(
-      "{} {} {}",
-      desugar_expr(ast, left),
-      operator.op,
-      desugar_expr(ast, right)
-    ),
     Expr::UnaryExpr { operator, right } => format!("{} {}", operator.op, desugar_expr(ast, right)),
     Expr::Literal { literal, info: _ } => format!("{}", literal.display(ast)),
     Expr::Variable { id, id_info: _ } => format!("{}", ast.get_str(id)),
