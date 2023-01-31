@@ -74,10 +74,10 @@ impl<'src> Parser<'src> {
     let mut stop = false;
     while !stop {
       match self.lookahead {
-        Token::Basic(';') => {
+        Token::Basic(';') | Token::Basic('}') => {
           stop = true;
         }
-        Token::Basic('}') | Token::EndOfFile => {
+        Token::EndOfFile => {
           break;
         }
         _ => {}
