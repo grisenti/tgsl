@@ -22,8 +22,8 @@ impl<'src> Parser<'src> {
         ret
       }
       Token::Id(id) => {
-        let id = self.env.add_name(id);
         let id_info = self.last_token_info();
+        let id = self.env.get_name(id, self.ast.get_source_info(id_info))?;
         let ret = Ok(self.ast.add_expression(Expr::Variable { id, id_info }));
         self.advance()?;
         ret
