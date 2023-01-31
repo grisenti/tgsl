@@ -12,20 +12,14 @@ impl Environment {
     self.scopes.last_mut().unwrap()
   }
 
-  pub fn get_name(&mut self, name: &str, name_info: SourceInfo) -> Result<Identifier, SourceError> {
+  pub fn get_name_or_add(&mut self, name: &str) -> Identifier {
     self
       .scopes
       .iter()
       .rev()
       .find_map(|scope| scope.get(name))
       .cloned()
-      .ok_or_else(|| {
-        SourceError::from_token_info(
-          &name_info,
-          format!("identifier {name} was not declared"),
-          SourceErrorType::Parsing,
-        )
-      })
+      .unwrap_or_else(|| self.declare_name(name))
   }
 
   pub fn declare_name(&mut self, name: &str) -> Identifier {

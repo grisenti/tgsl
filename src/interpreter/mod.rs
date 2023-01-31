@@ -1,10 +1,11 @@
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+mod environment;
 use std::fmt::Debug;
 
 use crate::ast::*;
 use crate::errors::{SourceError, SourceErrorType};
 use crate::lexer::SourceInfo;
+
+use self::environment::Environment;
 
 pub trait ClonableFn {
   fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
@@ -178,7 +179,7 @@ fn check_bool(val: ExprValue, info: SourceInfo) -> Result<bool, SourceError> {
 }
 
 pub struct Interpreter {
-  env: HashMap<u32, ExprValue>,
+  env: Environment,
   ast: AST,
 }
 
@@ -201,19 +202,13 @@ impl Interpreter {
       .as_ref()
       .map(|exp| self.interpret_expression(exp.clone()))
       .unwrap_or(Ok(ExprValue::Null))?;
-    if let Entry::Vacant(e) = self.env.entry(id.0) {
-      e.insert(value);
-      Ok(())
-    } else {
-      Err(SourceError::from_token_info(
-        &self.ast.get_source_info(id_info),
-        "identifier already declared".to_string(),
-        SourceErrorType::Runtime,
-      ))
-    }
+    self
+      .env
+      .set_if_none(id, self.ast.get_source_info(id_info), value)?;
+    Ok(())
   }
 
-  fn handle_literal_expression(&self, ast: &AST, literal: Literal) -> ExprResult {
+  fn handle_literal_expression(&self, literal: Literal) -> ExprResult {
     match literal {
       Literal::Number(num) => Ok(ExprValue::Num(num)),
       Literal::String(s) => Ok(ExprValue::Str(self.ast.get_str(s).to_string())),
@@ -319,7 +314,7 @@ impl Interpreter {
 
   fn interpret_expression(&mut self, exp: ExprHandle) -> ExprResult {
     match self.ast.get_expression(exp) {
-      Expr::Literal { literal, info: _ } => self.handle_literal_expression(&self.ast, literal),
+      Expr::Literal { literal, info: _ } => self.handle_literal_expression(literal),
       Expr::BinaryExpr {
         left,
         operator,
@@ -335,17 +330,12 @@ impl Interpreter {
         self.ast.get_source_info(operator.src_info),
         right,
       ),
-      Expr::Variable { id, id_info } => self.env.get(&id.0).cloned().ok_or_else(|| {
-        SourceError::from_token_info(
-          &self.ast.get_source_info(id_info),
-          "identifier was not declared before".to_string(),
-          SourceErrorType::Runtime,
-        )
-      }),
+      Expr::Variable { id, id_info } => self.env.get_or_err(id, self.ast.get_source_info(id_info)),
       Expr::Assignment { id, id_info, value } => {
         let rhs = self.interpret_expression(value)?;
-        self.env.insert(id.0, rhs.clone());
-        Ok(rhs)
+        self
+          .env
+          .update_value_or_err(id, self.ast.get_source_info(id_info), rhs)
       }
       Expr::FnCall {
         func,
@@ -415,7 +405,7 @@ impl Interpreter {
     arguments: Vec<ExprValue>,
   ) -> InterpreterFnResult {
     for (param, arg) in parameters.iter().zip(arguments) {
-      self.env.insert(param.0, arg);
+      self.env.set(*param, arg);
     }
     for stmt in body.iter().cloned() {
       if let Some(EarlyOut::Return(val)) = self.interpret_statement(stmt).or(Err(()))? {
@@ -475,7 +465,11 @@ impl Interpreter {
           name: "".to_string(),
           callable: Box::new(func),
         };
-        self.env.insert(id.0, ExprValue::Func(interpreter_fn));
+        self.env.set_if_none(
+          id,
+          self.ast.get_source_info(name_info),
+          ExprValue::Func(interpreter_fn),
+        )?
       }
       Stmt::Return(expr) => return Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?))),
       _ => panic!(),
@@ -485,7 +479,7 @@ impl Interpreter {
 
   pub fn new(ast: AST) -> Self {
     Self {
-      env: HashMap::new(),
+      env: Environment::new(),
       ast,
     }
   }

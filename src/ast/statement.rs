@@ -1,4 +1,4 @@
-use super::{ExprHandle, Identifier, SourceInfoHandle, StmtHandle, StrHandle};
+use super::{ExprHandle, Identifier, SourceInfoHandle, StmtHandle};
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
