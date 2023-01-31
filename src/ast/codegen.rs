@@ -16,8 +16,8 @@ pub fn desugar_expr(ast: &AST, expr: ExprHandle) -> String {
     Expr::Literal { literal, info: _ } => format!("{}", literal.display(ast)),
     Expr::Variable { id, id_info: _ } => format!("{}", ast.get_str(id)),
     Expr::Assignment {
-      name,
-      name_info: _,
+      id: name,
+      id_info: _,
       value,
     } => format!("{} = {}", ast.get_str(name), desugar_expr(ast, value)),
     Expr::FnCall {

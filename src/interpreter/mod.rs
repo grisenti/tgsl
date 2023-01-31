@@ -1,8 +1,6 @@
-mod environment;
-
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::fmt::Debug;
-
-use environment::*;
 
 use crate::ast::*;
 use crate::errors::{SourceError, SourceErrorType};
@@ -41,7 +39,7 @@ impl Clone for Box<dyn ClonableFn> {
 #[derive(Clone)]
 struct NativeFn {
   body: Vec<StmtHandle>,
-  parameters: Vec<StrHandle>,
+  parameters: Vec<Identifier>,
 }
 
 impl ClonableFn for NativeFn {
@@ -180,7 +178,7 @@ fn check_bool(val: ExprValue, info: SourceInfo) -> Result<bool, SourceError> {
 }
 
 pub struct Interpreter {
-  env: Environment,
+  env: HashMap<u32, ExprValue>,
   ast: AST,
 }
 
@@ -195,7 +193,7 @@ type StmtRes = Result<Option<EarlyOut>, SourceError>;
 impl Interpreter {
   fn install_identifier(
     &mut self,
-    id: &str,
+    id: Identifier,
     id_info: SourceInfoHandle,
     exp_opt: Option<ExprHandle>,
   ) -> IntepreterResult {
@@ -203,9 +201,16 @@ impl Interpreter {
       .as_ref()
       .map(|exp| self.interpret_expression(exp.clone()))
       .unwrap_or(Ok(ExprValue::Null))?;
-    self
-      .env
-      .declare_source_identifier(id, &self.ast.get_source_info(id_info), value)
+    if let Entry::Vacant(e) = self.env.entry(id.0) {
+      e.insert(value);
+      Ok(())
+    } else {
+      Err(SourceError::from_token_info(
+        &self.ast.get_source_info(id_info),
+        "identifier already declared".to_string(),
+        SourceErrorType::Runtime,
+      ))
+    }
   }
 
   fn handle_literal_expression(&self, ast: &AST, literal: Literal) -> ExprResult {
@@ -330,20 +335,17 @@ impl Interpreter {
         self.ast.get_source_info(operator.src_info),
         right,
       ),
-      Expr::Variable { id, id_info } => self
-        .env
-        .get_id_value(self.ast.get_str(id), &self.ast.get_source_info(id_info)),
-      Expr::Assignment {
-        name,
-        name_info,
-        value,
-      } => {
-        let rhs = self.interpret_expression(value)?;
-        self.env.assign(
-          self.ast.get_str(name),
-          self.ast.get_source_info(name_info),
-          rhs,
+      Expr::Variable { id, id_info } => self.env.get(&id.0).cloned().ok_or_else(|| {
+        SourceError::from_token_info(
+          &self.ast.get_source_info(id_info),
+          "identifier was not declared before".to_string(),
+          SourceErrorType::Runtime,
         )
+      }),
+      Expr::Assignment { id, id_info, value } => {
+        let rhs = self.interpret_expression(value)?;
+        self.env.insert(id.0, rhs.clone());
+        Ok(rhs)
       }
       Expr::FnCall {
         func,
@@ -408,32 +410,18 @@ impl Interpreter {
 
   fn interpret_function(
     &mut self,
-    parameters: &[StrHandle],
+    parameters: &[Identifier],
     body: &[StmtHandle],
     arguments: Vec<ExprValue>,
   ) -> InterpreterFnResult {
-    self.env.push();
     for (param, arg) in parameters.iter().zip(arguments) {
-      self
-        .env
-        .declare_source_identifier(
-          self.ast.get_str(param.clone()),
-          &SourceInfo {
-            line_no: 0,
-            start: 0,
-            end: 0,
-          },
-          arg,
-        )
-        .or(Err(()))?;
+      self.env.insert(param.0, arg);
     }
     for stmt in body.iter().cloned() {
       if let Some(EarlyOut::Return(val)) = self.interpret_statement(stmt).or(Err(()))? {
-        self.env.pop();
         return Ok(val);
       };
     }
-    self.env.pop();
     Ok(ExprValue::Null)
   }
 
@@ -443,10 +431,7 @@ impl Interpreter {
         identifier,
         id_info,
         expression,
-      } => {
-        let id = self.ast.get_str(identifier).to_string();
-        self.install_identifier(&id, id_info, expression)?
-      }
+      } => self.install_identifier(identifier, id_info, expression)?,
       Stmt::Print(expression) => {
         println!("{:?}", self.interpret_expression(expression)?);
       }
@@ -454,14 +439,12 @@ impl Interpreter {
         self.interpret_expression(expr)?;
       }
       Stmt::Block(stmts) => {
-        self.env.push();
         for stmt in stmts {
           let res = self.interpret_statement(stmt)?;
           if res.is_some() {
             return Ok(res);
           }
         }
-        self.env.pop();
       }
       Stmt::IfBranch {
         if_info,
@@ -480,7 +463,7 @@ impl Interpreter {
       }
       Stmt::Break => return Ok(Some(EarlyOut::Break)),
       Stmt::Function {
-        name,
+        id,
         name_info,
         parameters,
         body,
@@ -489,14 +472,10 @@ impl Interpreter {
         let func = NativeFn { body, parameters };
         let interpreter_fn = InterpreterFn {
           arity,
-          name: self.ast.get_str(name.clone()).to_string(),
+          name: "".to_string(),
           callable: Box::new(func),
         };
-        self.env.declare_source_identifier(
-          self.ast.get_str(name),
-          &self.ast.get_source_info(name_info),
-          ExprValue::Func(interpreter_fn),
-        )?;
+        self.env.insert(id.0, ExprValue::Func(interpreter_fn));
       }
       Stmt::Return(expr) => return Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?))),
       _ => panic!(),
@@ -506,7 +485,7 @@ impl Interpreter {
 
   pub fn new(ast: AST) -> Self {
     Self {
-      env: Environment::global(),
+      env: HashMap::new(),
       ast,
     }
   }
@@ -516,11 +495,5 @@ impl Interpreter {
       self.interpret_statement(stmt.clone())?;
     }
     Ok(())
-  }
-
-  pub fn add_native_function(&mut self, name: String, func: InterpreterFn) {
-    self
-      .env
-      .declare_native_identifier(name, ExprValue::Func(func));
   }
 }

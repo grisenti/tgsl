@@ -6,7 +6,7 @@ mod parser;
 
 use std::fs;
 
-use ast::codegen::desugar;
+//use ast::codegen::desugar;
 use errors::SourceError;
 use interpreter::*;
 use lexer::*;
@@ -22,7 +22,7 @@ fn add(_: &mut Interpreter, args: Vec<ExprValue>) -> InterpreterFnResult {
 fn test(program: &str) -> Result<(), SourceError> {
   let parser = Parser::new(Lexer::new(program));
   let ast = parser.parse()?;
-  print!("{}", desugar(&ast));
+  //print!("{}", desugar(&ast));
   let mut interpreter = Interpreter::new(ast);
   interpreter.interpret()?;
   Ok(())

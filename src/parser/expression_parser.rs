@@ -22,7 +22,7 @@ impl<'src> Parser<'src> {
         ret
       }
       Token::Id(id) => {
-        let id = self.ast.add_str(id);
+        let id = self.env.add_name(id);
         let id_info = self.last_token_info();
         let ret = Ok(self.ast.add_expression(Expr::Variable { id, id_info }));
         self.advance()?;
@@ -127,8 +127,8 @@ impl<'src> Parser<'src> {
       let rhs = self.parse_binary_operation(0)?;
       if let Expr::Variable { id, id_info } = self.ast.get_expression(lhs) {
         return Ok(self.ast.add_expression(Expr::Assignment {
-          name: id,
-          name_info: id_info,
+          id,
+          id_info,
           value: rhs,
         }));
       } else {
@@ -254,8 +254,8 @@ mod test {
     assert!(matches!(
       parser.ast.get_expression(assignment),
       Expr::Assignment {
-        name: _,
-        name_info: _,
+        id: _,
+        id_info: _,
         value: _
       }
     ));
