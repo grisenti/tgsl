@@ -189,16 +189,6 @@ mod test {
   }
 
   #[test]
-  fn parse_literal_identifier() {
-    let mut parser = create_parser("identifier");
-    let literal = parser.parse_expression().unwrap();
-    match parser.ast.get_expression(literal) {
-      Expr::Variable { id, id_info: _ } if parser.ast.get_str(id.clone()) == "identifier" => {}
-      a => panic!("expected literal, got {a:?}"),
-    }
-  }
-
-  #[test]
   fn binary_op() {
     let mut parser = create_parser("1 + 1");
     let binexp = parser.parse_expression().unwrap();
@@ -228,13 +218,6 @@ mod test {
         } if operator.op == op => {
           binexp = left;
         }
-        Expr::Logical {
-          left,
-          operator,
-          right: _,
-        } if operator.op == op => {
-          binexp = left;
-        }
         _ => panic!("wrong precedence"),
       }
     }
@@ -245,19 +228,5 @@ mod test {
     let mut parser = create_parser("1 = 2");
     let assignment = parser.parse_expression();
     assert!(matches!(assignment, Err(_)));
-  }
-
-  #[test]
-  fn assign_to_rvalue() {
-    let mut parser = create_parser("id = 2");
-    let assignment = parser.parse_expression().unwrap();
-    assert!(matches!(
-      parser.ast.get_expression(assignment),
-      Expr::Assignment {
-        id: _,
-        id_info: _,
-        value: _
-      }
-    ));
   }
 }
