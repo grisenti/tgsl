@@ -50,6 +50,15 @@ impl SourceInfo {
       end: end.end,
     }
   }
+
+  // TODO: remove after its not needed
+  pub fn temporary() -> Self {
+    Self {
+      line_no: 0,
+      start: 0,
+      end: 0,
+    }
+  }
 }
 
 fn indentifier_token(input: &str) -> Token {
