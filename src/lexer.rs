@@ -71,7 +71,7 @@ fn indentifier_token(input: &str) -> Token {
     "false" => Token::False,
     "fun" => Token::Fun,
     "null" => Token::Null,
-    "ret" => Token::Return,
+    "return" => Token::Return,
     "var" => Token::Var,
     "print" => Token::Print,
     "while" => Token::While,
