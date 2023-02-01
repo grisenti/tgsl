@@ -369,31 +369,29 @@ impl Interpreter {
     }
   }
 
+  fn bool_or_err(
+    &mut self,
+    formula: ExprHandle,
+    info: SourceInfoHandle,
+  ) -> Result<bool, SourceError> {
+    match self.interpret_expression(formula.clone())? {
+      ExprValue::Boolean(val) => Ok(val),
+      val => Err(SourceError::from_token_info(
+        &self.ast.get_source_info(info),
+        format!("while condition has to evaluate to a boolean, got {val:?}"),
+        SourceErrorType::Runtime,
+      )),
+    }
+  }
+
   fn interpret_while_loop(
     &mut self,
     info: SourceInfoHandle,
     condition: ExprHandle,
     body: StmtHandle,
   ) -> StmtRes {
-    loop {
-      match self.interpret_expression(condition.clone())? {
-        ExprValue::Boolean(val) => {
-          if val {
-            if let Some(EarlyOut::Break) = self.interpret_statement(body.clone())? {
-              break;
-            }
-          } else {
-            break;
-          }
-        }
-        val => {
-          return Err(SourceError::from_token_info(
-            &self.ast.get_source_info(info),
-            format!("while condition has to evaluate to a boolean, got {val:?}"),
-            SourceErrorType::Runtime,
-          ))
-        }
-      }
+    while self.bool_or_err(condition.clone(), info)? {
+      self.interpret_statement(body.clone())?;
     }
     Ok(None)
   }
