@@ -86,7 +86,7 @@ impl OperatorPair {
   }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Identifier(pub u32);
 
 #[derive(Debug, Clone)]
