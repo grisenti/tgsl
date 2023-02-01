@@ -391,7 +391,11 @@ impl Interpreter {
     body: StmtHandle,
   ) -> StmtRes {
     while self.bool_or_err(condition.clone(), info)? {
-      self.interpret_statement(body.clone())?;
+      match self.interpret_statement(body.clone())? {
+        Some(EarlyOut::Break) => break,
+        Some(EarlyOut::Return(val)) => return Ok(Some(EarlyOut::Return(val))),
+        _ => {}
+      }
     }
     Ok(None)
   }
