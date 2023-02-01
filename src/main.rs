@@ -3,14 +3,17 @@ mod errors;
 mod interpreter;
 mod lexer;
 mod parser;
+mod semantic_analysis;
 
 use std::fs;
 
 //use ast::codegen::desugar;
+
 use errors::SourceError;
 use interpreter::*;
 use lexer::*;
 use parser::*;
+use semantic_analysis::*;
 /*
 fn add(_: &mut Interpreter, args: Vec<ExprValue>) -> InterpreterFnResult {
   match (args[0].clone(), args[1].clone()) {
@@ -22,6 +25,7 @@ fn add(_: &mut Interpreter, args: Vec<ExprValue>) -> InterpreterFnResult {
 fn test(program: &str) -> Result<(), SourceError> {
   let parser = Parser::new(Lexer::new(program));
   let ast = parser.parse()?;
+  SemanticAnalizer::analyze(&ast)?;
   //print!("{}", desugar(&ast));
   let mut interpreter = Interpreter::new(ast);
   interpreter.interpret()?;
