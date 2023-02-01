@@ -75,10 +75,10 @@ impl SemanticAnalizer {
           ));
         }
       }
-      Stmt::Return(_) => {
+      Stmt::Return { expr: _, src_info } => {
         if self.function_depth == 0 {
           return Err(SourceError::from_token_info(
-            &SourceInfo::temporary(),
+            &ast.get_source_info(src_info),
             "cannot have break outside of loop body".to_string(),
             crate::errors::SourceErrorType::Parsing,
           ));

@@ -28,5 +28,8 @@ pub enum Stmt {
     body: Vec<StmtHandle>,
   },
   Break(SourceInfoHandle),
-  Return(ExprHandle),
+  Return {
+    expr: ExprHandle,
+    src_info: SourceInfoHandle,
+  },
 }

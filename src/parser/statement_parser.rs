@@ -126,10 +126,11 @@ impl<'src> Parser<'src> {
 
   fn parse_function_return(&mut self) -> StmtRes {
     assert!(matches!(self.lookahead, Token::Return));
+    let src_info = self.last_token_info();
     self.advance()?;
     let expr = self.parse_expression()?;
     self.match_or_err(Token::Basic(';'))?;
-    Ok(self.ast.add_statement(Stmt::Return(expr)))
+    Ok(self.ast.add_statement(Stmt::Return { expr, src_info }))
   }
 
   fn parse_statement(&mut self) -> StmtRes {

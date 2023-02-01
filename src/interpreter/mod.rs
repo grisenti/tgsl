@@ -473,7 +473,9 @@ impl Interpreter {
           ExprValue::Func(interpreter_fn),
         )?
       }
-      Stmt::Return(expr) => return Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?))),
+      Stmt::Return { expr, src_info: _ } => {
+        return Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?)))
+      }
       _ => panic!(),
     };
     Ok(None)
