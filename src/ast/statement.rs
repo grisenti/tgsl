@@ -1,9 +1,9 @@
-use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle};
+use super::{ExprHandle, Identifier, SourceInfoHandle, StmtHandle};
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
   VarDecl {
-    identifier: StrHandle,
+    identifier: Identifier,
     id_info: SourceInfoHandle,
     expression: Option<ExprHandle>,
   },
@@ -22,9 +22,9 @@ pub enum Stmt {
     loop_body: StmtHandle,
   },
   Function {
-    name: StrHandle,
+    id: Identifier,
     name_info: SourceInfoHandle,
-    parameters: Vec<StrHandle>,
+    parameters: Vec<Identifier>,
     body: Vec<StmtHandle>,
   },
   Break,

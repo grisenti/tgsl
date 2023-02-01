@@ -22,8 +22,8 @@ impl<'src> Parser<'src> {
         ret
       }
       Token::Id(id) => {
-        let id = self.ast.add_str(id);
         let id_info = self.last_token_info();
+        let id = self.env.get_name_or_add(id);
         let ret = Ok(self.ast.add_expression(Expr::Variable { id, id_info }));
         self.advance()?;
         ret
@@ -127,8 +127,8 @@ impl<'src> Parser<'src> {
       let rhs = self.parse_binary_operation(0)?;
       if let Expr::Variable { id, id_info } = self.ast.get_expression(lhs) {
         return Ok(self.ast.add_expression(Expr::Assignment {
-          name: id,
-          name_info: id_info,
+          id,
+          id_info,
           value: rhs,
         }));
       } else {
@@ -189,16 +189,6 @@ mod test {
   }
 
   #[test]
-  fn parse_literal_identifier() {
-    let mut parser = create_parser("identifier");
-    let literal = parser.parse_expression().unwrap();
-    match parser.ast.get_expression(literal) {
-      Expr::Variable { id, id_info: _ } if parser.ast.get_str(id.clone()) == "identifier" => {}
-      a => panic!("expected literal, got {a:?}"),
-    }
-  }
-
-  #[test]
   fn binary_op() {
     let mut parser = create_parser("1 + 1");
     let binexp = parser.parse_expression().unwrap();
@@ -228,13 +218,6 @@ mod test {
         } if operator.op == op => {
           binexp = left;
         }
-        Expr::Logical {
-          left,
-          operator,
-          right: _,
-        } if operator.op == op => {
-          binexp = left;
-        }
         _ => panic!("wrong precedence"),
       }
     }
@@ -254,10 +237,22 @@ mod test {
     assert!(matches!(
       parser.ast.get_expression(assignment),
       Expr::Assignment {
-        name: _,
-        name_info: _,
+        id: _,
+        id_info: _,
         value: _
       }
     ));
+  }
+
+  #[test]
+  fn parse_identifier() {
+    let mut parser = create_parser("identifier");
+    let variable = parser.parse_expression().unwrap();
+    match parser.ast.get_expression(variable) {
+      Expr::Variable { id, id_info: _ } => {
+        assert_eq!(id.0, 0)
+      }
+      a => panic!("expected variable, got {a:?}"),
+    }
   }
 }

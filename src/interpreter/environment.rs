@@ -1,88 +1,70 @@
-use super::*;
-use std::{collections::HashMap, ops::Not};
+use std::collections::{hash_map::Entry, HashMap};
 
+use crate::{
+  ast::Identifier,
+  errors::{SourceError, SourceErrorType},
+  lexer::SourceInfo,
+};
+
+use super::ExprValue;
+
+#[derive(Default)]
 pub struct Environment {
-  scopes: Vec<HashMap<String, ExprValue>>,
+  memory: HashMap<u32, ExprValue>,
 }
 
 impl Environment {
-  fn innermost(&mut self) -> &mut HashMap<String, ExprValue> {
-    // we are always guaranteed the global scope so unwrapping is safe
-    self.scopes.last_mut().unwrap()
+  pub fn new() -> Self {
+    Self::default()
   }
 
-  pub fn declare_source_identifier(
+  pub fn get_or_err(&self, id: Identifier, info: SourceInfo) -> Result<ExprValue, SourceError> {
+    self.memory.get(&id.0).cloned().ok_or_else(|| {
+      SourceError::from_token_info(
+        &info,
+        "identifier was not declared before".to_string(),
+        SourceErrorType::Runtime,
+      )
+    })
+  }
+
+  pub fn update_value_or_err(
     &mut self,
-    id: &str,
-    id_info: &SourceInfo,
+    id: Identifier,
+    id_info: SourceInfo,
+    value: ExprValue,
+  ) -> Result<ExprValue, SourceError> {
+    if let Entry::Occupied(mut e) = self.memory.entry(id.0) {
+      *e.get_mut() = value.clone();
+      Ok(value)
+    } else {
+      Err(SourceError::from_token_info(
+        &id_info,
+        "identifier was not declared".to_string(),
+        SourceErrorType::Runtime,
+      ))
+    }
+  }
+
+  pub fn set_if_none(
+    &mut self,
+    id: Identifier,
+    id_info: SourceInfo,
     value: ExprValue,
   ) -> Result<(), SourceError> {
-    self
-      .innermost()
-      .contains_key(id)
-      .not()
-      .then(|| {
-        self.innermost().insert(id.to_string(), value);
-      })
-      .ok_or_else(|| {
-        SourceError::from_token_info(
-          id_info,
-          format!("identifier '{id}' already declared in the current scope"),
-          SourceErrorType::Runtime,
-        )
-      })
-  }
-
-  pub fn declare_native_identifier(&mut self, id: String, value: ExprValue) {
-    self.scopes.first_mut().unwrap().insert(id, value);
-  }
-
-  pub fn get_id_value(&self, id: &str, id_info: &SourceInfo) -> ExprResult {
-    self
-      .scopes
-      .iter()
-      .rev()
-      .find_map(|scope| scope.get(id))
-      .cloned()
-      .ok_or_else(|| {
-        SourceError::from_token_info(
-          id_info,
-          format!("unknown identifier {id}"),
-          SourceErrorType::Runtime,
-        )
-      })
-  }
-
-  pub fn assign(&mut self, name: &str, info: SourceInfo, value: ExprValue) -> ExprResult {
-    self
-      .scopes
-      .iter_mut()
-      .rev()
-      .find_map(|scope| scope.get_mut(name))
-      .map(|var_value| {
-        *var_value = value.clone();
-        value
-      })
-      .ok_or_else(|| {
-        SourceError::from_token_info(
-          &info,
-          format!("variable {name} was not declared before"),
-          SourceErrorType::Runtime,
-        )
-      })
-  }
-
-  pub fn pop(&mut self) {
-    self.scopes.pop();
-  }
-
-  pub fn push(&mut self) {
-    self.scopes.push(HashMap::new())
-  }
-
-  pub fn global() -> Self {
-    Self {
-      scopes: vec![HashMap::new()],
+    if let Entry::Vacant(e) = self.memory.entry(id.0) {
+      e.insert(value);
+      Ok(())
+    } else {
+      Err(SourceError::from_token_info(
+        &id_info,
+        "identifier already declared".to_string(),
+        SourceErrorType::Runtime,
+      ))
     }
+  }
+
+  pub fn set(&mut self, id: Identifier, value: ExprValue) {
+    self.memory.insert(id.0, value);
   }
 }

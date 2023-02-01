@@ -48,7 +48,6 @@ pub fn to_operator(token: Token) -> Operator {
 pub enum Literal {
   String(StrHandle),
   Number(f64),
-  Id(StrHandle),
   True,
   False,
   Null,
@@ -59,7 +58,6 @@ impl Literal {
     match self {
       Self::String(s) => format!("\"{}\"", ast.get_str(s.clone())),
       Self::Number(num) => format!("{num}"),
-      Self::Id(id) => ast.get_str(id.clone()).to_string(),
       _ => format!("{self:?}").to_lowercase(),
     }
   }
@@ -68,7 +66,6 @@ impl Literal {
 pub fn literal_from_token(token: Token, ast: &mut AST) -> Literal {
   match token {
     Token::String(s) => Literal::String(ast.add_str(s)),
-    Token::Id(id) => Literal::Id(ast.add_str(id)),
     Token::Number(num) => Literal::Number(num),
     Token::True => Literal::True,
     Token::False => Literal::False,
@@ -89,6 +86,9 @@ impl OperatorPair {
   }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Identifier(pub u32);
+
 #[derive(Debug, Clone)]
 pub enum Expr {
   BinaryExpr {
@@ -105,12 +105,12 @@ pub enum Expr {
     info: SourceInfoHandle,
   },
   Variable {
-    id: StrHandle,
+    id: Identifier,
     id_info: SourceInfoHandle,
   },
   Assignment {
-    name: StrHandle,
-    name_info: SourceInfoHandle,
+    id: Identifier,
+    id_info: SourceInfoHandle,
     value: ExprHandle,
   },
   FnCall {

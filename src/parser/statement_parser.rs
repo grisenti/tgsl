@@ -1,11 +1,11 @@
 use super::*;
 
 impl<'src> Parser<'src> {
-  fn match_id_or_err(&mut self) -> Result<(StrHandle, SourceInfoHandle), SourceError> {
+  fn match_id_or_err(&mut self) -> Result<(Identifier, SourceInfoHandle), SourceError> {
     if let Token::Id(id) = self.lookahead {
       let info = self.last_token_info();
       self.advance()?;
-      Ok((self.ast.add_str(id), info))
+      Ok((self.env.declare_name(id), info))
     } else {
       Err(SourceError::from_lexer_state(
         &self.lex,
@@ -27,6 +27,7 @@ impl<'src> Parser<'src> {
   fn parse_block(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::Basic('{'));
     self.advance()?;
+    self.env.push();
     let mut statements = Vec::new();
     let mut errors = Vec::new();
     while self.lookahead != Token::Basic('}') && !self.is_at_end() {
@@ -38,6 +39,7 @@ impl<'src> Parser<'src> {
         }
       }
     }
+    self.env.pop();
     self.match_or_err(Token::Basic('}'))?;
     if errors.is_empty() {
       Ok(self.ast.add_statement(Stmt::Block(statements)))
@@ -94,6 +96,7 @@ impl<'src> Parser<'src> {
     let info = self.last_token_info();
     self.advance()?; //consume for
     self.match_or_err(Token::Basic('('))?;
+    self.env.push(); // for statement scope
     let init = self.parse_decl()?;
     let condition = self.parse_expression()?;
     self.match_or_err(Token::Basic(';'))?;
@@ -109,6 +112,7 @@ impl<'src> Parser<'src> {
       condition,
       loop_body: while_body,
     });
+    self.env.pop(); // for statement scope
     Ok(self.ast.add_statement(Stmt::Block(vec![init, while_loop])))
   }
 
@@ -165,14 +169,16 @@ impl<'src> Parser<'src> {
   fn parse_function_params(
     &mut self,
     call_start: SourceInfo,
-  ) -> Result<Vec<StrHandle>, SourceError> {
+  ) -> Result<Vec<Identifier>, SourceError> {
     let mut parameters = Vec::new();
+    self.env.push();
     loop {
       parameters.push(self.match_id_or_err()?.0);
       if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
         break;
       }
     }
+    self.env.pop();
     if parameters.len() > 255 {
       Err(SourceError::from_token_info(
         &call_start,
@@ -187,7 +193,7 @@ impl<'src> Parser<'src> {
   fn parse_fun_decl(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::Fun);
     self.advance()?; // consume fun
-    let (function_name, name_info) = self.match_id_or_err()?;
+    let (name_id, name_info) = self.match_id_or_err()?;
     let call_start = self.lex.prev_token_info();
     self.match_or_err(Token::Basic('('))?;
     let parameters = if self.lookahead != Token::Basic(')') {
@@ -200,7 +206,7 @@ impl<'src> Parser<'src> {
       let block = self.parse_block()?;
       if let Stmt::Block(body) = self.ast.get_statement(block) {
         Ok(self.ast.add_statement(Stmt::Function {
-          name: function_name,
+          id: name_id,
           name_info,
           parameters: parameters?,
           body,

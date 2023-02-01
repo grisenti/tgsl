@@ -1,12 +1,11 @@
 mod environment;
-
 use std::fmt::Debug;
-
-use environment::*;
 
 use crate::ast::*;
 use crate::errors::{SourceError, SourceErrorType};
 use crate::lexer::SourceInfo;
+
+use self::environment::Environment;
 
 pub trait ClonableFn {
   fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
@@ -41,7 +40,7 @@ impl Clone for Box<dyn ClonableFn> {
 #[derive(Clone)]
 struct NativeFn {
   body: Vec<StmtHandle>,
-  parameters: Vec<StrHandle>,
+  parameters: Vec<Identifier>,
 }
 
 impl ClonableFn for NativeFn {
@@ -195,7 +194,7 @@ type StmtRes = Result<Option<EarlyOut>, SourceError>;
 impl Interpreter {
   fn install_identifier(
     &mut self,
-    id: &str,
+    id: Identifier,
     id_info: SourceInfoHandle,
     exp_opt: Option<ExprHandle>,
   ) -> IntepreterResult {
@@ -205,10 +204,11 @@ impl Interpreter {
       .unwrap_or(Ok(ExprValue::Null))?;
     self
       .env
-      .declare_source_identifier(id, &self.ast.get_source_info(id_info), value)
+      .set_if_none(id, self.ast.get_source_info(id_info), value)?;
+    Ok(())
   }
 
-  fn handle_literal_expression(&self, ast: &AST, literal: Literal) -> ExprResult {
+  fn handle_literal_expression(&self, literal: Literal) -> ExprResult {
     match literal {
       Literal::Number(num) => Ok(ExprValue::Num(num)),
       Literal::String(s) => Ok(ExprValue::Str(self.ast.get_str(s).to_string())),
@@ -314,7 +314,7 @@ impl Interpreter {
 
   fn interpret_expression(&mut self, exp: ExprHandle) -> ExprResult {
     match self.ast.get_expression(exp) {
-      Expr::Literal { literal, info: _ } => self.handle_literal_expression(&self.ast, literal),
+      Expr::Literal { literal, info: _ } => self.handle_literal_expression(literal),
       Expr::BinaryExpr {
         left,
         operator,
@@ -330,20 +330,12 @@ impl Interpreter {
         self.ast.get_source_info(operator.src_info),
         right,
       ),
-      Expr::Variable { id, id_info } => self
-        .env
-        .get_id_value(self.ast.get_str(id), &self.ast.get_source_info(id_info)),
-      Expr::Assignment {
-        name,
-        name_info,
-        value,
-      } => {
+      Expr::Variable { id, id_info } => self.env.get_or_err(id, self.ast.get_source_info(id_info)),
+      Expr::Assignment { id, id_info, value } => {
         let rhs = self.interpret_expression(value)?;
-        self.env.assign(
-          self.ast.get_str(name),
-          self.ast.get_source_info(name_info),
-          rhs,
-        )
+        self
+          .env
+          .update_value_or_err(id, self.ast.get_source_info(id_info), rhs)
       }
       Expr::FnCall {
         func,
@@ -408,32 +400,18 @@ impl Interpreter {
 
   fn interpret_function(
     &mut self,
-    parameters: &[StrHandle],
+    parameters: &[Identifier],
     body: &[StmtHandle],
     arguments: Vec<ExprValue>,
   ) -> InterpreterFnResult {
-    self.env.push();
     for (param, arg) in parameters.iter().zip(arguments) {
-      self
-        .env
-        .declare_source_identifier(
-          self.ast.get_str(param.clone()),
-          &SourceInfo {
-            line_no: 0,
-            start: 0,
-            end: 0,
-          },
-          arg,
-        )
-        .or(Err(()))?;
+      self.env.set(*param, arg);
     }
     for stmt in body.iter().cloned() {
       if let Some(EarlyOut::Return(val)) = self.interpret_statement(stmt).or(Err(()))? {
-        self.env.pop();
         return Ok(val);
       };
     }
-    self.env.pop();
     Ok(ExprValue::Null)
   }
 
@@ -443,10 +421,7 @@ impl Interpreter {
         identifier,
         id_info,
         expression,
-      } => {
-        let id = self.ast.get_str(identifier).to_string();
-        self.install_identifier(&id, id_info, expression)?
-      }
+      } => self.install_identifier(identifier, id_info, expression)?,
       Stmt::Print(expression) => {
         println!("{:?}", self.interpret_expression(expression)?);
       }
@@ -454,14 +429,12 @@ impl Interpreter {
         self.interpret_expression(expr)?;
       }
       Stmt::Block(stmts) => {
-        self.env.push();
         for stmt in stmts {
           let res = self.interpret_statement(stmt)?;
           if res.is_some() {
             return Ok(res);
           }
         }
-        self.env.pop();
       }
       Stmt::IfBranch {
         if_info,
@@ -480,7 +453,7 @@ impl Interpreter {
       }
       Stmt::Break => return Ok(Some(EarlyOut::Break)),
       Stmt::Function {
-        name,
+        id,
         name_info,
         parameters,
         body,
@@ -489,14 +462,14 @@ impl Interpreter {
         let func = NativeFn { body, parameters };
         let interpreter_fn = InterpreterFn {
           arity,
-          name: self.ast.get_str(name.clone()).to_string(),
+          name: "".to_string(),
           callable: Box::new(func),
         };
-        self.env.declare_source_identifier(
-          self.ast.get_str(name),
-          &self.ast.get_source_info(name_info),
+        self.env.set_if_none(
+          id,
+          self.ast.get_source_info(name_info),
           ExprValue::Func(interpreter_fn),
-        )?;
+        )?
       }
       Stmt::Return(expr) => return Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?))),
       _ => panic!(),
@@ -506,7 +479,7 @@ impl Interpreter {
 
   pub fn new(ast: AST) -> Self {
     Self {
-      env: Environment::global(),
+      env: Environment::new(),
       ast,
     }
   }
@@ -516,11 +489,5 @@ impl Interpreter {
       self.interpret_statement(stmt.clone())?;
     }
     Ok(())
-  }
-
-  pub fn add_native_function(&mut self, name: String, func: InterpreterFn) {
-    self
-      .env
-      .declare_native_identifier(name, ExprValue::Func(func));
   }
 }

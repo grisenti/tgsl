@@ -1,11 +1,15 @@
+mod environment;
 mod expression_parser;
 mod statement_parser;
+
+use self::environment::Environment;
 
 use super::ast::*;
 use super::errors::*;
 use super::lexer::*;
 
 pub struct Parser<'src> {
+  env: Environment,
   lex: Lexer<'src>,
   lookahead: Token<'src>,
   ast: AST,
@@ -70,10 +74,10 @@ impl<'src> Parser<'src> {
     let mut stop = false;
     while !stop {
       match self.lookahead {
-        Token::Basic(';') => {
+        Token::Basic(';') | Token::Basic('}') => {
           stop = true;
         }
-        Token::Basic('}') | Token::EndOfFile => {
+        Token::EndOfFile => {
           break;
         }
         _ => {}
@@ -91,6 +95,7 @@ impl<'src> Parser<'src> {
       lex,
       lookahead: Token::EndOfFile,
       ast: AST::new(),
+      env: Environment::global(),
     }
   }
 
