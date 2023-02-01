@@ -27,6 +27,6 @@ pub enum Stmt {
     parameters: Vec<Identifier>,
     body: Vec<StmtHandle>,
   },
-  Break,
+  Break(SourceInfoHandle),
   Return(ExprHandle),
 }

@@ -116,11 +116,12 @@ impl<'src> Parser<'src> {
     Ok(self.ast.add_statement(Stmt::Block(vec![init, while_loop])))
   }
 
-  fn parse_loop_early_out(&mut self, kind: Stmt) -> StmtRes {
+  fn parse_loop_break(&mut self) -> StmtRes {
     assert!(matches!(self.lookahead, Token::Break));
+    let info = self.last_token_info();
     self.advance()?;
     self.match_or_err(Token::Basic(';'))?;
-    Ok(self.ast.add_statement(kind))
+    Ok(self.ast.add_statement(Stmt::Break(info)))
   }
 
   fn parse_function_return(&mut self) -> StmtRes {
@@ -138,7 +139,7 @@ impl<'src> Parser<'src> {
       Token::If => self.parse_if_stmt(),
       Token::While => self.parse_while_stmt(),
       Token::For => self.parse_for_stmt(),
-      Token::Break => self.parse_loop_early_out(Stmt::Break),
+      Token::Break => self.parse_loop_break(),
       Token::Return => self.parse_function_return(),
       _ => self.parse_expr_stmt(),
     }

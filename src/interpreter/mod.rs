@@ -449,7 +449,7 @@ impl Interpreter {
       } => {
         self.interpret_while_loop(info, condition, loop_body)?;
       }
-      Stmt::Break => return Ok(Some(EarlyOut::Break)),
+      Stmt::Break(_) => return Ok(Some(EarlyOut::Break)),
       Stmt::Function {
         id,
         name_info,
