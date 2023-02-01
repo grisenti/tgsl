@@ -229,4 +229,30 @@ mod test {
     let assignment = parser.parse_expression();
     assert!(matches!(assignment, Err(_)));
   }
+
+  #[test]
+  fn assign_to_rvalue() {
+    let mut parser = create_parser("id = 2");
+    let assignment = parser.parse_expression().unwrap();
+    assert!(matches!(
+      parser.ast.get_expression(assignment),
+      Expr::Assignment {
+        id: _,
+        id_info: _,
+        value: _
+      }
+    ));
+  }
+
+  #[test]
+  fn parse_identifier() {
+    let mut parser = create_parser("identifier");
+    let variable = parser.parse_expression().unwrap();
+    match parser.ast.get_expression(variable) {
+      Expr::Variable { id, id_info: _ } => {
+        assert_eq!(id.0, 0)
+      }
+      a => panic!("expected variable, got {a:?}"),
+    }
+  }
 }
