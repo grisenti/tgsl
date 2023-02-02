@@ -25,7 +25,16 @@ var x = 0;
 var x: num = 0;
 ```
 
-## Types
+## Built-in types
+```rs
+var a = "string"; // dynamic string
+var b = 1; // f64 
+var c = [1,2,3]; // array
+var d = map["a": 1, "b": 2]; // map
+var e = set["a", "b", "c"]; // set
+```
+
+## User defined types
 ```rs
 struct A {
 	a, //any type
@@ -48,6 +57,10 @@ var a = A(a, b, c);
 "{id} - {a.to_string()}"
 ```
 
+## Compiler directives
+```rs
+#[enable(set)]
+```
 
 # Grammar
 ## Program
@@ -137,3 +150,4 @@ arguments → expression ( "," expression )* ;
 
 type_specifier → (":" IDENTIFIER)?
 ```
+
