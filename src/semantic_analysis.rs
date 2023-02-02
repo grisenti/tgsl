@@ -1,5 +1,5 @@
 use crate::ast::*;
-use crate::errors::SourceError;
+use crate::errors::{SourceError, SourceErrorType};
 use crate::lexer::SourceInfo;
 
 pub type SemAnalysisRes = Result<(), SourceError>;
@@ -14,7 +14,7 @@ impl SemanticAnalizer {
     match ast.get_statement(stmt) {
       Stmt::VarDecl {
         identifier,
-        id_info,
+        id_info: _,
         expression,
       } => {
         if let Some(Expr::Variable { id, id_info }) =
@@ -24,14 +24,14 @@ impl SemanticAnalizer {
             return Err(SourceError::from_token_info(
               &ast.get_source_info(id_info),
               "cannot initialize identifier with itself".to_string(),
-              crate::errors::SourceErrorType::Parsing,
+              SourceErrorType::Parsing,
             ));
           }
         }
       }
       Stmt::While {
-        info,
-        condition,
+        info: _,
+        condition: _,
         loop_body,
       } => {
         self.loop_depth += 1;
@@ -39,8 +39,8 @@ impl SemanticAnalizer {
         self.loop_depth -= 1;
       }
       Stmt::IfBranch {
-        if_info,
-        condition,
+        if_info: _,
+        condition: _,
         true_branch,
         else_branch,
       } => {
@@ -55,9 +55,9 @@ impl SemanticAnalizer {
         }
       }
       Stmt::Function {
-        id,
-        name_info,
-        parameters,
+        id: _,
+        name_info: _,
+        parameters: _,
         body,
       } => {
         self.function_depth += 1;
@@ -71,7 +71,7 @@ impl SemanticAnalizer {
           return Err(SourceError::from_token_info(
             &ast.get_source_info(info),
             "cannot have break outside of loop body".to_string(),
-            crate::errors::SourceErrorType::Parsing,
+            SourceErrorType::Parsing,
           ));
         }
       }
@@ -80,7 +80,7 @@ impl SemanticAnalizer {
           return Err(SourceError::from_token_info(
             &ast.get_source_info(src_info),
             "cannot have break outside of loop body".to_string(),
-            crate::errors::SourceErrorType::Parsing,
+            SourceErrorType::Parsing,
           ));
         }
       }
