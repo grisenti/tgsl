@@ -1,5 +1,8 @@
 mod environment;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt::Debug;
+use std::rc::Rc;
 
 use crate::ast::*;
 use crate::errors::{SourceError, SourceErrorType};
@@ -57,6 +60,46 @@ impl ClonableFn for NativeFn {
 }
 
 #[derive(Clone)]
+struct NativeClass {
+  methods: HashMap<String, ExprValue>,
+}
+
+impl NativeClass {
+  fn new(ast: &AST, methods: &[(StrHandle, Function)]) -> Self {
+    Self {
+      methods: HashMap::from_iter(methods.iter().map(|(handle, func)| {
+        (
+          ast.get_str(handle.clone()).to_string(),
+          ExprValue::Func(InterpreterFn {
+            arity: func.parameters.len() as u32,
+            name: "".to_string(),
+            callable: Box::new(NativeFn {
+              body: func.body.clone(),
+              parameters: func.parameters.clone(),
+            }),
+          }),
+        )
+      })),
+    }
+  }
+}
+
+impl ClonableFn for NativeClass {
+  fn call(&self, interpreter: &mut Interpreter, arguments: Vec<ExprValue>) -> InterpreterFnResult {
+    Ok(ExprValue::ClassInstance(Rc::new(RefCell::new(
+      self.methods.clone(),
+    ))))
+  }
+
+  fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
+  where
+    Self: 'a,
+  {
+    Box::new(self.clone())
+  }
+}
+
+#[derive(Clone)]
 pub struct InterpreterFn {
   pub arity: u32,
   pub name: String,
@@ -69,12 +112,15 @@ impl Debug for InterpreterFn {
   }
 }
 
+type ClassInstance = Rc<RefCell<HashMap<String, ExprValue>>>;
+
 #[derive(Debug, Clone)]
 pub enum ExprValue {
   Str(String),
   Num(f64),
   Boolean(bool),
   Func(InterpreterFn),
+  ClassInstance(ClassInstance),
   Null,
 }
 
@@ -342,6 +388,53 @@ impl Interpreter {
         call_info,
         arguments,
       } => self.handle_function_call(func, call_info, arguments),
+      Expr::Get {
+        object,
+        name,
+        name_info,
+      } => {
+        let info = self.ast.get_source_info(name_info);
+        if let ExprValue::ClassInstance(instance) = self.interpret_expression(object.clone())? {
+          let name = self.ast.get_str(name);
+          let instance = instance.as_ref().borrow();
+          instance
+            .get(name)
+            .ok_or_else(|| {
+              SourceError::from_token_info(
+                &info,
+                format!("{name} is not a valid property"),
+                SourceErrorType::Runtime,
+              )
+            })
+            .cloned()
+        } else {
+          Err(SourceError::from_token_info(
+            &self.ast.get_source_info(name_info),
+            "cannot access prorety of a primitive object".to_string(),
+            SourceErrorType::Runtime,
+          ))
+        }
+      }
+      Expr::Set {
+        object,
+        name,
+        name_info,
+        value,
+      } => {
+        if let ExprValue::ClassInstance(instance) = self.interpret_expression(object.clone())? {
+          let value = self.interpret_expression(value)?;
+          let name = self.ast.get_str(name);
+          let mut instance = instance.as_ref().borrow_mut();
+          instance.insert(name.to_string(), value.clone());
+          Ok(value.clone())
+        } else {
+          Err(SourceError::from_token_info(
+            &self.ast.get_source_info(name_info),
+            "cannot set prorety of a primitive object".to_string(),
+            SourceErrorType::Runtime,
+          ))
+        }
+      }
     }
   }
 
@@ -417,6 +510,28 @@ impl Interpreter {
     Ok(ExprValue::Null)
   }
 
+  fn add_function(
+    &mut self,
+    id: Identifier,
+    name_info: SourceInfoHandle,
+    parameters: Vec<Identifier>,
+    body: Vec<StmtHandle>,
+  ) -> StmtRes {
+    let arity = parameters.len() as u32;
+    let func = NativeFn { body, parameters };
+    let interpreter_fn = InterpreterFn {
+      arity,
+      name: "".to_string(),
+      callable: Box::new(func),
+    };
+    self.env.set_if_none(
+      id,
+      self.ast.get_source_info(name_info),
+      ExprValue::Func(interpreter_fn),
+    )?;
+    Ok(None)
+  }
+
   fn interpret_statement(&mut self, stmt: StmtHandle) -> StmtRes {
     match self.ast.get_statement(stmt) {
       Stmt::VarDecl {
@@ -460,21 +575,33 @@ impl Interpreter {
         parameters,
         body,
       } => {
-        let arity = parameters.len() as u32;
-        let func = NativeFn { body, parameters };
-        let interpreter_fn = InterpreterFn {
-          arity,
-          name: "".to_string(),
-          callable: Box::new(func),
-        };
-        self.env.set_if_none(
-          id,
-          self.ast.get_source_info(name_info),
-          ExprValue::Func(interpreter_fn),
-        )?
+        self.add_function(id, name_info, parameters, body)?;
       }
       Stmt::Return { expr, src_info: _ } => {
         return Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?)))
+      }
+      Stmt::Class {
+        name,
+        name_info,
+        methods,
+      } => {
+        for (_, method) in &methods {
+          self.add_function(
+            method.id,
+            method.name_info,
+            method.parameters.clone(),
+            method.body.clone(),
+          )?;
+        }
+        self.env.set_if_none(
+          name,
+          self.ast.get_source_info(name_info),
+          ExprValue::Func(InterpreterFn {
+            arity: 0,
+            name: "".to_string(),
+            callable: Box::new(NativeClass::new(&self.ast, &methods)),
+          }),
+        )?;
       }
       _ => panic!(),
     };

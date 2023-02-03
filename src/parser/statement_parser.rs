@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::*;
 
 impl<'src> Parser<'src> {
@@ -221,10 +223,58 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn parse_class_decl(&mut self) -> StmtRes {
+    assert_eq!(self.lookahead, Token::Class);
+    self.advance()?;
+    let (name_id, name_info) = self.match_id_or_err()?;
+    self.match_or_err(Token::Basic('{'))?;
+    let mut methods = Vec::new();
+    self.env.push();
+    while self.lookahead != Token::Basic('}') {
+      if let Token::Id(method_name) = self.lookahead {
+        self.advance()?;
+        let call_start = self.lex.prev_token_info();
+        self.match_or_err(Token::Basic('('))?;
+        let parameters = if self.lookahead != Token::Basic(')') {
+          self.parse_function_params(call_start)
+        } else {
+          Ok(Vec::new())
+        };
+        self.match_or_err(Token::Basic(')'))?;
+        if self.lookahead == Token::Basic('{') {
+          let block = self.parse_block()?;
+          if let Stmt::Block(body) = self.ast.get_statement(block) {
+            methods.push((
+              self.ast.add_str(method_name),
+              Function {
+                id: self.env.declare_name(method_name),
+                name_info,
+                parameters: parameters?,
+                body,
+              },
+            ));
+          } else {
+            panic!()
+          }
+        } else {
+          return Err(self.unexpected_token(Some(Token::Basic('{'))));
+        }
+      }
+    }
+    self.env.pop();
+    self.match_or_err(Token::Basic('}'))?;
+    Ok(self.ast.add_statement(Stmt::Class {
+      name: name_id,
+      name_info: name_info,
+      methods,
+    }))
+  }
+
   pub(super) fn parse_decl(&mut self) -> StmtRes {
     let ret = match self.lookahead {
       Token::Var => self.parse_var_decl()?,
       Token::Fun => self.parse_fun_decl()?,
+      Token::Class => self.parse_class_decl()?,
       _ => self.parse_statement()?,
     };
     Ok(ret)

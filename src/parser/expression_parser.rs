@@ -84,6 +84,19 @@ impl<'src> Parser<'src> {
             arguments: arguments?,
           })
         }
+        Token::Basic('.') => {
+          self.advance()?;
+          if let Token::Id(name) = self.lookahead {
+            let name_info = self.last_token_info();
+            self.advance()?;
+            let name = self.ast.add_str(name);
+            expr = self.ast.add_expression(Expr::Get {
+              object: expr,
+              name,
+              name_info,
+            });
+          }
+        }
         _ => break,
       }
     }
@@ -125,21 +138,31 @@ impl<'src> Parser<'src> {
     let lhs = self.parse_binary_operation(0)?;
     if let Some((_, eq_src_info)) = self.match_next(Token::Basic('='))? {
       let rhs = self.parse_binary_operation(0)?;
-      if let Expr::Variable { id, id_info } = self.ast.get_expression(lhs) {
-        return Ok(self.ast.add_expression(Expr::Assignment {
+      match self.ast.get_expression(lhs) {
+        Expr::Variable { id, id_info } => Ok(self.ast.add_expression(Expr::Assignment {
           id,
           id_info,
           value: rhs,
-        }));
-      } else {
-        return Err(SourceError::from_token_info(
+        })),
+        Expr::Get {
+          object,
+          name,
+          name_info,
+        } => Ok(self.ast.add_expression(Expr::Set {
+          object: object,
+          name: name,
+          name_info: name_info,
+          value: rhs,
+        })),
+        _ => Err(SourceError::from_token_info(
           &self.ast.get_source_info(eq_src_info),
           "left hand side of assignment is not a valid target".to_string(),
           SourceErrorType::Parsing,
-        ));
+        )),
       }
+    } else {
+      Ok(lhs)
     }
-    Ok(lhs)
   }
 
   pub(super) fn parse_expression(&mut self) -> ExprRes {

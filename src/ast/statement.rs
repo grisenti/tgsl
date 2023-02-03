@@ -1,4 +1,12 @@
-use super::{ExprHandle, Identifier, SourceInfoHandle, StmtHandle};
+use super::{ExprHandle, Identifier, SourceInfoHandle, StmtHandle, StrHandle};
+
+#[derive(Debug, Clone)]
+pub struct Function {
+  pub id: Identifier,
+  pub name_info: SourceInfoHandle,
+  pub parameters: Vec<Identifier>,
+  pub body: Vec<StmtHandle>,
+}
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
@@ -31,5 +39,10 @@ pub enum Stmt {
   Return {
     expr: ExprHandle,
     src_info: SourceInfoHandle,
+  },
+  Class {
+    name: Identifier,
+    name_info: SourceInfoHandle,
+    methods: Vec<(StrHandle, Function)>,
   },
 }
