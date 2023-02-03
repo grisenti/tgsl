@@ -46,24 +46,6 @@ impl Environment {
     }
   }
 
-  pub fn set_if_none(
-    &mut self,
-    id: Identifier,
-    id_info: SourceInfo,
-    value: ExprValue,
-  ) -> Result<(), SourceError> {
-    if let Entry::Vacant(e) = self.memory.entry(id.0) {
-      e.insert(value);
-      Ok(())
-    } else {
-      Err(SourceError::from_token_info(
-        &id_info,
-        "identifier already declared".to_string(),
-        SourceErrorType::Runtime,
-      ))
-    }
-  }
-
   pub fn set(&mut self, id: Identifier, value: ExprValue) {
     self.memory.insert(id.0, value);
   }

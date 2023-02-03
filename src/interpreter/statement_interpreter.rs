@@ -66,7 +66,7 @@ impl Interpreter {
       self.env.set(*param, arg);
     }
     for stmt in body.iter().cloned() {
-      if let Some(EarlyOut::Return(val)) = self.interpret_statement(stmt).or(Err(()))? {
+      if let Some(EarlyOut::Return(val)) = self.interpret_statement(stmt)? {
         return Ok(val);
       };
     }
@@ -86,11 +86,7 @@ impl Interpreter {
       arity,
       callable: Box::new(func),
     };
-    self.env.set_if_none(
-      id,
-      self.ast.get_source_info(name_info),
-      ExprValue::Func(interpreter_fn),
-    )?;
+    self.env.set(id, ExprValue::Func(interpreter_fn));
     Ok(None)
   }
 
@@ -147,14 +143,13 @@ impl Interpreter {
         name_info,
         methods,
       } => {
-        self.env.set_if_none(
+        self.env.set(
           name,
-          self.ast.get_source_info(name_info),
           ExprValue::Func(InterpreterFn {
             arity: 0,
             callable: Box::new(NativeClass::new(&self.ast, &methods)),
           }),
-        )?;
+        );
       }
       _ => panic!(),
     };

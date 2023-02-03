@@ -74,13 +74,7 @@ impl Interpreter {
     let func_val = self.interpret_expression(func)?;
     if let ExprValue::Func(func) = func_val {
       if func.arity as usize == argument_values.len() {
-        func.callable.call(self, argument_values).map_err(|_| {
-          SourceError::from_token_info(
-            &self.ast.get_source_info(call_info),
-            "function call error".to_string(),
-            SourceErrorType::Runtime,
-          )
-        })
+        func.callable.call(self, argument_values)
       } else {
         Err(SourceError::from_token_info(
           &self.ast.get_source_info(call_info),
@@ -108,7 +102,7 @@ impl Interpreter {
     name_info: SourceInfoHandle,
   ) -> ExprResult {
     let info = self.ast.get_source_info(name_info);
-    if let ExprValue::ClassInstance(instance) = self.interpret_expression(object.clone())? {
+    if let ExprValue::ClassInstance(instance) = self.interpret_expression(object)? {
       let name = self.ast.get_str(name);
       let instance = instance.as_ref().borrow();
       instance
@@ -137,12 +131,12 @@ impl Interpreter {
     name_info: SourceInfoHandle,
     value: ExprHandle,
   ) -> ExprResult {
-    if let ExprValue::ClassInstance(instance) = self.interpret_expression(object.clone())? {
+    if let ExprValue::ClassInstance(instance) = self.interpret_expression(object)? {
       let value = self.interpret_expression(value)?;
       let name = self.ast.get_str(name);
       let mut instance = instance.as_ref().borrow_mut();
       instance.insert(name.to_string(), value.clone());
-      Ok(value.clone())
+      Ok(value)
     } else {
       Err(SourceError::from_token_info(
         &self.ast.get_source_info(name_info),

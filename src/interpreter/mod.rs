@@ -99,7 +99,7 @@ pub enum ExprValue {
 }
 
 pub type ExprResult = Result<ExprValue, SourceError>;
-pub type InterpreterFnResult = Result<ExprValue, ()>;
+pub type InterpreterFnResult = Result<ExprValue, SourceError>;
 
 pub struct Interpreter {
   env: Environment,
@@ -125,9 +125,7 @@ impl Interpreter {
       .as_ref()
       .map(|exp| self.interpret_expression(exp.clone()))
       .unwrap_or(Ok(ExprValue::Null))?;
-    self
-      .env
-      .set_if_none(id, self.ast.get_source_info(id_info), value)?;
+    self.env.set(id, value);
     Ok(())
   }
 
