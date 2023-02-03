@@ -20,9 +20,7 @@ impl NativeClass {
 
 impl ClonableFn for NativeClass {
   fn call(&self, _: &mut Interpreter, _: Vec<ExprValue>) -> InterpreterFnResult {
-    Ok(ExprValue::ClassInstance(Rc::new(RefCell::new(
-      self.methods.clone(),
-    ))))
+    Ok(ExprValue::ClassInstance(ClassInstance::new(&self.methods)))
   }
 
   fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
@@ -30,5 +28,41 @@ impl ClonableFn for NativeClass {
     Self: 'a,
   {
     Box::new(self.clone())
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct ClassInstance {
+  value: Rc<RefCell<HashMap<String, ExprValue>>>,
+}
+
+impl ClassInstance {
+  fn new(methods: &HashMap<String, ExprValue>) -> Self {
+    Self {
+      value: Rc::new(RefCell::new(methods.clone())),
+    }
+  }
+
+  pub fn get(&self, name: &str, name_info: &SourceInfo) -> ExprResult {
+    self
+      .value
+      .borrow()
+      .get(name)
+      .ok_or_else(|| {
+        SourceError::from_token_info(
+          name_info,
+          format!("{name} is not a valid property"),
+          SourceErrorType::Runtime,
+        )
+      })
+      .cloned()
+  }
+
+  pub fn set(&mut self, name: &str, value: ExprValue) -> ExprValue {
+    self
+      .value
+      .borrow_mut()
+      .insert(name.to_string(), value.clone());
+    value
   }
 }

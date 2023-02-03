@@ -11,6 +11,7 @@ use crate::ast::*;
 use crate::errors::{SourceError, SourceErrorType};
 use crate::lexer::SourceInfo;
 
+use self::class::ClassInstance;
 use self::environment::Environment;
 
 pub trait ClonableFn {
@@ -86,8 +87,6 @@ impl Debug for InterpreterFn {
   }
 }
 
-type ClassInstance = Rc<RefCell<HashMap<String, ExprValue>>>;
-
 #[derive(Debug, Clone)]
 pub enum ExprValue {
   Str(String),
@@ -118,7 +117,6 @@ impl Interpreter {
   fn install_identifier(
     &mut self,
     id: Identifier,
-    id_info: SourceInfoHandle,
     exp_opt: Option<ExprHandle>,
   ) -> IntepreterResult {
     let value = exp_opt

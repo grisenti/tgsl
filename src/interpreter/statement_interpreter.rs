@@ -1,6 +1,21 @@
 use super::{class::NativeClass, *};
 
 impl Interpreter {
+  fn bool_or_err(
+    &mut self,
+    formula: ExprHandle,
+    info: SourceInfoHandle,
+  ) -> Result<bool, SourceError> {
+    match self.interpret_expression(formula)? {
+      ExprValue::Boolean(val) => Ok(val),
+      val => Err(SourceError::from_token_info(
+        &self.ast.get_source_info(info),
+        format!("expected boolean, got {val:?}"),
+        SourceErrorType::Runtime,
+      )),
+    }
+  }
+
   fn interpret_if_branch(
     &mut self,
     if_info: SourceInfoHandle,
@@ -8,35 +23,12 @@ impl Interpreter {
     true_branch: StmtHandle,
     false_branch: Option<StmtHandle>,
   ) -> StmtRes {
-    if let ExprValue::Boolean(value) = self.interpret_expression(condition)? {
-      if value {
-        self.interpret_statement(true_branch)
-      } else if let Some(branch) = false_branch {
-        self.interpret_statement(branch)
-      } else {
-        Ok(None)
-      }
+    if self.bool_or_err(condition, if_info)? {
+      self.interpret_statement(true_branch)
+    } else if let Some(branch) = false_branch {
+      self.interpret_statement(branch)
     } else {
-      Err(SourceError::from_token_info(
-        &self.ast.get_source_info(if_info),
-        "if condition has to evaluate to boolean".to_string(),
-        SourceErrorType::Runtime,
-      ))
-    }
-  }
-
-  fn bool_or_err(
-    &mut self,
-    formula: ExprHandle,
-    info: SourceInfoHandle,
-  ) -> Result<bool, SourceError> {
-    match self.interpret_expression(formula.clone())? {
-      ExprValue::Boolean(val) => Ok(val),
-      val => Err(SourceError::from_token_info(
-        &self.ast.get_source_info(info),
-        format!("while condition has to evaluate to a boolean, got {val:?}"),
-        SourceErrorType::Runtime,
-      )),
+      Ok(None)
     }
   }
 
@@ -76,7 +68,6 @@ impl Interpreter {
   fn add_function(
     &mut self,
     id: Identifier,
-    name_info: SourceInfoHandle,
     parameters: Vec<Identifier>,
     body: Vec<StmtHandle>,
   ) -> StmtRes {
@@ -94,9 +85,9 @@ impl Interpreter {
     match self.ast.get_statement(stmt) {
       Stmt::VarDecl {
         identifier,
-        id_info,
+        id_info: _,
         expression,
-      } => self.install_identifier(identifier, id_info, expression)?,
+      } => self.install_identifier(identifier, expression)?,
       Stmt::Print(expression) => {
         println!("{:?}", self.interpret_expression(expression)?);
       }
@@ -129,18 +120,18 @@ impl Interpreter {
       Stmt::Break(_) => return Ok(Some(EarlyOut::Break)),
       Stmt::Function {
         id,
-        name_info,
+        name_info: _,
         parameters,
         body,
       } => {
-        self.add_function(id, name_info, parameters, body)?;
+        self.add_function(id, parameters, body)?;
       }
       Stmt::Return { expr, src_info: _ } => {
         return Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?)))
       }
       Stmt::Class {
         name,
-        name_info,
+        name_info: _,
         methods,
       } => {
         self.env.set(

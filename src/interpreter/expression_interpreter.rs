@@ -95,33 +95,35 @@ impl Interpreter {
     }
   }
 
+  fn class_instance_or_err(
+    &mut self,
+    expr: ExprHandle,
+    info: SourceInfoHandle,
+    msg: &str,
+  ) -> Result<ClassInstance, SourceError> {
+    if let ExprValue::ClassInstance(instace) = self.interpret_expression(expr)? {
+      Ok(instace)
+    } else {
+      Err(SourceError::from_token_info(
+        &self.ast.get_source_info(info),
+        msg.to_string(),
+        SourceErrorType::Runtime,
+      ))
+    }
+  }
+
   fn handle_get(
     &mut self,
     object: ExprHandle,
     name: StrHandle,
     name_info: SourceInfoHandle,
   ) -> ExprResult {
-    let info = self.ast.get_source_info(name_info);
-    if let ExprValue::ClassInstance(instance) = self.interpret_expression(object)? {
-      let name = self.ast.get_str(name);
-      let instance = instance.as_ref().borrow();
-      instance
-        .get(name)
-        .ok_or_else(|| {
-          SourceError::from_token_info(
-            &info,
-            format!("{name} is not a valid property"),
-            SourceErrorType::Runtime,
-          )
-        })
-        .cloned()
-    } else {
-      Err(SourceError::from_token_info(
-        &self.ast.get_source_info(name_info),
-        "cannot access prorety of a primitive object".to_string(),
-        SourceErrorType::Runtime,
-      ))
-    }
+    let instace = self.class_instance_or_err(
+      object,
+      name_info,
+      "cannot access prorety of a primitive object",
+    )?;
+    instace.get(self.ast.get_str(name), &self.ast.get_source_info(name_info))
   }
 
   fn handle_set(
@@ -131,19 +133,13 @@ impl Interpreter {
     name_info: SourceInfoHandle,
     value: ExprHandle,
   ) -> ExprResult {
-    if let ExprValue::ClassInstance(instance) = self.interpret_expression(object)? {
-      let value = self.interpret_expression(value)?;
-      let name = self.ast.get_str(name);
-      let mut instance = instance.as_ref().borrow_mut();
-      instance.insert(name.to_string(), value.clone());
-      Ok(value)
-    } else {
-      Err(SourceError::from_token_info(
-        &self.ast.get_source_info(name_info),
-        "cannot set prorety of a primitive object".to_string(),
-        SourceErrorType::Runtime,
-      ))
-    }
+    let mut instance = self.class_instance_or_err(
+      object,
+      name_info,
+      "cannot set prorety of a primitive object",
+    )?;
+    let value = self.interpret_expression(value)?;
+    Ok(instance.set(self.ast.get_str(name), value))
   }
 
   pub(super) fn interpret_expression(&mut self, exp: ExprHandle) -> ExprResult {
