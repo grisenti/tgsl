@@ -1,102 +1,5 @@
 use super::*;
 
-fn unary_minus(rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
-  if let ExprValue::Num(x) = rhs {
-    Ok(ExprValue::Num(-x))
-  } else {
-    Err(SourceError::from_token_info(
-      &op_info,
-      format!("unary - cannot be applyed to operand {rhs:?}"),
-      SourceErrorType::Runtime,
-    ))
-  }
-}
-
-fn unary_not(rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
-  if let ExprValue::Boolean(x) = rhs {
-    Ok(ExprValue::Boolean(!x))
-  } else {
-    Err(SourceError::from_token_info(
-      &op_info,
-      format!("unary ! cannot be applyed to operand {rhs:?}"),
-      SourceErrorType::Runtime,
-    ))
-  }
-}
-
-fn binary_num<F>(lhs: ExprValue, rhs: ExprValue, op_info: SourceInfo, op: F) -> ExprResult
-where
-  F: Fn(f64, f64) -> f64,
-{
-  match (lhs, rhs) {
-    (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Num(op(l, r))),
-    (lhs, rhs) => Err(SourceError::from_token_info(
-      &op_info,
-      format!("operation only works for numbers, not supported for operands {lhs:?} {rhs:?}"),
-      SourceErrorType::Runtime,
-    )),
-  }
-}
-
-fn add(lhs: ExprValue, rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
-  match (lhs, rhs) {
-    (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Num(l + r)),
-    (ExprValue::Str(l), ExprValue::Str(r)) => Ok(ExprValue::Str(l + &r)),
-    (lhs, rhs) => Err(SourceError::from_token_info(
-      &op_info,
-      format!("cannot add {lhs:?} and {rhs:?}"),
-      SourceErrorType::Runtime,
-    )),
-  }
-}
-
-fn equal(lhs: ExprValue, rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
-  match (lhs, rhs) {
-    (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Boolean(l == r)),
-    (ExprValue::Str(l), ExprValue::Str(r)) => Ok(ExprValue::Boolean(l == r)),
-    (ExprValue::Boolean(l), ExprValue::Boolean(r)) => Ok(ExprValue::Boolean(l == r)),
-    (lhs, rhs) => Err(SourceError::from_token_info(
-      &op_info,
-      format!("cannot determine if {lhs:?} and {rhs:?} are equal"),
-      SourceErrorType::Runtime,
-    )),
-  }
-}
-
-fn compare<Nc, Sc>(
-  lhs: ExprValue,
-  rhs: ExprValue,
-  op_info: SourceInfo,
-  num_cmp: Nc,
-  str_cmp: Sc,
-) -> ExprResult
-where
-  Sc: Fn(&str, &str) -> bool,
-  Nc: Fn(f64, f64) -> bool,
-{
-  match (lhs, rhs) {
-    (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Boolean(num_cmp(l, r))),
-    (ExprValue::Str(l), ExprValue::Str(r)) => Ok(ExprValue::Boolean(str_cmp(&l, &r))),
-    (lhs, rhs) => Err(SourceError::from_token_info(
-      &op_info,
-      format!("operation not supported for operands {lhs:?}, {rhs:?}"),
-      SourceErrorType::Runtime,
-    )),
-  }
-}
-
-fn check_bool(val: ExprValue, info: SourceInfo) -> Result<bool, SourceError> {
-  if let ExprValue::Boolean(value) = val {
-    Ok(value)
-  } else {
-    Err(SourceError::from_token_info(
-      &info,
-      format!("binary operation cannot be applied to type {val:?}, only to booleans"),
-      SourceErrorType::Runtime,
-    ))
-  }
-}
-
 impl Interpreter {
   fn handle_binary_expression(
     &mut self,
@@ -131,8 +34,6 @@ impl Interpreter {
           _ => unreachable!(),
         }
       }
-
-      _ => panic!(),
     }
   }
 
@@ -143,7 +44,6 @@ impl Interpreter {
       Literal::True => Ok(ExprValue::Boolean(true)),
       Literal::False => Ok(ExprValue::Boolean(false)),
       Literal::Null => Ok(ExprValue::Null),
-      _ => panic!(),
     }
   }
 
@@ -294,5 +194,102 @@ impl Interpreter {
         value,
       } => self.handle_set(object, name, name_info, value),
     }
+  }
+}
+
+fn unary_minus(rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
+  if let ExprValue::Num(x) = rhs {
+    Ok(ExprValue::Num(-x))
+  } else {
+    Err(SourceError::from_token_info(
+      &op_info,
+      format!("unary - cannot be applyed to operand {rhs:?}"),
+      SourceErrorType::Runtime,
+    ))
+  }
+}
+
+fn unary_not(rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
+  if let ExprValue::Boolean(x) = rhs {
+    Ok(ExprValue::Boolean(!x))
+  } else {
+    Err(SourceError::from_token_info(
+      &op_info,
+      format!("unary ! cannot be applyed to operand {rhs:?}"),
+      SourceErrorType::Runtime,
+    ))
+  }
+}
+
+fn binary_num<F>(lhs: ExprValue, rhs: ExprValue, op_info: SourceInfo, op: F) -> ExprResult
+where
+  F: Fn(f64, f64) -> f64,
+{
+  match (lhs, rhs) {
+    (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Num(op(l, r))),
+    (lhs, rhs) => Err(SourceError::from_token_info(
+      &op_info,
+      format!("operation only works for numbers, not supported for operands {lhs:?} {rhs:?}"),
+      SourceErrorType::Runtime,
+    )),
+  }
+}
+
+fn add(lhs: ExprValue, rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
+  match (lhs, rhs) {
+    (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Num(l + r)),
+    (ExprValue::Str(l), ExprValue::Str(r)) => Ok(ExprValue::Str(l + &r)),
+    (lhs, rhs) => Err(SourceError::from_token_info(
+      &op_info,
+      format!("cannot add {lhs:?} and {rhs:?}"),
+      SourceErrorType::Runtime,
+    )),
+  }
+}
+
+fn equal(lhs: ExprValue, rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
+  match (lhs, rhs) {
+    (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Boolean(l == r)),
+    (ExprValue::Str(l), ExprValue::Str(r)) => Ok(ExprValue::Boolean(l == r)),
+    (ExprValue::Boolean(l), ExprValue::Boolean(r)) => Ok(ExprValue::Boolean(l == r)),
+    (lhs, rhs) => Err(SourceError::from_token_info(
+      &op_info,
+      format!("cannot determine if {lhs:?} and {rhs:?} are equal"),
+      SourceErrorType::Runtime,
+    )),
+  }
+}
+
+fn compare<Nc, Sc>(
+  lhs: ExprValue,
+  rhs: ExprValue,
+  op_info: SourceInfo,
+  num_cmp: Nc,
+  str_cmp: Sc,
+) -> ExprResult
+where
+  Sc: Fn(&str, &str) -> bool,
+  Nc: Fn(f64, f64) -> bool,
+{
+  match (lhs, rhs) {
+    (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Boolean(num_cmp(l, r))),
+    (ExprValue::Str(l), ExprValue::Str(r)) => Ok(ExprValue::Boolean(str_cmp(&l, &r))),
+    (lhs, rhs) => Err(SourceError::from_token_info(
+      &op_info,
+      format!("operation not supported for operands {lhs:?}, {rhs:?}"),
+      SourceErrorType::Runtime,
+    )),
+  }
+}
+
+fn check_bool(val: ExprValue, info: SourceInfo) -> Result<bool, SourceError> {
+  if let ExprValue::Boolean(value) = val {
+    Ok(value)
+  } else {
+    Err(SourceError::from_token_info(
+      &info,
+      format!("binary operation cannot be applied to type {val:?}, only to booleans"),
+      SourceErrorType::Runtime,
+    ))
   }
 }
