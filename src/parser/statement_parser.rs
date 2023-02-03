@@ -27,8 +27,7 @@ impl<'src> Parser<'src> {
   }
 
   fn parse_block(&mut self) -> StmtRes {
-    assert_eq!(self.lookahead, Token::Basic('{'));
-    self.advance()?;
+    self.match_or_err(Token::Basic('{'))?;
     self.env.push();
     let mut statements = Vec::new();
     let mut errors = Vec::new();
@@ -65,7 +64,7 @@ impl<'src> Parser<'src> {
     let condition = self.parse_expression()?;
     self.match_or_err(Token::Basic(')'))?;
     let true_branch = self.parse_statement()?;
-    let else_branch = if (self.matches_alternatives(&[Token::Else])?).is_some() {
+    let else_branch = if (self.match_next(Token::Else)?).is_some() {
       Some(self.parse_statement()?)
     } else {
       None
@@ -206,20 +205,46 @@ impl<'src> Parser<'src> {
       Ok(Vec::new())
     };
     self.match_or_err(Token::Basic(')'))?;
-    if self.lookahead == Token::Basic('{') {
+    let block = self.parse_block()?;
+    if let Stmt::Block(body) = self.ast.get_statement(block) {
+      Ok(self.ast.add_statement(Stmt::Function {
+        id: name_id,
+        name_info,
+        parameters: parameters?,
+        body,
+      }))
+    } else {
+      panic!()
+    }
+  }
+
+  fn parse_method(&mut self) -> Result<(StrHandle, Method), SourceError> {
+    if let Token::Id(method_name) = self.lookahead {
+      let name_info = self.last_token_info();
+      self.advance()?;
+      let call_start = self.lex.prev_token_info();
+      self.match_or_err(Token::Basic('('))?;
+      let parameters = if self.lookahead != Token::Basic(')') {
+        self.parse_function_params(call_start)
+      } else {
+        Ok(Vec::new())
+      };
+      self.match_or_err(Token::Basic(')'))?;
       let block = self.parse_block()?;
       if let Stmt::Block(body) = self.ast.get_statement(block) {
-        Ok(self.ast.add_statement(Stmt::Function {
-          id: name_id,
-          name_info,
-          parameters: parameters?,
-          body,
-        }))
+        Ok((
+          self.ast.add_str(method_name),
+          Method {
+            name_info,
+            parameters: parameters?,
+            body,
+          },
+        ))
       } else {
         panic!()
       }
     } else {
-      Err(self.unexpected_token(Some(Token::Basic('{'))))
+      Err(self.unexpected_token(None))
     }
   }
 
@@ -229,39 +254,9 @@ impl<'src> Parser<'src> {
     let (name_id, name_info) = self.match_id_or_err()?;
     self.match_or_err(Token::Basic('{'))?;
     let mut methods = Vec::new();
-    self.env.push();
     while self.lookahead != Token::Basic('}') {
-      if let Token::Id(method_name) = self.lookahead {
-        self.advance()?;
-        let call_start = self.lex.prev_token_info();
-        self.match_or_err(Token::Basic('('))?;
-        let parameters = if self.lookahead != Token::Basic(')') {
-          self.parse_function_params(call_start)
-        } else {
-          Ok(Vec::new())
-        };
-        self.match_or_err(Token::Basic(')'))?;
-        if self.lookahead == Token::Basic('{') {
-          let block = self.parse_block()?;
-          if let Stmt::Block(body) = self.ast.get_statement(block) {
-            methods.push((
-              self.ast.add_str(method_name),
-              Function {
-                id: self.env.declare_name(method_name),
-                name_info,
-                parameters: parameters?,
-                body,
-              },
-            ));
-          } else {
-            panic!()
-          }
-        } else {
-          return Err(self.unexpected_token(Some(Token::Basic('{'))));
-        }
-      }
+      methods.push(self.parse_method()?);
     }
-    self.env.pop();
     self.match_or_err(Token::Basic('}'))?;
     Ok(self.ast.add_statement(Stmt::Class {
       name: name_id,

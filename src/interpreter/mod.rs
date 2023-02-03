@@ -1,3 +1,4 @@
+mod class;
 mod environment;
 mod expression_interpreter;
 mod statement_interpreter;
@@ -62,48 +63,21 @@ impl ClonableFn for NativeFn {
 }
 
 #[derive(Clone)]
-struct NativeClass {
-  methods: HashMap<String, ExprValue>,
-}
-
-impl NativeClass {
-  fn new(ast: &AST, methods: &[(StrHandle, Function)]) -> Self {
-    Self {
-      methods: HashMap::from_iter(methods.iter().map(|(handle, func)| {
-        (
-          ast.get_str(handle.clone()).to_string(),
-          ExprValue::Func(InterpreterFn {
-            arity: func.parameters.len() as u32,
-            callable: Box::new(NativeFn {
-              body: func.body.clone(),
-              parameters: func.parameters.clone(),
-            }),
-          }),
-        )
-      })),
-    }
-  }
-}
-
-impl ClonableFn for NativeClass {
-  fn call(&self, interpreter: &mut Interpreter, arguments: Vec<ExprValue>) -> InterpreterFnResult {
-    Ok(ExprValue::ClassInstance(Rc::new(RefCell::new(
-      self.methods.clone(),
-    ))))
-  }
-
-  fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
-  where
-    Self: 'a,
-  {
-    Box::new(self.clone())
-  }
-}
-
-#[derive(Clone)]
 pub struct InterpreterFn {
   pub arity: u32,
   pub callable: Box<dyn ClonableFn>,
+}
+
+impl InterpreterFn {
+  pub fn native(func: Method) -> Self {
+    Self {
+      arity: func.parameters.len() as u32,
+      callable: Box::new(NativeFn {
+        body: func.body,
+        parameters: func.parameters,
+      }),
+    }
+  }
 }
 
 impl Debug for InterpreterFn {

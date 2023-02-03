@@ -1,8 +1,7 @@
 use super::{ExprHandle, Identifier, SourceInfoHandle, StmtHandle, StrHandle};
 
 #[derive(Debug, Clone)]
-pub struct Function {
-  pub id: Identifier,
+pub struct Method {
   pub name_info: SourceInfoHandle,
   pub parameters: Vec<Identifier>,
   pub body: Vec<StmtHandle>,
@@ -43,6 +42,6 @@ pub enum Stmt {
   Class {
     name: Identifier,
     name_info: SourceInfoHandle,
-    methods: Vec<(StrHandle, Function)>,
+    methods: Vec<(StrHandle, Method)>,
   },
 }

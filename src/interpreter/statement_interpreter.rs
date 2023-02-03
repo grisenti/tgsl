@@ -1,4 +1,4 @@
-use super::*;
+use super::{class::NativeClass, *};
 
 impl Interpreter {
   fn interpret_if_branch(
@@ -147,14 +147,6 @@ impl Interpreter {
         name_info,
         methods,
       } => {
-        for (_, method) in &methods {
-          self.add_function(
-            method.id,
-            method.name_info,
-            method.parameters.clone(),
-            method.body.clone(),
-          )?;
-        }
         self.env.set_if_none(
           name,
           self.ast.get_source_info(name_info),
