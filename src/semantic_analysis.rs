@@ -10,25 +10,33 @@ pub struct SemanticAnalizer {
 }
 
 impl SemanticAnalizer {
+  fn analyze_var_decl(
+    &mut self,
+    ast: &AST,
+    identifier: Identifier,
+    expression: Option<ExprHandle>,
+  ) -> SemAnalysisRes {
+    if let Some(Expr::Variable { id, id_info }) =
+      expression.and_then(|handle| Some(ast.get_expression(handle)))
+    {
+      if id == identifier {
+        return Err(SourceError::from_token_info(
+          &ast.get_source_info(id_info),
+          "cannot initialize identifier with itself".to_string(),
+          SourceErrorType::Parsing,
+        ));
+      }
+    }
+    Ok(())
+  }
+
   pub fn analyze_stmt(&mut self, ast: &AST, stmt: StmtHandle) -> SemAnalysisRes {
     match ast.get_statement(stmt) {
       Stmt::VarDecl {
         identifier,
         id_info: _,
         expression,
-      } => {
-        if let Some(Expr::Variable { id, id_info }) =
-          expression.and_then(|handle| Some(ast.get_expression(handle)))
-        {
-          if id == identifier {
-            return Err(SourceError::from_token_info(
-              &ast.get_source_info(id_info),
-              "cannot initialize identifier with itself".to_string(),
-              SourceErrorType::Parsing,
-            ));
-          }
-        }
-      }
+      } => self.analyze_var_decl(ast, identifier, expression)?,
       Stmt::While {
         info: _,
         condition: _,
@@ -79,7 +87,7 @@ impl SemanticAnalizer {
         if self.function_depth == 0 {
           return Err(SourceError::from_token_info(
             &ast.get_source_info(src_info),
-            "cannot have break outside of loop body".to_string(),
+            "cannot have return outside of loop body".to_string(),
             SourceErrorType::Parsing,
           ));
         }
