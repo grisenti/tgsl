@@ -185,9 +185,8 @@ impl Interpreter {
         Err(SourceError::from_token_info(
           &self.ast.get_source_info(call_info),
           format!(
-            "incorrect number of arguments ({}) for function {} (arity: {})",
+            "incorrect number of function arguments (arguments: {} - arity: {})",
             argument_values.len(),
-            func.name,
             func.arity
           ),
           SourceErrorType::Runtime,
@@ -197,6 +196,57 @@ impl Interpreter {
       Err(SourceError::from_token_info(
         &self.ast.get_source_info(call_info),
         format!("cannot call {func_val:?}, only functions"),
+        SourceErrorType::Runtime,
+      ))
+    }
+  }
+
+  fn handle_get(
+    &mut self,
+    object: ExprHandle,
+    name: StrHandle,
+    name_info: SourceInfoHandle,
+  ) -> ExprResult {
+    let info = self.ast.get_source_info(name_info);
+    if let ExprValue::ClassInstance(instance) = self.interpret_expression(object.clone())? {
+      let name = self.ast.get_str(name);
+      let instance = instance.as_ref().borrow();
+      instance
+        .get(name)
+        .ok_or_else(|| {
+          SourceError::from_token_info(
+            &info,
+            format!("{name} is not a valid property"),
+            SourceErrorType::Runtime,
+          )
+        })
+        .cloned()
+    } else {
+      Err(SourceError::from_token_info(
+        &self.ast.get_source_info(name_info),
+        "cannot access prorety of a primitive object".to_string(),
+        SourceErrorType::Runtime,
+      ))
+    }
+  }
+
+  fn handle_set(
+    &mut self,
+    object: ExprHandle,
+    name: StrHandle,
+    name_info: SourceInfoHandle,
+    value: ExprHandle,
+  ) -> ExprResult {
+    if let ExprValue::ClassInstance(instance) = self.interpret_expression(object.clone())? {
+      let value = self.interpret_expression(value)?;
+      let name = self.ast.get_str(name);
+      let mut instance = instance.as_ref().borrow_mut();
+      instance.insert(name.to_string(), value.clone());
+      Ok(value.clone())
+    } else {
+      Err(SourceError::from_token_info(
+        &self.ast.get_source_info(name_info),
+        "cannot set prorety of a primitive object".to_string(),
         SourceErrorType::Runtime,
       ))
     }
@@ -236,49 +286,13 @@ impl Interpreter {
         object,
         name,
         name_info,
-      } => {
-        let info = self.ast.get_source_info(name_info);
-        if let ExprValue::ClassInstance(instance) = self.interpret_expression(object.clone())? {
-          let name = self.ast.get_str(name);
-          let instance = instance.as_ref().borrow();
-          instance
-            .get(name)
-            .ok_or_else(|| {
-              SourceError::from_token_info(
-                &info,
-                format!("{name} is not a valid property"),
-                SourceErrorType::Runtime,
-              )
-            })
-            .cloned()
-        } else {
-          Err(SourceError::from_token_info(
-            &self.ast.get_source_info(name_info),
-            "cannot access prorety of a primitive object".to_string(),
-            SourceErrorType::Runtime,
-          ))
-        }
-      }
+      } => self.handle_get(object, name, name_info),
       Expr::Set {
         object,
         name,
         name_info,
         value,
-      } => {
-        if let ExprValue::ClassInstance(instance) = self.interpret_expression(object.clone())? {
-          let value = self.interpret_expression(value)?;
-          let name = self.ast.get_str(name);
-          let mut instance = instance.as_ref().borrow_mut();
-          instance.insert(name.to_string(), value.clone());
-          Ok(value.clone())
-        } else {
-          Err(SourceError::from_token_info(
-            &self.ast.get_source_info(name_info),
-            "cannot set prorety of a primitive object".to_string(),
-            SourceErrorType::Runtime,
-          ))
-        }
-      }
+      } => self.handle_set(object, name, name_info, value),
     }
   }
 }

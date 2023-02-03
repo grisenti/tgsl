@@ -84,7 +84,6 @@ impl Interpreter {
     let func = NativeFn { body, parameters };
     let interpreter_fn = InterpreterFn {
       arity,
-      name: "".to_string(),
       callable: Box::new(func),
     };
     self.env.set_if_none(
@@ -161,7 +160,6 @@ impl Interpreter {
           self.ast.get_source_info(name_info),
           ExprValue::Func(InterpreterFn {
             arity: 0,
-            name: "".to_string(),
             callable: Box::new(NativeClass::new(&self.ast, &methods)),
           }),
         )?;

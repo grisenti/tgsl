@@ -74,7 +74,6 @@ impl NativeClass {
           ast.get_str(handle.clone()).to_string(),
           ExprValue::Func(InterpreterFn {
             arity: func.parameters.len() as u32,
-            name: "".to_string(),
             callable: Box::new(NativeFn {
               body: func.body.clone(),
               parameters: func.parameters.clone(),
@@ -104,13 +103,12 @@ impl ClonableFn for NativeClass {
 #[derive(Clone)]
 pub struct InterpreterFn {
   pub arity: u32,
-  pub name: String,
   pub callable: Box<dyn ClonableFn>,
 }
 
 impl Debug for InterpreterFn {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.name)
+    write!(f, "function<{}>", self.arity)
   }
 }
 
