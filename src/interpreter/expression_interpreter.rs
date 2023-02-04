@@ -76,21 +76,19 @@ impl Interpreter {
       if func.arity as usize == argument_values.len() {
         func.callable.call(self, argument_values)
       } else {
-        Err(SourceError::from_token_info(
+        Err(Self::runtime_error(
           &self.ast.get_source_info(call_info),
           format!(
             "incorrect number of function arguments (arguments: {} - arity: {})",
             argument_values.len(),
             func.arity
           ),
-          SourceErrorType::Runtime,
         ))
       }
     } else {
-      Err(SourceError::from_token_info(
+      Err(Self::runtime_error(
         &self.ast.get_source_info(call_info),
         format!("cannot call {func_val:?}, only functions"),
-        SourceErrorType::Runtime,
       ))
     }
   }
@@ -104,10 +102,9 @@ impl Interpreter {
     if let ExprValue::ClassInstance(instace) = self.interpret_expression(expr)? {
       Ok(instace)
     } else {
-      Err(SourceError::from_token_info(
+      Err(Self::runtime_error(
         &self.ast.get_source_info(info),
         msg.to_string(),
-        SourceErrorType::Runtime,
       ))
     }
   }
@@ -191,10 +188,9 @@ fn unary_minus(rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
   if let ExprValue::Num(x) = rhs {
     Ok(ExprValue::Num(-x))
   } else {
-    Err(SourceError::from_token_info(
+    Err(Interpreter::runtime_error(
       &op_info,
       format!("unary - cannot be applyed to operand {rhs:?}"),
-      SourceErrorType::Runtime,
     ))
   }
 }
@@ -203,10 +199,9 @@ fn unary_not(rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
   if let ExprValue::Boolean(x) = rhs {
     Ok(ExprValue::Boolean(!x))
   } else {
-    Err(SourceError::from_token_info(
+    Err(Interpreter::runtime_error(
       &op_info,
       format!("unary ! cannot be applyed to operand {rhs:?}"),
-      SourceErrorType::Runtime,
     ))
   }
 }
@@ -217,10 +212,9 @@ where
 {
   match (lhs, rhs) {
     (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Num(op(l, r))),
-    (lhs, rhs) => Err(SourceError::from_token_info(
+    (lhs, rhs) => Err(Interpreter::runtime_error(
       &op_info,
       format!("operation only works for numbers, not supported for operands {lhs:?} {rhs:?}"),
-      SourceErrorType::Runtime,
     )),
   }
 }
@@ -229,10 +223,9 @@ fn add(lhs: ExprValue, rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
   match (lhs, rhs) {
     (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Num(l + r)),
     (ExprValue::Str(l), ExprValue::Str(r)) => Ok(ExprValue::Str(l + &r)),
-    (lhs, rhs) => Err(SourceError::from_token_info(
+    (lhs, rhs) => Err(Interpreter::runtime_error(
       &op_info,
       format!("cannot add {lhs:?} and {rhs:?}"),
-      SourceErrorType::Runtime,
     )),
   }
 }
@@ -242,10 +235,9 @@ fn equal(lhs: ExprValue, rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
     (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Boolean(l == r)),
     (ExprValue::Str(l), ExprValue::Str(r)) => Ok(ExprValue::Boolean(l == r)),
     (ExprValue::Boolean(l), ExprValue::Boolean(r)) => Ok(ExprValue::Boolean(l == r)),
-    (lhs, rhs) => Err(SourceError::from_token_info(
+    (lhs, rhs) => Err(Interpreter::runtime_error(
       &op_info,
       format!("cannot determine if {lhs:?} and {rhs:?} are equal"),
-      SourceErrorType::Runtime,
     )),
   }
 }
@@ -264,10 +256,9 @@ where
   match (lhs, rhs) {
     (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Boolean(num_cmp(l, r))),
     (ExprValue::Str(l), ExprValue::Str(r)) => Ok(ExprValue::Boolean(str_cmp(&l, &r))),
-    (lhs, rhs) => Err(SourceError::from_token_info(
+    (lhs, rhs) => Err(Interpreter::runtime_error(
       &op_info,
       format!("operation not supported for operands {lhs:?}, {rhs:?}"),
-      SourceErrorType::Runtime,
     )),
   }
 }
@@ -276,10 +267,9 @@ fn check_bool(val: ExprValue, info: SourceInfo) -> Result<bool, SourceError> {
   if let ExprValue::Boolean(value) = val {
     Ok(value)
   } else {
-    Err(SourceError::from_token_info(
+    Err(Interpreter::runtime_error(
       &info,
       format!("binary operation cannot be applied to type {val:?}, only to booleans"),
-      SourceErrorType::Runtime,
     ))
   }
 }

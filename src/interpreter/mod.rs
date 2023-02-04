@@ -114,6 +114,10 @@ pub type IntepreterResult = Result<(), SourceError>;
 type StmtRes = Result<Option<EarlyOut>, SourceError>;
 
 impl Interpreter {
+  pub fn runtime_error(info: &SourceInfo, error_msg: String) -> SourceError {
+    SourceError::from_token_info(info, error_msg, SourceErrorType::Runtime)
+  }
+
   fn install_identifier(
     &mut self,
     id: Identifier,

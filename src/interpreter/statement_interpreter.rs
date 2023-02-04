@@ -8,10 +8,9 @@ impl Interpreter {
   ) -> Result<bool, SourceError> {
     match self.interpret_expression(formula)? {
       ExprValue::Boolean(val) => Ok(val),
-      val => Err(SourceError::from_token_info(
+      val => Err(Self::runtime_error(
         &self.ast.get_source_info(info),
         format!("expected boolean, got {val:?}"),
-        SourceErrorType::Runtime,
       )),
     }
   }
