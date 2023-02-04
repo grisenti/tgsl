@@ -52,15 +52,20 @@ impl Interpreter {
     parameters: &[Identifier],
     body: &[StmtHandle],
     arguments: Vec<ExprValue>,
+    environment: EnvRef,
   ) -> InterpreterFnResult {
+    let old = self.set_env(environment);
+    self.new_scope();
     for (param, arg) in parameters.iter().zip(arguments) {
-      self.env.set(*param, arg);
+      self.env.borrow_mut().set(*param, arg);
     }
     for stmt in body.iter().cloned() {
       if let Some(EarlyOut::Return(val)) = self.interpret_statement(stmt)? {
+        self.set_env(old);
         return Ok(val);
       };
     }
+    self.set_env(old);
     Ok(ExprValue::Null)
   }
 
@@ -71,12 +76,19 @@ impl Interpreter {
     body: Vec<StmtHandle>,
   ) -> StmtRes {
     let arity = parameters.len() as u32;
-    let func = NativeFn { body, parameters };
+    let func = NativeFn {
+      body,
+      parameters,
+      capture: self.env.clone(),
+    };
     let interpreter_fn = InterpreterFn {
       arity,
       callable: Box::new(func),
     };
-    self.env.set(id, ExprValue::Func(interpreter_fn));
+    self
+      .env
+      .borrow_mut()
+      .set(id, ExprValue::Func(interpreter_fn));
     Ok(None)
   }
 
@@ -94,12 +106,15 @@ impl Interpreter {
         self.interpret_expression(expr)?;
       }
       Stmt::Block(stmts) => {
+        self.new_scope();
         for stmt in stmts {
           let res = self.interpret_statement(stmt)?;
           if res.is_some() {
+            self.pop_scope();
             return Ok(res);
           }
         }
+        self.pop_scope();
       }
       Stmt::IfBranch {
         if_info,
@@ -133,7 +148,7 @@ impl Interpreter {
         name_info: _,
         methods,
       } => {
-        self.env.set(
+        self.env.borrow_mut().set(
           name,
           ExprValue::Func(InterpreterFn {
             arity: 0,

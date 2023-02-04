@@ -157,11 +157,15 @@ impl Interpreter {
         self.ast.get_source_info(operator.src_info),
         right,
       ),
-      Expr::Variable { id, id_info } => self.env.get_or_err(id, self.ast.get_source_info(id_info)),
+      Expr::Variable { id, id_info } => self
+        .env
+        .borrow()
+        .get_or_err(id, self.ast.get_source_info(id_info)),
       Expr::Assignment { id, id_info, value } => {
         let rhs = self.interpret_expression(value)?;
         self
           .env
+          .borrow_mut()
           .update_value_or_err(id, self.ast.get_source_info(id_info), rhs)
       }
       Expr::FnCall {

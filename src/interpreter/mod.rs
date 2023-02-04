@@ -12,7 +12,7 @@ use crate::errors::{SourceError, SourceErrorType};
 use crate::lexer::SourceInfo;
 
 use self::class::ClassInstance;
-use self::environment::Environment;
+use self::environment::{EnvRef, Environment};
 
 pub trait ClonableFn {
   fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
@@ -48,11 +48,17 @@ impl Clone for Box<dyn ClonableFn> {
 struct NativeFn {
   body: Vec<StmtHandle>,
   parameters: Vec<Identifier>,
+  capture: EnvRef,
 }
 
 impl ClonableFn for NativeFn {
   fn call(&self, interpreter: &mut Interpreter, arguments: Vec<ExprValue>) -> InterpreterFnResult {
-    interpreter.interpret_function(&self.parameters, &self.body, arguments)
+    interpreter.interpret_function(
+      &self.parameters,
+      &self.body,
+      arguments,
+      self.capture.clone(),
+    )
   }
 
   fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
@@ -70,12 +76,13 @@ pub struct InterpreterFn {
 }
 
 impl InterpreterFn {
-  pub fn native(func: Method) -> Self {
+  pub fn native(func: Method, capture: EnvRef) -> Self {
     Self {
       arity: func.parameters.len() as u32,
       callable: Box::new(NativeFn {
         body: func.body,
         parameters: func.parameters,
+        capture,
       }),
     }
   }
@@ -101,7 +108,7 @@ pub type ExprResult = Result<ExprValue, SourceError>;
 pub type InterpreterFnResult = Result<ExprValue, SourceError>;
 
 pub struct Interpreter {
-  env: Environment,
+  env: EnvRef,
   ast: AST,
 }
 
@@ -118,6 +125,22 @@ impl Interpreter {
     SourceError::from_token_info(info, error_msg, SourceErrorType::Runtime)
   }
 
+  fn new_scope(&mut self) {
+    let new_env = Environment::inner_scope(self.env.clone());
+    self.env = new_env;
+  }
+
+  fn set_env(&mut self, env: EnvRef) -> EnvRef {
+    let old = self.env.clone();
+    self.env = env;
+    old
+  }
+
+  fn pop_scope(&mut self) {
+    let parent = self.env.borrow().parent();
+    self.env = parent;
+  }
+
   fn install_identifier(
     &mut self,
     id: Identifier,
@@ -127,13 +150,13 @@ impl Interpreter {
       .as_ref()
       .map(|exp| self.interpret_expression(exp.clone()))
       .unwrap_or(Ok(ExprValue::Null))?;
-    self.env.set(id, value);
+    self.env.borrow_mut().set(id, value);
     Ok(())
   }
 
   pub fn new(ast: AST) -> Self {
     Self {
-      env: Environment::new(),
+      env: Environment::global(),
       ast,
     }
   }

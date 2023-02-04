@@ -11,7 +11,7 @@ impl NativeClass {
       methods: HashMap::from_iter(methods.iter().map(|(handle, func)| {
         (
           ast.get_str(handle.clone()).to_string(),
-          ExprValue::Func(InterpreterFn::native(func.clone())),
+          ExprValue::Func(InterpreterFn::native(func.clone(), Environment::global())),
         )
       })),
     }
