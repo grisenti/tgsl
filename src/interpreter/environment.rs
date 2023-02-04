@@ -42,6 +42,10 @@ impl Environment {
     }
   }
 
+  pub fn get(&self, id: Identifier) -> Option<ExprValue> {
+    self.memory.get(&id.0).cloned()
+  }
+
   pub fn update_value_or_err(
     &mut self,
     id: Identifier,

@@ -174,14 +174,12 @@ impl<'src> Parser<'src> {
     call_start: SourceInfo,
   ) -> Result<Vec<Identifier>, SourceError> {
     let mut parameters = Vec::new();
-    self.env.push();
     loop {
       parameters.push(self.match_id_or_err()?.0);
       if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
         break;
       }
     }
-    self.env.pop();
     if parameters.len() > 255 {
       Err(SourceError::from_token_info(
         &call_start,
@@ -198,6 +196,7 @@ impl<'src> Parser<'src> {
     self.advance()?; // consume fun
     let (name_id, name_info) = self.match_id_or_err()?;
     let call_start = self.lex.prev_token_info();
+    self.env.push();
     self.match_or_err(Token::Basic('('))?;
     let parameters = if self.lookahead != Token::Basic(')') {
       self.parse_function_params(call_start)
@@ -207,6 +206,7 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic(')'))?;
     let block = self.parse_block()?;
     if let Stmt::Block(body) = self.ast.get_statement(block) {
+      self.env.pop();
       Ok(self.ast.add_statement(Stmt::Function {
         id: name_id,
         name_info,
@@ -218,50 +218,34 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_method(&mut self) -> Result<(StrHandle, Method), SourceError> {
-    if let Token::Id(method_name) = self.lookahead {
-      let name_info = self.last_token_info();
+  fn id_str_or_err(&mut self) -> Result<StrHandle, SourceError> {
+    if let Token::Id(name) = self.lookahead {
       self.advance()?;
-      let call_start = self.lex.prev_token_info();
-      self.match_or_err(Token::Basic('('))?;
-      let parameters = if self.lookahead != Token::Basic(')') {
-        self.parse_function_params(call_start)
-      } else {
-        Ok(Vec::new())
-      };
-      self.match_or_err(Token::Basic(')'))?;
-      let block = self.parse_block()?;
-      if let Stmt::Block(body) = self.ast.get_statement(block) {
-        Ok((
-          self.ast.add_str(method_name),
-          Method {
-            name_info,
-            parameters: parameters?,
-            body,
-          },
-        ))
-      } else {
-        panic!()
-      }
+      Ok(self.ast.add_str(name))
     } else {
-      Err(self.unexpected_token(None))
+      Err(SourceError::from_lexer_state(
+        &self.lex,
+        format!("expected identifier, got {}", self.lookahead),
+        SourceErrorType::Parsing,
+      ))
     }
   }
 
-  fn parse_class_decl(&mut self) -> StmtRes {
-    assert_eq!(self.lookahead, Token::Class);
+  fn parse_struct_decl(&mut self) -> StmtRes {
+    assert_eq!(self.lookahead, Token::Struct);
     self.advance()?;
     let (name_id, name_info) = self.match_id_or_err()?;
     self.match_or_err(Token::Basic('{'))?;
-    let mut methods = Vec::new();
+    let mut members = Vec::new();
     while self.lookahead != Token::Basic('}') {
-      methods.push(self.parse_method()?);
+      members.push(self.id_str_or_err()?);
+      self.match_or_err(Token::Basic(','))?;
     }
     self.match_or_err(Token::Basic('}'))?;
-    Ok(self.ast.add_statement(Stmt::Class {
+    Ok(self.ast.add_statement(Stmt::Struct {
       name: name_id,
       name_info: name_info,
-      methods,
+      members,
     }))
   }
 
@@ -269,7 +253,7 @@ impl<'src> Parser<'src> {
     let ret = match self.lookahead {
       Token::Var => self.parse_var_decl()?,
       Token::Fun => self.parse_fun_decl()?,
-      Token::Class => self.parse_class_decl()?,
+      Token::Struct => self.parse_struct_decl()?,
       _ => self.parse_statement()?,
     };
     Ok(ret)

@@ -1,4 +1,4 @@
-use super::{class::NativeClass, *};
+use super::{class::NativeStruct, *};
 
 impl Interpreter {
   fn bool_or_err(
@@ -143,16 +143,16 @@ impl Interpreter {
       Stmt::Return { expr, src_info: _ } => {
         return Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?)))
       }
-      Stmt::Class {
+      Stmt::Struct {
         name,
         name_info: _,
-        methods,
+        members,
       } => {
         self.env.borrow_mut().set(
           name,
           ExprValue::Func(InterpreterFn {
             arity: 0,
-            callable: Box::new(NativeClass::new(&self.ast, &methods)),
+            callable: Box::new(NativeStruct::new(&self.ast, &members)),
           }),
         );
       }

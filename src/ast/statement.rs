@@ -39,9 +39,9 @@ pub enum Stmt {
     expr: ExprHandle,
     src_info: SourceInfoHandle,
   },
-  Class {
+  Struct {
     name: Identifier,
     name_info: SourceInfoHandle,
-    methods: Vec<(StrHandle, Method)>,
+    members: Vec<StrHandle>,
   },
 }

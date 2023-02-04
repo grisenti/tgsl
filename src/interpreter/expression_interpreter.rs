@@ -67,29 +67,48 @@ impl Interpreter {
     call_info: SourceInfoHandle,
     arguments: Vec<ExprHandle>,
   ) -> ExprResult {
-    let mut argument_values = Vec::new();
-    for arg in arguments {
-      argument_values.push(self.interpret_expression(arg)?);
-    }
     let func_val = self.interpret_expression(func)?;
-    if let ExprValue::Func(func) = func_val {
-      if func.arity as usize == argument_values.len() {
-        func.callable.call(self, argument_values)
-      } else {
-        Err(Self::runtime_error(
-          &self.ast.get_source_info(call_info),
-          format!(
-            "incorrect number of function arguments (arguments: {} - arity: {})",
-            argument_values.len(),
-            func.arity
-          ),
-        ))
+    match func_val {
+      ExprValue::Func(func) => {
+        let mut argument_values = Vec::new();
+        for arg in arguments {
+          argument_values.push(self.interpret_expression(arg)?);
+        }
+        if func.arity as usize == argument_values.len() {
+          func.callable.call(self, argument_values)
+        } else {
+          Err(Self::runtime_error(
+            &self.ast.get_source_info(call_info),
+            format!(
+              "incorrect number of function arguments (arguments: {} - arity: {})",
+              argument_values.len(),
+              func.arity
+            ),
+          ))
+        }
       }
-    } else {
-      Err(Self::runtime_error(
+      ExprValue::PartialCall { func, args } => {
+        let mut argument_values = args;
+        for arg in arguments {
+          argument_values.push(self.interpret_expression(arg)?);
+        }
+        if func.arity as usize == argument_values.len() {
+          func.callable.call(self, argument_values)
+        } else {
+          Err(Self::runtime_error(
+            &self.ast.get_source_info(call_info),
+            format!(
+              "incorrect number of function arguments (arguments: {} - arity: {})",
+              argument_values.len(),
+              func.arity
+            ),
+          ))
+        }
+      }
+      _ => Err(Self::runtime_error(
         &self.ast.get_source_info(call_info),
         format!("cannot call {func_val:?}, only functions"),
-      ))
+      )),
     }
   }
 
@@ -113,6 +132,7 @@ impl Interpreter {
     &mut self,
     object: ExprHandle,
     name: StrHandle,
+    id: Identifier,
     name_info: SourceInfoHandle,
   ) -> ExprResult {
     let instace = self.class_instance_or_err(
@@ -120,7 +140,21 @@ impl Interpreter {
       name_info,
       "cannot access prorety of a primitive object",
     )?;
-    instace.get(self.ast.get_str(name), &self.ast.get_source_info(name_info))
+    if let Some(val) = instace.get(self.ast.get_str(name), &self.ast.get_source_info(name_info)) {
+      Ok(val)
+    } else {
+      if let Some(ExprValue::Func(func)) = self.env.borrow().get(id) {
+        Ok(ExprValue::PartialCall {
+          func: func,
+          args: vec![ExprValue::ClassInstance(instace)],
+        })
+      } else {
+        Err(Self::runtime_error(
+          &self.ast.get_source_info(name_info),
+          "ERROOOOIERUJOI".to_string(),
+        ))
+      }
+    }
   }
 
   fn handle_set(
@@ -136,7 +170,11 @@ impl Interpreter {
       "cannot set prorety of a primitive object",
     )?;
     let value = self.interpret_expression(value)?;
-    Ok(instance.set(self.ast.get_str(name), value))
+    instance.set(
+      self.ast.get_str(name),
+      &self.ast.get_source_info(name_info),
+      value,
+    )
   }
 
   pub(super) fn interpret_expression(&mut self, exp: ExprHandle) -> ExprResult {
@@ -176,8 +214,9 @@ impl Interpreter {
       Expr::Get {
         object,
         name,
+        identifier,
         name_info,
-      } => self.handle_get(object, name, name_info),
+      } => self.handle_get(object, name, identifier, name_info),
       Expr::Set {
         object,
         name,

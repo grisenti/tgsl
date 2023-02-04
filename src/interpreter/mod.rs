@@ -100,6 +100,10 @@ pub enum ExprValue {
   Num(f64),
   Boolean(bool),
   Func(InterpreterFn),
+  PartialCall {
+    func: InterpreterFn,
+    args: Vec<ExprValue>,
+  },
   ClassInstance(ClassInstance),
   Null,
 }

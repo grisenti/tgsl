@@ -87,11 +87,13 @@ impl<'src> Parser<'src> {
         Token::Basic('.') => {
           self.advance()?;
           if let Token::Id(name) = self.lookahead {
+            let id = self.env.get_name_or_add(name);
             let name_info = self.last_token_info();
             self.advance()?;
             let name = self.ast.add_str(name);
             expr = self.ast.add_expression(Expr::Get {
               object: expr,
+              identifier: id,
               name,
               name_info,
             });
@@ -147,6 +149,7 @@ impl<'src> Parser<'src> {
         Expr::Get {
           object,
           name,
+          identifier: _,
           name_info,
         } => Ok(self.ast.add_expression(Expr::Set {
           object: object,

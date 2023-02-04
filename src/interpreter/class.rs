@@ -1,24 +1,25 @@
+use std::collections::hash_map::Entry;
+
 use super::*;
 
 #[derive(Clone)]
-pub(super) struct NativeClass {
+pub(super) struct NativeStruct {
   methods: HashMap<String, ExprValue>,
 }
 
-impl NativeClass {
-  pub(super) fn new(ast: &AST, methods: &[(StrHandle, Method)]) -> Self {
+impl NativeStruct {
+  pub(super) fn new(ast: &AST, methods: &[StrHandle]) -> Self {
     Self {
-      methods: HashMap::from_iter(methods.iter().map(|(handle, func)| {
-        (
-          ast.get_str(handle.clone()).to_string(),
-          ExprValue::Func(InterpreterFn::native(func.clone(), Environment::global())),
-        )
-      })),
+      methods: HashMap::from_iter(
+        methods
+          .iter()
+          .map(|handle| (ast.get_str(handle.clone()).to_string(), ExprValue::Null)),
+      ),
     }
   }
 }
 
-impl ClonableFn for NativeClass {
+impl ClonableFn for NativeStruct {
   fn call(&self, _: &mut Interpreter, _: Vec<ExprValue>) -> InterpreterFnResult {
     Ok(ExprValue::ClassInstance(ClassInstance::new(&self.methods)))
   }
@@ -36,6 +37,14 @@ pub struct ClassInstance {
   value: Rc<RefCell<HashMap<String, ExprValue>>>,
 }
 
+fn invalid_access(name: &str, name_info: &SourceInfo) -> SourceError {
+  SourceError::from_token_info(
+    name_info,
+    format!("{name} is not a valid property"),
+    SourceErrorType::Runtime,
+  )
+}
+
 impl ClassInstance {
   fn new(methods: &HashMap<String, ExprValue>) -> Self {
     Self {
@@ -43,26 +52,17 @@ impl ClassInstance {
     }
   }
 
-  pub fn get(&self, name: &str, name_info: &SourceInfo) -> ExprResult {
-    self
-      .value
-      .borrow()
-      .get(name)
-      .ok_or_else(|| {
-        SourceError::from_token_info(
-          name_info,
-          format!("{name} is not a valid property"),
-          SourceErrorType::Runtime,
-        )
-      })
-      .cloned()
+  pub fn get(&self, name: &str, name_info: &SourceInfo) -> Option<ExprValue> {
+    self.value.borrow().get(name).cloned()
   }
 
-  pub fn set(&mut self, name: &str, value: ExprValue) -> ExprValue {
+  pub fn set(&mut self, name: &str, name_info: &SourceInfo, value: ExprValue) -> ExprResult {
     self
       .value
       .borrow_mut()
-      .insert(name.to_string(), value.clone());
-    value
+      .get_mut(name)
+      .and_then(|val| Some(*val = value.clone()))
+      .ok_or_else(|| invalid_access(name, name_info))?;
+    Ok(value)
   }
 }

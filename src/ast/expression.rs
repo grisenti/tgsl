@@ -121,6 +121,7 @@ pub enum Expr {
   Get {
     object: ExprHandle,
     name: StrHandle,
+    identifier: Identifier,
     name_info: SourceInfoHandle,
   },
   Set {
