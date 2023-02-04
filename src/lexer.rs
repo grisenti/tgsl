@@ -203,9 +203,9 @@ impl<'src> Lexer<'src> {
     let mut dot_encountered = false;
     let tok_start = self.total_offset;
     while !self.is_at_end() {
-      if self.lookahead.is_ascii_digit() || (self.lookahead == '.' && !dot_encountered) {
+      if self.lookahead.is_ascii_digit() {
         self.advance();
-      } else if self.lookahead == '.' {
+      } else if self.lookahead == '.' && !dot_encountered {
         dot_encountered = true;
       } else {
         break;
