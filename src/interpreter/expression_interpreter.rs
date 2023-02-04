@@ -95,18 +95,25 @@ impl Interpreter {
     }
   }
 
-  fn class_instance_or_err(
+  fn dot_call(
     &mut self,
-    expr: ExprHandle,
-    info: SourceInfoHandle,
-    msg: &str,
-  ) -> Result<ClassInstance, SourceError> {
-    if let ExprValue::ClassInstance(instace) = self.interpret_expression(expr)? {
-      Ok(instace)
+    lhs: ExprValue,
+    name: StrHandle,
+    id: Identifier,
+    name_info: SourceInfoHandle,
+  ) -> ExprResult {
+    if let Some(ExprValue::Func(func)) = self.env.borrow().get(id) {
+      Ok(ExprValue::PartialCall {
+        func: func,
+        args: vec![lhs],
+      })
     } else {
       Err(Self::runtime_error(
-        &self.ast.get_source_info(info),
-        msg.to_string(),
+        &self.ast.get_source_info(name_info),
+        format!(
+          "{} is neither an object member nor a viable function",
+          self.ast.get_str(name)
+        ),
       ))
     }
   }
@@ -118,25 +125,32 @@ impl Interpreter {
     id: Identifier,
     name_info: SourceInfoHandle,
   ) -> ExprResult {
-    let instace = self.class_instance_or_err(
-      object,
-      name_info,
-      "cannot access prorety of a primitive object",
-    )?;
-    if let Some(val) = instace.get(self.ast.get_str(name), &self.ast.get_source_info(name_info)) {
-      Ok(val)
-    } else {
-      if let Some(ExprValue::Func(func)) = self.env.borrow().get(id) {
-        Ok(ExprValue::PartialCall {
-          func: func,
-          args: vec![ExprValue::ClassInstance(instace)],
-        })
+    let lhs = self.interpret_expression(object)?;
+    if let ExprValue::ClassInstance(instance) = lhs {
+      if let Some(val) = instance.get(
+        self.ast.get_str(name.clone()),
+        &self.ast.get_source_info(name_info),
+      ) {
+        Ok(val)
       } else {
-        Err(Self::runtime_error(
-          &self.ast.get_source_info(name_info),
-          "ERROOOOIERUJOI".to_string(),
-        ))
+        self.dot_call(ExprValue::ClassInstance(instance), name, id, name_info)
       }
+    } else {
+      self.dot_call(lhs, name, id, name_info)
+    }
+  }
+
+  fn class_instance_or_err(
+    &mut self,
+    expr: ExprHandle,
+    info: SourceInfoHandle,
+  ) -> Result<ClassInstance, SourceError> {
+    match self.interpret_expression(expr)? {
+      ExprValue::ClassInstance(instance) => Ok(instance),
+      other => Err(Self::runtime_error(
+        &self.ast.get_source_info(info),
+        format!("cannot access member of {:?}", other),
+      )),
     }
   }
 
@@ -147,11 +161,7 @@ impl Interpreter {
     name_info: SourceInfoHandle,
     value: ExprHandle,
   ) -> ExprResult {
-    let mut instance = self.class_instance_or_err(
-      object,
-      name_info,
-      "cannot set prorety of a primitive object",
-    )?;
+    let mut instance = self.class_instance_or_err(object, name_info)?;
     let value = self.interpret_expression(value)?;
     instance.set(
       self.ast.get_str(name),
