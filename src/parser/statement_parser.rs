@@ -192,7 +192,7 @@ impl<'src> Parser<'src> {
   }
 
   fn parse_fun_decl(&mut self) -> StmtRes {
-    assert_eq!(self.lookahead, Token::Fun);
+    assert_eq!(self.lookahead, Token::Fn);
     self.advance()?; // consume fun
     let (name_id, name_info) = self.match_id_or_err()?;
     let call_start = self.lex.prev_token_info();
@@ -252,7 +252,7 @@ impl<'src> Parser<'src> {
   pub(super) fn parse_decl(&mut self) -> StmtRes {
     let ret = match self.lookahead {
       Token::Var => self.parse_var_decl()?,
-      Token::Fun => self.parse_fun_decl()?,
+      Token::Fn => self.parse_fun_decl()?,
       Token::Struct => self.parse_struct_decl()?,
       _ => self.parse_statement()?,
     };
