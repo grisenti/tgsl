@@ -118,7 +118,7 @@ impl Interpreter {
     }
   }
 
-  fn handle_get(
+  fn handle_dot(
     &mut self,
     object: ExprHandle,
     name: StrHandle,
@@ -204,12 +204,12 @@ impl Interpreter {
         call_info,
         arguments,
       } => self.handle_function_call(func, call_info, arguments),
-      Expr::Get {
-        object,
+      Expr::Dot {
+        lhs: object,
         name,
         identifier,
         name_info,
-      } => self.handle_get(object, name, identifier, name_info),
+      } => self.handle_dot(object, name, identifier, name_info),
       Expr::Set {
         object,
         name,

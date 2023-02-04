@@ -118,8 +118,8 @@ pub enum Expr {
     call_info: SourceInfoHandle,
     arguments: Vec<ExprHandle>,
   },
-  Get {
-    object: ExprHandle,
+  Dot {
+    lhs: ExprHandle,
     name: StrHandle,
     identifier: Identifier,
     name_info: SourceInfoHandle,

@@ -91,8 +91,8 @@ impl<'src> Parser<'src> {
             let name_info = self.last_token_info();
             self.advance()?;
             let name = self.ast.add_str(name);
-            expr = self.ast.add_expression(Expr::Get {
-              object: expr,
+            expr = self.ast.add_expression(Expr::Dot {
+              lhs: expr,
               identifier: id,
               name,
               name_info,
@@ -146,8 +146,8 @@ impl<'src> Parser<'src> {
           id_info,
           value: rhs,
         })),
-        Expr::Get {
-          object,
+        Expr::Dot {
+          lhs: object,
           name,
           identifier: _,
           name_info,
