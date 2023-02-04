@@ -68,47 +68,30 @@ impl Interpreter {
     arguments: Vec<ExprHandle>,
   ) -> ExprResult {
     let func_val = self.interpret_expression(func)?;
-    match func_val {
-      ExprValue::Func(func) => {
-        let mut argument_values = Vec::new();
-        for arg in arguments {
-          argument_values.push(self.interpret_expression(arg)?);
-        }
-        if func.arity as usize == argument_values.len() {
-          func.callable.call(self, argument_values)
-        } else {
-          Err(Self::runtime_error(
-            &self.ast.get_source_info(call_info),
-            format!(
-              "incorrect number of function arguments (arguments: {} - arity: {})",
-              argument_values.len(),
-              func.arity
-            ),
-          ))
-        }
+    let (mut argument_values, func) = match func_val {
+      ExprValue::Func(func) => (Vec::new(), func),
+      ExprValue::PartialCall { func, args } => (args, func),
+      _ => {
+        return Err(Self::runtime_error(
+          &self.ast.get_source_info(call_info),
+          format!("cannot call {func_val:?}, only functions"),
+        ))
       }
-      ExprValue::PartialCall { func, args } => {
-        let mut argument_values = args;
-        for arg in arguments {
-          argument_values.push(self.interpret_expression(arg)?);
-        }
-        if func.arity as usize == argument_values.len() {
-          func.callable.call(self, argument_values)
-        } else {
-          Err(Self::runtime_error(
-            &self.ast.get_source_info(call_info),
-            format!(
-              "incorrect number of function arguments (arguments: {} - arity: {})",
-              argument_values.len(),
-              func.arity
-            ),
-          ))
-        }
-      }
-      _ => Err(Self::runtime_error(
+    };
+    for arg in arguments {
+      argument_values.push(self.interpret_expression(arg)?);
+    }
+    if func.arity as usize == argument_values.len() {
+      func.callable.call(self, argument_values)
+    } else {
+      Err(Self::runtime_error(
         &self.ast.get_source_info(call_info),
-        format!("cannot call {func_val:?}, only functions"),
-      )),
+        format!(
+          "incorrect number of function arguments (arguments: {} - arity: {})",
+          argument_values.len(),
+          func.arity
+        ),
+      ))
     }
   }
 
