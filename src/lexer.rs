@@ -206,7 +206,13 @@ impl<'src> Lexer<'src> {
       if self.lookahead.is_ascii_digit() {
         self.advance();
       } else if self.lookahead == '.' && !dot_encountered {
+        if let Some((_, c)) = self.current.clone().next() {
+          if !c.is_ascii_digit() {
+            break;
+          }
+        }
         dot_encountered = true;
+        self.advance();
       } else {
         break;
       }
@@ -355,11 +361,12 @@ mod test {
 
   #[test]
   fn lex_numbers() {
-    let mut lex = Lexer::new("1 123 123.33 0.9");
+    let mut lex = Lexer::new("1 123 123.33 0.9 1.a");
     assert_eq!(lex.next_token(), Ok(Token::Number(1.0)));
     assert_eq!(lex.next_token(), Ok(Token::Number(123.0)));
     assert_eq!(lex.next_token(), Ok(Token::Number(123.33)));
     assert_eq!(lex.next_token(), Ok(Token::Number(0.9)));
+    assert_eq!(lex.next_token(), Ok(Token::Number(1.0)));
   }
 
   #[test]
