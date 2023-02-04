@@ -25,6 +25,20 @@ impl<'src> Parser<'src> {
     self.lookahead == Token::EndOfFile
   }
 
+  fn match_id_or_err(&mut self) -> Result<(Identifier, SourceInfoHandle), SourceError> {
+    if let Token::Id(id) = self.lookahead {
+      let info = self.last_token_info();
+      self.advance()?;
+      Ok((self.env.declare_name(id), info))
+    } else {
+      Err(SourceError::from_lexer_state(
+        &self.lex,
+        format!("expected identifier, got {}", self.lookahead),
+        SourceErrorType::Parsing,
+      ))
+    }
+  }
+
   fn last_token_info(&mut self) -> SourceInfoHandle {
     self.ast.add_source_info(self.lex.prev_token_info())
   }

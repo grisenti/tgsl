@@ -170,6 +170,20 @@ impl Interpreter {
     )
   }
 
+  fn create_closure(&mut self, parameters: Vec<Identifier>, body: Vec<StmtHandle>) -> ExprResult {
+    let arity = parameters.len() as u32;
+    let func = NativeFn {
+      body,
+      parameters,
+      capture: self.env.clone(),
+    };
+    let interpreter_fn = InterpreterFn {
+      arity,
+      callable: Box::new(func),
+    };
+    Ok(ExprValue::Func(interpreter_fn))
+  }
+
   pub(super) fn interpret_expression(&mut self, exp: ExprHandle) -> ExprResult {
     match self.ast.get_expression(exp) {
       Expr::Literal { literal, info: _ } => self.handle_literal_expression(literal),
@@ -199,6 +213,7 @@ impl Interpreter {
           .borrow_mut()
           .update_value_or_err(id, self.ast.get_source_info(id_info), rhs)
       }
+      Expr::Closure { parameters, body } => self.create_closure(parameters, body),
       Expr::FnCall {
         func,
         call_info,

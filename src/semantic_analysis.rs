@@ -16,8 +16,9 @@ impl SemanticAnalizer {
     identifier: Identifier,
     expression: Option<ExprHandle>,
   ) -> SemAnalysisRes {
-    if let Some(Expr::Variable { id, id_info }) =
-      expression.and_then(|handle| Some(ast.get_expression(handle)))
+    if let Some(Expr::Variable { id, id_info }) = expression
+      .clone()
+      .and_then(|handle| Some(ast.get_expression(handle)))
     {
       if id == identifier {
         return Err(SourceError::from_token_info(
@@ -26,6 +27,9 @@ impl SemanticAnalizer {
           SourceErrorType::Parsing,
         ));
       }
+    }
+    if let Some(expr) = expression {
+      self.analyze_expr(ast, expr)?;
     }
     Ok(())
   }
@@ -97,7 +101,19 @@ impl SemanticAnalizer {
     Ok(())
   }
 
-  pub fn analyze_expr(ast: &AST, expr: ExprHandle) {}
+  pub fn analyze_expr(&mut self, ast: &AST, expr: ExprHandle) -> SemAnalysisRes {
+    match ast.get_expression(expr) {
+      Expr::Closure { parameters, body } => {
+        self.function_depth += 1;
+        for s in body {
+          self.analyze_stmt(ast, s)?;
+        }
+        self.function_depth -= 1;
+      }
+      _ => {}
+    }
+    Ok(())
+  }
 
   pub fn analyze(ast: &AST) -> SemAnalysisRes {
     let mut analizer = Self {

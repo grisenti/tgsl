@@ -3,20 +3,6 @@ use std::collections::HashMap;
 use super::*;
 
 impl<'src> Parser<'src> {
-  fn match_id_or_err(&mut self) -> Result<(Identifier, SourceInfoHandle), SourceError> {
-    if let Token::Id(id) = self.lookahead {
-      let info = self.last_token_info();
-      self.advance()?;
-      Ok((self.env.declare_name(id), info))
-    } else {
-      Err(SourceError::from_lexer_state(
-        &self.lex,
-        format!("expected identifier, got {}", self.lookahead),
-        SourceErrorType::Parsing,
-      ))
-    }
-  }
-
   fn parse_print_stmt(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::Print);
     self.advance()?;
@@ -26,7 +12,7 @@ impl<'src> Parser<'src> {
     ret
   }
 
-  fn parse_block(&mut self) -> StmtRes {
+  pub(super) fn parse_block(&mut self) -> StmtRes {
     self.match_or_err(Token::Basic('{'))?;
     self.env.push();
     let mut statements = Vec::new();
@@ -169,7 +155,7 @@ impl<'src> Parser<'src> {
     Ok(self.ast.add_statement(ret))
   }
 
-  fn parse_function_params(
+  pub(super) fn parse_function_params(
     &mut self,
     call_start: SourceInfo,
   ) -> Result<Vec<Identifier>, SourceError> {
@@ -191,7 +177,7 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_fun_decl(&mut self) -> StmtRes {
+  fn parse_function_decl(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::Fn);
     self.advance()?; // consume fun
     let (name_id, name_info) = self.match_id_or_err()?;
@@ -252,7 +238,7 @@ impl<'src> Parser<'src> {
   pub(super) fn parse_decl(&mut self) -> StmtRes {
     let ret = match self.lookahead {
       Token::Var => self.parse_var_decl()?,
-      Token::Fn => self.parse_fun_decl()?,
+      Token::Fn => self.parse_function_decl()?,
       Token::Struct => self.parse_struct_decl()?,
       _ => self.parse_statement()?,
     };

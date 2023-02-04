@@ -168,8 +168,34 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn parse_closure(&mut self) -> ExprRes {
+    let call_start = self.lex.prev_token_info();
+    self.env.push();
+    self.match_or_err(Token::Basic('('))?;
+    let parameters = if self.lookahead != Token::Basic(')') {
+      self.parse_function_params(call_start)
+    } else {
+      Ok(Vec::new())
+    };
+    self.match_or_err(Token::Basic(')'))?;
+    let block = self.parse_block()?;
+    if let Stmt::Block(body) = self.ast.get_statement(block) {
+      self.env.pop();
+      Ok(self.ast.add_expression(Expr::Closure {
+        parameters: parameters?,
+        body,
+      }))
+    } else {
+      panic!()
+    }
+  }
+
   pub(super) fn parse_expression(&mut self) -> ExprRes {
-    self.parse_assignment()
+    if self.match_next(Token::Fn)?.is_some() {
+      self.parse_closure()
+    } else {
+      self.parse_assignment()
+    }
   }
 }
 
