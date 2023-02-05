@@ -152,9 +152,9 @@ impl<'src> Parser<'src> {
           identifier: _,
           name_info,
         } => Ok(self.ast.add_expression(Expr::Set {
-          object: object,
-          name: name,
-          name_info: name_info,
+          object,
+          name,
+          name_info,
           value: rhs,
         })),
         _ => Err(SourceError::from_token_info(

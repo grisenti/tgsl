@@ -1,13 +1,19 @@
 use super::*;
-use std::{collections::HashMap, ops::Not};
+use std::collections::HashMap;
+
+#[derive(Debug, Clone)]
+pub struct NameInfo {
+  id: Identifier,
+  is_const: bool,
+}
 
 pub struct Environment {
-  scopes: Vec<HashMap<String, Identifier>>,
+  scopes: Vec<HashMap<String, NameInfo>>,
   last_id: u32,
 }
 
 impl Environment {
-  fn innermost(&mut self) -> &mut HashMap<String, Identifier> {
+  fn innermost(&mut self) -> &mut HashMap<String, NameInfo> {
     // we are always guaranteed the global scope so unwrapping is safe
     self.scopes.last_mut().unwrap()
   }
@@ -19,14 +25,17 @@ impl Environment {
       .rev()
       .find_map(|scope| scope.get(name))
       .cloned()
-      .unwrap_or_else(|| self.declare_name(name))
+      .map(|name_info| name_info.id)
+      .unwrap_or_else(|| self.declare_name(name, false))
   }
 
-  pub fn declare_name(&mut self, name: &str) -> Identifier {
-    let id = self.last_id;
-    self.innermost().insert(name.to_string(), Identifier(id));
+  pub fn declare_name(&mut self, name: &str, is_const: bool) -> Identifier {
+    let id = Identifier(self.last_id);
+    self
+      .innermost()
+      .insert(name.to_string(), NameInfo { id, is_const });
     self.last_id += 1;
-    Identifier(id)
+    id
   }
 
   pub fn pop(&mut self) {
