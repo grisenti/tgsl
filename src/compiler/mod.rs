@@ -1,6 +1,13 @@
+use std::collections::HashMap;
+
 use crate::errors::*;
 
-use self::{ast::AST, lexer::Lexer, parser::Parser, semantic_analysis::SemanticAnalizer};
+use self::{
+  ast::{Identifier, AST},
+  lexer::Lexer,
+  parser::Parser,
+  semantic_analysis::SemanticAnalizer,
+};
 
 pub mod ast;
 pub mod lexer;
@@ -9,12 +16,20 @@ pub mod semantic_analysis;
 
 pub struct Compiler {}
 
+pub struct CompilerResult {
+  pub ast: AST,
+  pub global_environment: HashMap<String, Identifier>,
+}
+
 impl Compiler {
-  pub fn compile(program: &str) -> Result<AST, SourceError> {
+  pub fn compile(program: &str) -> Result<CompilerResult, SourceError> {
     let parser = Parser::new(Lexer::new(program));
-    let ast = parser.parse()?;
+    let (ast, global_environment) = parser.parse()?;
     SemanticAnalizer::analyze(&ast)?;
-    Ok(ast)
+    Ok(CompilerResult {
+      ast,
+      global_environment,
+    })
   }
 }
 

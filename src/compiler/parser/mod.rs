@@ -2,6 +2,8 @@ mod environment;
 mod expression_parser;
 mod statement_parser;
 
+use std::collections::HashMap;
+
 use self::environment::Environment;
 
 use super::ast::*;
@@ -108,11 +110,11 @@ impl<'src> Parser<'src> {
       lex,
       lookahead: Token::EndOfFile,
       ast: AST::new(),
-      env: Environment::global(),
+      env: Environment::new(),
     }
   }
 
-  pub fn parse(mut self) -> Result<AST, SourceError> {
+  pub fn parse(mut self) -> Result<(AST, HashMap<String, Identifier>), SourceError> {
     let mut errors = Vec::new();
     if let Err(e) = self.advance() {
       errors.push(e)
@@ -127,7 +129,7 @@ impl<'src> Parser<'src> {
       }
     }
     if errors.is_empty() {
-      Ok(self.ast)
+      Ok((self.ast, self.env.get_global()))
     } else {
       Err(SourceError::from_err_vec(errors))
     }

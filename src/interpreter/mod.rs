@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use crate::compiler::ast::*;
+use crate::compiler::{ast::*, CompilerResult};
 use crate::errors::SourceInfo;
 use crate::errors::{SourceError, SourceErrorType};
 
@@ -160,10 +160,10 @@ impl Interpreter {
     Ok(())
   }
 
-  pub fn new(ast: AST) -> Self {
+  pub fn new(compiler_result: CompilerResult) -> Self {
     Self {
       env: Environment::global(),
-      ast,
+      ast: compiler_result.ast,
     }
   }
 

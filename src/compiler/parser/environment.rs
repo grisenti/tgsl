@@ -1,15 +1,17 @@
 use super::*;
 use std::collections::HashMap;
 
+pub type Scope = HashMap<String, Identifier>;
+
 pub struct Environment {
-  scopes: Vec<HashMap<String, Identifier>>,
+  global: Scope,
+  scopes: Vec<Scope>,
   last_id: u32,
 }
 
 impl Environment {
-  fn innermost(&mut self) -> &mut HashMap<String, Identifier> {
-    // we are always guaranteed the global scope so unwrapping is safe
-    self.scopes.last_mut().unwrap()
+  fn innermost(&mut self) -> &mut Scope {
+    self.scopes.last_mut().unwrap_or(&mut self.global)
   }
 
   pub fn get_name_or_add(&mut self, name: &str) -> Identifier {
@@ -18,6 +20,7 @@ impl Environment {
       .iter()
       .rev()
       .find_map(|scope| scope.get(name))
+      .or_else(|| self.global.get(name))
       .cloned()
       .unwrap_or_else(|| self.declare_name(name))
   }
@@ -37,9 +40,14 @@ impl Environment {
     self.scopes.push(HashMap::new())
   }
 
-  pub fn global() -> Self {
+  pub fn get_global(self) -> Scope {
+    self.global
+  }
+
+  pub fn new() -> Self {
     Self {
-      scopes: vec![HashMap::new()],
+      global: HashMap::new(),
+      scopes: Vec::new(),
       last_id: 0,
     }
   }
