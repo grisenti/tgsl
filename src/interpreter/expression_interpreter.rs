@@ -104,7 +104,7 @@ impl Interpreter {
   ) -> ExprResult {
     if let Some(ExprValue::Func(func)) = self.env.borrow().get(id) {
       Ok(ExprValue::PartialCall {
-        func: func,
+        func,
         args: vec![lhs],
       })
     } else {
@@ -149,7 +149,7 @@ impl Interpreter {
       ExprValue::ClassInstance(instance) => Ok(instance),
       other => Err(Self::runtime_error(
         &self.ast.get_source_info(info),
-        format!("cannot access member of {:?}", other),
+        format!("cannot access member of {other:?}"),
       )),
     }
   }
@@ -187,7 +187,7 @@ impl Interpreter {
   pub(super) fn interpret_expression(&mut self, exp: ExprHandle) -> ExprResult {
     match self.ast.get_expression(exp) {
       Expr::Literal { literal, info: _ } => self.handle_literal_expression(literal),
-      Expr::BinaryExpr {
+      Expr::Binary {
         left,
         operator,
         right,
@@ -197,7 +197,7 @@ impl Interpreter {
         self.ast.get_source_info(operator.src_info),
         right,
       ),
-      Expr::UnaryExpr { operator, right } => self.handle_unary_expression(
+      Expr::Unary { operator, right } => self.handle_unary_expression(
         operator.op,
         self.ast.get_source_info(operator.src_info),
         right,

@@ -119,6 +119,6 @@ impl AST {
 
   pub fn get_source_info(&self, handle: SourceInfoHandle) -> SourceInfo {
     assert!(handle.index < self.source_ptrs.len() as u32);
-    self.source_ptrs[handle.index as usize].clone()
+    self.source_ptrs[handle.index as usize]
   }
 }

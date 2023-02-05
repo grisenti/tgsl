@@ -110,7 +110,7 @@ impl<'src> Parser<'src> {
       self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')])?
     {
       let right = self.parse_call()?;
-      Ok(self.ast.add_expression(Expr::UnaryExpr {
+      Ok(self.ast.add_expression(Expr::Unary {
         operator: OperatorPair::new(to_operator(op), src_info),
         right,
       }))
@@ -126,7 +126,7 @@ impl<'src> Parser<'src> {
       let mut expr = self.parse_binary_operation(prec + 1)?;
       while let Some((op, src_info)) = self.matches_alternatives(&BIN_OP_PRECEDENCE[prec])? {
         let right = self.parse_binary_operation(prec + 1)?;
-        expr = self.ast.add_expression(Expr::BinaryExpr {
+        expr = self.ast.add_expression(Expr::Binary {
           left: expr,
           operator: OperatorPair::new(to_operator(op), src_info),
           right,
@@ -245,7 +245,7 @@ mod test {
     let mut parser = create_parser("1 + 1");
     let binexp = parser.parse_expression().unwrap();
     assert!(
-      matches!(parser.ast.get_expression(binexp), Expr::BinaryExpr{left: _, operator, right: _} if operator.op == Operator::Basic('+'))
+      matches!(parser.ast.get_expression(binexp), Expr::Binary{left: _, operator, right: _} if operator.op == Operator::Basic('+'))
     );
   }
 
@@ -263,7 +263,7 @@ mod test {
     let mut binexp = parser.parse_expression().unwrap();
     for op in operators {
       match parser.ast.get_expression(binexp) {
-        Expr::BinaryExpr {
+        Expr::Binary {
           left,
           operator,
           right: _,

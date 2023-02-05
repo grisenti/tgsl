@@ -133,7 +133,7 @@ impl Interpreter {
         condition,
         loop_body,
       } => self.interpret_while_loop(info, condition, loop_body),
-      Stmt::Break(_) => return Ok(Some(EarlyOut::Break)),
+      Stmt::Break(_) => Ok(Some(EarlyOut::Break)),
       Stmt::Function {
         id,
         name_info: _,
@@ -160,7 +160,6 @@ impl Interpreter {
         );
         Ok(None)
       }
-      _ => panic!(),
     }
   }
 }

@@ -91,12 +91,12 @@ pub struct Identifier(pub u32);
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-  BinaryExpr {
+  Binary {
     left: ExprHandle,
     operator: OperatorPair,
     right: ExprHandle,
   },
-  UnaryExpr {
+  Unary {
     operator: OperatorPair,
     right: ExprHandle,
   },
