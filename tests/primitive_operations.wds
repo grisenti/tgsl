@@ -1,3 +1,3 @@
-print 1 + 2; // 3
-print 1 - 2; // -1
-print "string1" < "string2";
+assert(1 + 2 == 3);
+assert(1 - 2 == -1);
+assert("string1" < "string2");

@@ -1,13 +1,13 @@
 fn f () {
   var y = 1;
   return fn () {
-    print y;
     y = y + 1;
+    return y;
   };
 }
 
 var z = f();
 var w = f();
-z(); // 1
-w(); // 1
-z(); // 2
+assert(z() == 2);
+assert(w() == 2);
+assert(z() == 3);
