@@ -29,3 +29,22 @@ fn main() {
     println!("{}", err.print_long(&program));
   }
 }
+
+#[cfg(test)]
+mod test {
+  use std::fs;
+
+  use crate::{compiler::Compiler, interpreter::Interpreter};
+
+  #[test]
+  fn compile_and_run() {
+    for entry in fs::read_dir("tests/").unwrap() {
+      let path = entry.unwrap().path();
+      if path.is_file() {
+        let res = Compiler::compile(&fs::read_to_string(path).unwrap()).unwrap();
+        let mut interpreter = Interpreter::new(res);
+        interpreter.interpret().unwrap();
+      }
+    }
+  }
+}
