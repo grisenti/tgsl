@@ -5,56 +5,59 @@ if the line being executed does not change, restart execution as normal, otherwi
 resolve all bindings during parsing and assign an id to each named identifier (function or variable). The id is then used in the interpreter to get the value of the identifier from an array
 
 # Syntax
-## Functions
-```rs
-// untyped
-fn add(x, y) {
-	return x + y;
-}
-//typed
-fn sum(x: num, y: num) -> num {
-	return x + y;
-}
-```
-
 ## Variables
 ```rs
-//infered
 var x = 0;
-//specified
-var x: num = 0;
+vax x; // cannot be used, only initialized
+```
+
+## Functions
+```rs
+fn combine(x, y, op) { // define via function declaration
+	return op(x, y);
+}
+
+combine(x: 1, y: 2, op: fn (x, y) {x + y}) // optional named arguments
+
+var add = fn (x, y) { // define assigning the closure to a variable
+	return x + y;
+}
+
+//uniform function call syntax
+print 1.add(2); // 3
+"hello".add(" world!"); // hello world!
 ```
 
 ## Built-in types
 ```rs
-var a = "string"; // dynamic string
-var b = 1; // f64 
-var c = [1,2,3]; // array
-var d = map["a": 1, "b": 2]; // map
-var e = set["a", "b", "c"]; // set
+"string"; // dynamic string
+1; // f64
+true; // bool
+[1,2,3]; // array
+map["a": 1, "b": 2]; // map
+set["a", "b", "c"]; // set
+null; // no value
 ```
 
 ## User defined types
 ```rs
 struct A {
-	a, //any type
-	b: num,
-	c: str,
+	a,
+	b,
+	c,
 }
 
-fn to_string(A) -> string {
-	A.a
-}
+var a = A(1,2,3) // initialization
 
-var a = A(0, 2, "hello");
-print a.to_string();
+fn reduce (a) {a.a + a.b + a.c}
+
+a.reduce() // uniform function call syntax again
 ```
 
 ## String formatting
 ```rs
-var id = "hello";
-var a = A(a, b, c);
-"{id} - {a.to_string()}"
+var hello = "HELLO";
+print "{hello.to_lower()}"; // hello
 ```
 
 ## Compiler directives
@@ -69,16 +72,18 @@ program → declaration* EOF ;
 ```
 ## Declarations
 ```text
-declaration → classDecl
+declaration → structDecl
 	| funDecl
 	| varDecl
 	| statement ;
 
-classDecl → "class" IDENTIFIER ( "<" IDENTIFIER )? "{" function* "}" ;
+structDecl → "struct" IDENTIFIER "{" (IDENTIFIER ",")* "}";
 
-funDecl → "fun" function ;
+funcDecl → "fn" IDENTIFIER function
 
-varDecl → "var" IDENTIFIER  ( "=" expression )? ";" ;
+parameters → IDENTIFIER ( "," IDENTIFIER  )* ;
+
+idDecl → "var" IDENTIFIER ( "=" expression )? ";" | "const" IDENTIFIER "=" expression ";" ;
 ```
 
 ## Statements
@@ -108,7 +113,9 @@ block → "{" declaration* "}" ;
 
 ## Expressions
 ```
-expression → assignment ;
+expression → closure | assignment;
+
+closure → "fn" function;
 
 assignment → ( call "." )? IDENTIFIER "=" assignment
 	| logic_or ;
@@ -131,23 +138,15 @@ call → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
 
 primary → "true"
 	| "false"
-	| "nil"
-	| "this"
 	| NUMBER
 	| STRING
 	| IDENTIFIER
 	| "(" expression ")"
-	| "super" "." IDENTIFIER ;
 ```
 
 ## Others
 ```text
-function → IDENTIFIER "(" parameters? ")" block ;
-
-parameters → IDENTIFIER ( "," IDENTIFIER  )* ;
-
+function → "(" parameters? ")" block;
 arguments → expression ( "," expression )* ;
-
-type_specifier → (":" IDENTIFIER)?
 ```
 
