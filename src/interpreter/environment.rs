@@ -32,7 +32,14 @@ impl Environment {
 
   pub fn get_or_err(&self, id: Identifier, info: SourceInfo) -> Result<ExprValue, SourceError> {
     if let Some(val) = self.memory.get(&id.0) {
-      Ok(val.clone())
+      if matches!(val, ExprValue::Undefined) {
+        Err(Interpreter::runtime_error(
+          &info,
+          "cannot use an undefined variable".to_string(),
+        ))
+      } else {
+        Ok(val.clone())
+      }
     } else if let Some(parent) = &self.parent {
       parent.borrow().get_or_err(id, info)
     } else {

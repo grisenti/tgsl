@@ -106,6 +106,8 @@ pub enum ExprValue {
   },
   ClassInstance(ClassInstance),
   Null,
+
+  Undefined,
 }
 
 pub type ExprResult = Result<ExprValue, SourceError>;
@@ -153,7 +155,7 @@ impl Interpreter {
     let value = exp_opt
       .as_ref()
       .map(|exp| self.interpret_expression(exp.clone()))
-      .unwrap_or(Ok(ExprValue::Null))?;
+      .unwrap_or(Ok(ExprValue::Undefined))?;
     self.env.borrow_mut().set(id, value);
     Ok(())
   }
