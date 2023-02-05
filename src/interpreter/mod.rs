@@ -71,8 +71,8 @@ impl ClonableFn for NativeFn {
 
 #[derive(Clone)]
 pub struct InterpreterFn {
-  pub arity: u32,
-  pub callable: Box<dyn ClonableFn>,
+  arity: u32,
+  callable: Box<dyn ClonableFn>,
 }
 
 impl InterpreterFn {
@@ -84,6 +84,16 @@ impl InterpreterFn {
         parameters: func.parameters,
         capture,
       }),
+    }
+  }
+
+  pub fn foreign<F>(func: F, arity: u32) -> Self
+  where
+    F: Fn(&mut Interpreter, Vec<ExprValue>) -> InterpreterFnResult + Clone + 'static,
+  {
+    Self {
+      arity,
+      callable: Box::new(func),
     }
   }
 }
@@ -116,6 +126,7 @@ pub type InterpreterFnResult = Result<ExprValue, SourceError>;
 pub struct Interpreter {
   env: EnvRef,
   ast: AST,
+  global_names: HashMap<String, Identifier>,
 }
 
 enum EarlyOut {
@@ -164,6 +175,13 @@ impl Interpreter {
     Self {
       env: Environment::global(),
       ast: compiler_result.ast,
+      global_names: compiler_result.global_environment,
+    }
+  }
+
+  pub fn add_global_variable(&mut self, name: &str, value: ExprValue) {
+    if let Some(id) = self.global_names.get(name) {
+      self.env.borrow_mut().set(*id, value);
     }
   }
 
