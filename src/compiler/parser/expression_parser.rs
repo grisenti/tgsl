@@ -34,10 +34,9 @@ impl<'src> Parser<'src> {
         self.match_or_err(Token::Basic(')'))?;
         ret
       }
-      _ => Err(SourceError::from_lexer_state(
+      _ => Err(error_from_lexer_state(
         &self.lex,
         format!("expected literal, got {}", self.lookahead),
-        SourceErrorType::Parsing,
       )),
     }
   }
@@ -160,7 +159,7 @@ impl<'src> Parser<'src> {
         _ => Err(SourceError::from_token_info(
           &self.ast.get_source_info(eq_src_info),
           "left hand side of assignment is not a valid target".to_string(),
-          SourceErrorType::Parsing,
+          SourceErrorType::Compilation,
         )),
       }
     } else {

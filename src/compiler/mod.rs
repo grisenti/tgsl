@@ -1,4 +1,4 @@
-use crate::errors::SourceError;
+use crate::errors::*;
 
 use self::{ast::AST, lexer::Lexer, parser::Parser, semantic_analysis::SemanticAnalizer};
 
@@ -16,4 +16,14 @@ impl Compiler {
     SemanticAnalizer::analyze(&ast)?;
     Ok(ast)
   }
+}
+
+fn error_from_lexer_state(lex: &Lexer, error_msg: String) -> SourceError {
+  SourceError::new(
+    lex.line_no(),
+    lex.prev_token_start(),
+    lex.prev_token_end(),
+    error_msg,
+    SourceErrorType::Compilation,
+  )
 }

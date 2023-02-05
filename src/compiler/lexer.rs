@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::CharIndices};
 
-use crate::errors::*;
+use crate::{compiler::error_from_lexer_state, errors::*};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Token<'src> {
@@ -221,10 +221,9 @@ impl<'src> Lexer<'src> {
         &self.source[tok_start + 1..self.total_offset - 1],
       ))
     } else {
-      Err(SourceError::from_lexer_state(
+      Err(error_from_lexer_state(
         self,
         "incomplete string".to_string(),
-        SourceErrorType::Lexing,
       ))
     }
   }

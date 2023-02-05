@@ -7,6 +7,7 @@ use crate::errors::*;
 use self::environment::Environment;
 
 use super::ast::*;
+use super::error_from_lexer_state;
 use super::lexer::*;
 
 pub struct Parser<'src> {
@@ -35,10 +36,9 @@ impl<'src> Parser<'src> {
       self.advance()?;
       Ok((self.env.declare_name(id, is_const), info))
     } else {
-      Err(SourceError::from_lexer_state(
+      Err(error_from_lexer_state(
         &self.lex,
         format!("expected identifier, got {}", self.lookahead),
-        SourceErrorType::Parsing,
       ))
     }
   }
@@ -59,7 +59,7 @@ impl<'src> Parser<'src> {
     } else {
       format!("unexpected token {}", self.lookahead)
     };
-    SourceError::from_lexer_state(&self.lex, msg, SourceErrorType::Parsing)
+    error_from_lexer_state(&self.lex, msg)
   }
 
   fn matches_alternatives(

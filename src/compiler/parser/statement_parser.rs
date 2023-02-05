@@ -171,7 +171,7 @@ impl<'src> Parser<'src> {
       Err(SourceError::from_token_info(
         &call_start,
         "function cannot have more than 255 parameters".to_string(),
-        SourceErrorType::Parsing,
+        SourceErrorType::Compilation,
       ))
     } else {
       Ok(parameters)
@@ -210,10 +210,9 @@ impl<'src> Parser<'src> {
       self.advance()?;
       Ok(self.ast.add_str(name))
     } else {
-      Err(SourceError::from_lexer_state(
+      Err(error_from_lexer_state(
         &self.lex,
         format!("expected identifier, got {}", self.lookahead),
-        SourceErrorType::Parsing,
       ))
     }
   }

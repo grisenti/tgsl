@@ -23,7 +23,7 @@ impl SemanticAnalizer {
         return Err(SourceError::from_token_info(
           &ast.get_source_info(id_info),
           "cannot initialize identifier with itself".to_string(),
-          SourceErrorType::Parsing,
+          SourceErrorType::Compilation,
         ));
       }
     }
@@ -82,7 +82,7 @@ impl SemanticAnalizer {
           return Err(SourceError::from_token_info(
             &ast.get_source_info(info),
             "cannot have break outside of loop body".to_string(),
-            SourceErrorType::Parsing,
+            SourceErrorType::Compilation,
           ));
         }
       }
@@ -91,7 +91,7 @@ impl SemanticAnalizer {
           return Err(SourceError::from_token_info(
             &ast.get_source_info(src_info),
             "cannot have return outside of loop body".to_string(),
-            SourceErrorType::Parsing,
+            SourceErrorType::Compilation,
           ));
         }
       }

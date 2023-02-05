@@ -29,8 +29,7 @@ impl SourceInfo {
 
 #[derive(Debug, PartialEq)]
 pub enum SourceErrorType {
-  Lexing,
-  Parsing,
+  Compilation,
   Runtime,
 }
 
@@ -62,11 +61,17 @@ fn line_str(source: &str, start: usize) -> (usize, String) {
 }
 
 impl SourceError {
-  pub fn from_lexer_state(lex: &Lexer, error_msg: String, kind: SourceErrorType) -> Self {
+  pub fn new(
+    line_no: u32,
+    start: usize,
+    end: usize,
+    error_msg: String,
+    kind: SourceErrorType,
+  ) -> Self {
     Self::One {
-      line_no: lex.line_no(),
-      start: lex.prev_token_start(),
-      end: lex.prev_token_end(),
+      line_no,
+      start,
+      end,
       error_msg,
       kind,
     }
