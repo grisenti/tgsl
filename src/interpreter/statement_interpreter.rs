@@ -98,12 +98,17 @@ impl Interpreter {
         identifier,
         id_info: _,
         expression,
-      } => self.install_identifier(identifier, expression)?,
+      } => {
+        self.install_identifier(identifier, expression)?;
+        Ok(None)
+      }
       Stmt::Print(expression) => {
         println!("{:?}", self.interpret_expression(expression)?);
+        Ok(None)
       }
       Stmt::Expr(expr) => {
         self.interpret_expression(expr)?;
+        Ok(None)
       }
       Stmt::Block(stmts) => {
         self.new_scope();
@@ -115,22 +120,19 @@ impl Interpreter {
           }
         }
         self.pop_scope();
+        Ok(None)
       }
       Stmt::IfBranch {
         if_info,
         condition,
         true_branch,
         else_branch,
-      } => {
-        self.interpret_if_branch(if_info, condition, true_branch, else_branch)?;
-      }
+      } => self.interpret_if_branch(if_info, condition, true_branch, else_branch),
       Stmt::While {
         info,
         condition,
         loop_body,
-      } => {
-        self.interpret_while_loop(info, condition, loop_body)?;
-      }
+      } => self.interpret_while_loop(info, condition, loop_body),
       Stmt::Break(_) => return Ok(Some(EarlyOut::Break)),
       Stmt::Function {
         id,
@@ -139,9 +141,10 @@ impl Interpreter {
         body,
       } => {
         self.add_function(id, parameters, body)?;
+        Ok(None)
       }
       Stmt::Return { expr, src_info: _ } => {
-        return Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?)))
+        Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?)))
       }
       Stmt::Struct {
         name,
@@ -155,9 +158,9 @@ impl Interpreter {
             callable: Box::new(NativeStruct::new(&self.ast, &members)),
           }),
         );
+        Ok(None)
       }
       _ => panic!(),
-    };
-    Ok(None)
+    }
   }
 }
