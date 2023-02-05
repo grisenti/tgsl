@@ -61,7 +61,7 @@ impl ClassInstance {
       .value
       .borrow_mut()
       .get_mut(name)
-      .and_then(|val| Some(*val = value.clone()))
+      .map(|val| *val = value.clone())
       .ok_or_else(|| invalid_access(name, name_info))?;
     Ok(value)
   }

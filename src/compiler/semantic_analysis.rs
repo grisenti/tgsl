@@ -15,9 +15,8 @@ impl SemanticAnalizer {
     identifier: Identifier,
     expression: Option<ExprHandle>,
   ) -> SemAnalysisRes {
-    if let Some(Expr::Variable { id, id_info }) = expression
-      .clone()
-      .and_then(|handle| Some(ast.get_expression(handle)))
+    if let Some(Expr::Variable { id, id_info }) =
+      expression.clone().map(|handle| ast.get_expression(handle))
     {
       if id == identifier {
         return Err(error_from_source_info(
