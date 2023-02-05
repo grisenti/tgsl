@@ -1,3 +1,8 @@
 assert(1 + 2 == 3);
 assert(1 - 2 == -1);
 assert("string1" < "string2");
+assert(!false);
+assert("a" + "b" == "ab");
+assert(!("" == null));
+assert(null == null);
+assert(!(1 == null));
