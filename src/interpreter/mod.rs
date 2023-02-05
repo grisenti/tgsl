@@ -7,9 +7,9 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use crate::ast::*;
+use crate::compiler::ast::*;
+use crate::compiler::lexer::SourceInfo;
 use crate::errors::{SourceError, SourceErrorType};
-use crate::lexer::SourceInfo;
 
 use self::class::ClassInstance;
 use self::environment::{EnvRef, Environment};

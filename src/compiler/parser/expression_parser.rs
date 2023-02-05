@@ -201,7 +201,7 @@ impl<'src> Parser<'src> {
 
 #[cfg(test)]
 mod test {
-  use crate::{
+  use crate::compiler::{
     ast::{Expr, Literal, Operator},
     lexer::Lexer,
     parser::Parser,

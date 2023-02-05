@@ -2,10 +2,11 @@ mod environment;
 mod expression_parser;
 mod statement_parser;
 
+use crate::errors::*;
+
 use self::environment::Environment;
 
 use super::ast::*;
-use super::errors::*;
 use super::lexer::*;
 
 pub struct Parser<'src> {

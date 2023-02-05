@@ -1,4 +1,4 @@
-use crate::{lexer::SourceInfo, Lexer};
+use crate::compiler::{lexer::Lexer, lexer::SourceInfo};
 
 #[derive(Debug, PartialEq)]
 pub enum SourceErrorType {

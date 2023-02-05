@@ -8,7 +8,7 @@ use std::{default::Default, marker::PhantomData};
 pub use expression::*;
 pub use statement::*;
 
-use crate::lexer::SourceInfo;
+use crate::compiler::lexer::SourceInfo;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ASTHandle<T> {

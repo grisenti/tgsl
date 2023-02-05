@@ -4,7 +4,8 @@ use std::{
   rc::Rc,
 };
 
-use crate::{ast::Identifier, errors::SourceError, lexer::SourceInfo};
+use crate::compiler::{ast::Identifier, lexer::SourceInfo};
+use crate::errors::SourceError;
 
 use super::{ExprValue, Interpreter};
 

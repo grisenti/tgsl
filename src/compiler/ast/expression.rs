@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::lexer::Token;
+use crate::compiler::lexer::Token;
 
 use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle, AST};
 

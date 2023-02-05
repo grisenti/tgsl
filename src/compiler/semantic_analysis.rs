@@ -1,6 +1,5 @@
-use crate::ast::*;
+use super::ast::*;
 use crate::errors::{SourceError, SourceErrorType};
-use crate::lexer::SourceInfo;
 
 pub type SemAnalysisRes = Result<(), SourceError>;
 
