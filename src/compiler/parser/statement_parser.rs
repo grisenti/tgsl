@@ -134,10 +134,9 @@ impl<'src> Parser<'src> {
   }
 
   fn parse_var_decl(&mut self) -> StmtRes {
-    assert!(self.lookahead == Token::Const || self.lookahead == Token::Var);
-    let is_const = self.lookahead == Token::Const;
+    assert!(self.lookahead == Token::Var);
     self.advance()?;
-    let (identifier, id_info) = self.match_id_or_err(is_const)?;
+    let (identifier, id_info) = self.match_id_or_err()?;
     let ret = if self.lookahead == Token::Basic('=') {
       self.advance()?; // consume '='
       Stmt::VarDecl {
@@ -162,7 +161,7 @@ impl<'src> Parser<'src> {
   ) -> Result<Vec<Identifier>, SourceError> {
     let mut parameters = Vec::new();
     loop {
-      parameters.push(self.match_id_or_err(false)?.0);
+      parameters.push(self.match_id_or_err()?.0);
       if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
         break;
       }
@@ -180,7 +179,7 @@ impl<'src> Parser<'src> {
   fn parse_function_decl(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::Fn);
     self.advance()?; // consume fun
-    let (name_id, name_info) = self.match_id_or_err(true)?;
+    let (name_id, name_info) = self.match_id_or_err()?;
     let call_start = self.lex.prev_token_info();
     self.env.push();
     self.match_or_err(Token::Basic('('))?;
@@ -219,7 +218,7 @@ impl<'src> Parser<'src> {
   fn parse_struct_decl(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::Struct);
     self.advance()?;
-    let (name_id, name_info) = self.match_id_or_err(true)?;
+    let (name_id, name_info) = self.match_id_or_err()?;
     self.match_or_err(Token::Basic('{'))?;
     let mut members = Vec::new();
     while self.lookahead != Token::Basic('}') {
@@ -236,7 +235,7 @@ impl<'src> Parser<'src> {
 
   pub(super) fn parse_decl(&mut self) -> StmtRes {
     let ret = match self.lookahead {
-      Token::Var | Token::Const => self.parse_var_decl()?,
+      Token::Var => self.parse_var_decl()?,
       Token::Fn => self.parse_function_decl()?,
       Token::Struct => self.parse_struct_decl()?,
       _ => self.parse_statement()?,

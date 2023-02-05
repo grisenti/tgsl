@@ -1,19 +1,13 @@
 use super::*;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
-pub struct NameInfo {
-  id: Identifier,
-  is_const: bool,
-}
-
 pub struct Environment {
-  scopes: Vec<HashMap<String, NameInfo>>,
+  scopes: Vec<HashMap<String, Identifier>>,
   last_id: u32,
 }
 
 impl Environment {
-  fn innermost(&mut self) -> &mut HashMap<String, NameInfo> {
+  fn innermost(&mut self) -> &mut HashMap<String, Identifier> {
     // we are always guaranteed the global scope so unwrapping is safe
     self.scopes.last_mut().unwrap()
   }
@@ -25,15 +19,12 @@ impl Environment {
       .rev()
       .find_map(|scope| scope.get(name))
       .cloned()
-      .map(|name_info| name_info.id)
-      .unwrap_or_else(|| self.declare_name(name, false))
+      .unwrap_or_else(|| self.declare_name(name))
   }
 
-  pub fn declare_name(&mut self, name: &str, is_const: bool) -> Identifier {
+  pub fn declare_name(&mut self, name: &str) -> Identifier {
     let id = Identifier(self.last_id);
-    self
-      .innermost()
-      .insert(name.to_string(), NameInfo { id, is_const });
+    self.innermost().insert(name.to_string(), id);
     self.last_id += 1;
     id
   }
