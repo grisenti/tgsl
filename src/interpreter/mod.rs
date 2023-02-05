@@ -99,9 +99,9 @@ pub enum ExprValue {
   Str(String),
   Num(f64),
   Boolean(bool),
-  Func(InterpreterFn),
+  Func(Rc<InterpreterFn>),
   PartialCall {
-    func: InterpreterFn,
+    func: Rc<InterpreterFn>,
     args: Vec<ExprValue>,
   },
   ClassInstance(ClassInstance),

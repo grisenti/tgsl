@@ -181,7 +181,7 @@ impl Interpreter {
       arity,
       callable: Box::new(func),
     };
-    Ok(ExprValue::Func(interpreter_fn))
+    Ok(ExprValue::Func(Rc::new(interpreter_fn)))
   }
 
   pub(super) fn interpret_expression(&mut self, exp: ExprHandle) -> ExprResult {

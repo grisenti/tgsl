@@ -88,7 +88,7 @@ impl Interpreter {
     self
       .env
       .borrow_mut()
-      .set(id, ExprValue::Func(interpreter_fn));
+      .set(id, ExprValue::Func(Rc::new(interpreter_fn)));
     Ok(None)
   }
 
@@ -153,10 +153,10 @@ impl Interpreter {
       } => {
         self.env.borrow_mut().set(
           name,
-          ExprValue::Func(InterpreterFn {
+          ExprValue::Func(Rc::new(InterpreterFn {
             arity: 0,
             callable: Box::new(NativeStruct::new(&self.ast, &members)),
-          }),
+          })),
         );
         Ok(None)
       }
