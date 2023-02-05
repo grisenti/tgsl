@@ -36,33 +36,6 @@ pub enum Token<'src> {
   EndOfFile,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct SourceInfo {
-  pub line_no: u32,
-  pub start: usize,
-  pub end: usize,
-}
-
-impl SourceInfo {
-  pub fn union(start: SourceInfo, end: SourceInfo) -> Self {
-    assert!(start.line_no <= end.line_no);
-    Self {
-      line_no: start.line_no,
-      start: start.start,
-      end: end.end,
-    }
-  }
-
-  // TODO: remove after its not needed
-  pub fn temporary() -> Self {
-    Self {
-      line_no: 0,
-      start: 0,
-      end: 0,
-    }
-  }
-}
-
 fn indentifier_token(input: &str) -> Token {
   match input {
     "and" => Token::And,

@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use std::rc::Rc;
 
 use crate::compiler::ast::*;
-use crate::compiler::lexer::SourceInfo;
+use crate::errors::SourceInfo;
 use crate::errors::{SourceError, SourceErrorType};
 
 use self::class::ClassInstance;
