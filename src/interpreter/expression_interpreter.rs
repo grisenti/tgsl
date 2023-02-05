@@ -286,6 +286,8 @@ fn equal(lhs: ExprValue, rhs: ExprValue, op_info: SourceInfo) -> ExprResult {
     (ExprValue::Num(l), ExprValue::Num(r)) => Ok(ExprValue::Boolean(l == r)),
     (ExprValue::Str(l), ExprValue::Str(r)) => Ok(ExprValue::Boolean(l == r)),
     (ExprValue::Boolean(l), ExprValue::Boolean(r)) => Ok(ExprValue::Boolean(l == r)),
+    (ExprValue::Null, ExprValue::Null) => Ok(ExprValue::Boolean(true)),
+    (ExprValue::Null, _) | (_, ExprValue::Null) => Ok(ExprValue::Boolean(false)),
     (lhs, rhs) => Err(Interpreter::runtime_error(
       &op_info,
       format!("cannot determine if {lhs:?} and {rhs:?} are equal"),
