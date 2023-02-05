@@ -50,10 +50,9 @@ impl<'src> Parser<'src> {
       }
     }
     if arguments.len() >= 255 {
-      Err(SourceError::from_token_info(
+      Err(error_from_source_info(
         &call_start,
         "function cannot have more than 255 arguments".to_string(),
-        SourceErrorType::Runtime,
       ))
     } else {
       Ok(arguments)
@@ -156,10 +155,9 @@ impl<'src> Parser<'src> {
           name_info,
           value: rhs,
         })),
-        _ => Err(SourceError::from_token_info(
+        _ => Err(error_from_source_info(
           &self.ast.get_source_info(eq_src_info),
           "left hand side of assignment is not a valid target".to_string(),
-          SourceErrorType::Compilation,
         )),
       }
     } else {

@@ -2,13 +2,11 @@ mod environment;
 mod expression_parser;
 mod statement_parser;
 
-use crate::errors::*;
-
 use self::environment::Environment;
 
 use super::ast::*;
-use super::error_from_lexer_state;
 use super::lexer::*;
+use super::*;
 
 pub struct Parser<'src> {
   env: Environment,
@@ -49,7 +47,7 @@ impl<'src> Parser<'src> {
 
   fn advance(&mut self) -> Result<Token<'src>, SourceError> {
     let next = self.lex.next_token()?;
-    self.lookahead = next.clone();
+    self.lookahead = next;
     Ok(next)
   }
 

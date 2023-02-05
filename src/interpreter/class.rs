@@ -38,7 +38,7 @@ pub struct ClassInstance {
 }
 
 fn invalid_access(name: &str, name_info: &SourceInfo) -> SourceError {
-  SourceError::from_token_info(
+  SourceError::from_source_info(
     name_info,
     format!("{name} is not a valid property"),
     SourceErrorType::Runtime,

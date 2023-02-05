@@ -1,4 +1,4 @@
-use super::ast::*;
+use super::{ast::*, error_from_source_info};
 use crate::errors::{SourceError, SourceErrorType};
 
 pub type SemAnalysisRes = Result<(), SourceError>;
@@ -20,10 +20,9 @@ impl SemanticAnalizer {
       .and_then(|handle| Some(ast.get_expression(handle)))
     {
       if id == identifier {
-        return Err(SourceError::from_token_info(
+        return Err(error_from_source_info(
           &ast.get_source_info(id_info),
           "cannot initialize identifier with itself".to_string(),
-          SourceErrorType::Compilation,
         ));
       }
     }
@@ -79,19 +78,17 @@ impl SemanticAnalizer {
       }
       Stmt::Break(info) => {
         if self.loop_depth == 0 {
-          return Err(SourceError::from_token_info(
+          return Err(error_from_source_info(
             &ast.get_source_info(info),
             "cannot have break outside of loop body".to_string(),
-            SourceErrorType::Compilation,
           ));
         }
       }
       Stmt::Return { expr: _, src_info } => {
         if self.function_depth == 0 {
-          return Err(SourceError::from_token_info(
+          return Err(error_from_source_info(
             &ast.get_source_info(src_info),
             "cannot have return outside of loop body".to_string(),
-            SourceErrorType::Compilation,
           ));
         }
       }

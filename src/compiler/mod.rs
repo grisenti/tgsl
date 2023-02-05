@@ -27,3 +27,7 @@ fn error_from_lexer_state(lex: &Lexer, error_msg: String) -> SourceError {
     SourceErrorType::Compilation,
   )
 }
+
+fn error_from_source_info(info: &SourceInfo, error_msg: String) -> SourceError {
+  SourceError::from_source_info(info, error_msg, SourceErrorType::Compilation)
+}

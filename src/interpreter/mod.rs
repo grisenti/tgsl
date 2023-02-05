@@ -126,7 +126,7 @@ type StmtRes = Result<Option<EarlyOut>, SourceError>;
 
 impl Interpreter {
   pub fn runtime_error(info: &SourceInfo, error_msg: String) -> SourceError {
-    SourceError::from_token_info(info, error_msg, SourceErrorType::Runtime)
+    SourceError::from_source_info(info, error_msg, SourceErrorType::Runtime)
   }
 
   fn new_scope(&mut self) {

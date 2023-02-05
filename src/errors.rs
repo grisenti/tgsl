@@ -77,7 +77,7 @@ impl SourceError {
     }
   }
 
-  pub fn from_token_info(info: &SourceInfo, error_msg: String, kind: SourceErrorType) -> Self {
+  pub fn from_source_info(info: &SourceInfo, error_msg: String, kind: SourceErrorType) -> Self {
     Self::One {
       line_no: info.line_no,
       start: info.start,

@@ -168,10 +168,9 @@ impl<'src> Parser<'src> {
       }
     }
     if parameters.len() > 255 {
-      Err(SourceError::from_token_info(
+      Err(error_from_source_info(
         &call_start,
         "function cannot have more than 255 parameters".to_string(),
-        SourceErrorType::Compilation,
       ))
     } else {
       Ok(parameters)
