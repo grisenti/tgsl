@@ -154,7 +154,7 @@ impl Interpreter {
         self.env.borrow_mut().set(
           name,
           ExprValue::Func(Rc::new(InterpreterFn {
-            arity: 0,
+            arity: members.len() as u32,
             callable: Box::new(NativeStruct::new(&self.ast, &members)),
           })),
         );

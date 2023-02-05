@@ -2,26 +2,36 @@ use std::collections::hash_map::Entry;
 
 use super::*;
 
+type StructMembers = Vec<(String, ExprValue)>;
+
 #[derive(Clone)]
 pub(super) struct NativeStruct {
-  methods: HashMap<String, ExprValue>,
+  members: StructMembers,
 }
 
 impl NativeStruct {
-  pub(super) fn new(ast: &AST, methods: &[StrHandle]) -> Self {
+  pub(super) fn new(ast: &AST, members: &[StrHandle]) -> Self {
     Self {
-      methods: HashMap::from_iter(
-        methods
-          .iter()
-          .map(|handle| (ast.get_str(handle.clone()).to_string(), ExprValue::Null)),
-      ),
+      members: Vec::from_iter(members.iter().map(|handle| {
+        (
+          ast.get_str(handle.clone()).to_string(),
+          ExprValue::Undefined,
+        )
+      })),
     }
   }
 }
 
 impl ClonableFn for NativeStruct {
-  fn call(&self, _: &mut Interpreter, _: Vec<ExprValue>) -> InterpreterFnResult {
-    Ok(ExprValue::ClassInstance(ClassInstance::new(&self.methods)))
+  fn call(&self, _: &mut Interpreter, values: Vec<ExprValue>) -> InterpreterFnResult {
+    Ok(ExprValue::ClassInstance(ClassInstance::new(
+      self
+        .members
+        .iter()
+        .zip(values)
+        .map(|(mem, value)| (mem.0.clone(), value))
+        .collect(),
+    )))
   }
 
   fn clone_box<'a>(&self) -> Box<dyn ClonableFn + 'a>
@@ -34,7 +44,7 @@ impl ClonableFn for NativeStruct {
 
 #[derive(Debug, Clone)]
 pub struct ClassInstance {
-  value: Rc<RefCell<HashMap<String, ExprValue>>>,
+  value: Rc<RefCell<StructMembers>>,
 }
 
 fn invalid_access(name: &str, name_info: &SourceInfo) -> SourceError {
@@ -46,22 +56,29 @@ fn invalid_access(name: &str, name_info: &SourceInfo) -> SourceError {
 }
 
 impl ClassInstance {
-  fn new(methods: &HashMap<String, ExprValue>) -> Self {
+  fn new(methods: StructMembers) -> Self {
     Self {
-      value: Rc::new(RefCell::new(methods.clone())),
+      value: Rc::new(RefCell::new(methods)),
     }
   }
 
   pub fn get(&self, name: &str, name_info: &SourceInfo) -> Option<ExprValue> {
-    self.value.borrow().get(name).cloned()
+    self
+      .value
+      .borrow()
+      .iter()
+      .find(|(member_name, _)| member_name == name)
+      .map(|(_, value)| value)
+      .cloned()
   }
 
   pub fn set(&mut self, name: &str, name_info: &SourceInfo, value: ExprValue) -> ExprResult {
     self
       .value
       .borrow_mut()
-      .get_mut(name)
-      .map(|val| *val = value.clone())
+      .iter_mut()
+      .find(|(member_name, _)| member_name == name)
+      .map(|(_, val)| *val = value.clone())
       .ok_or_else(|| invalid_access(name, name_info))?;
     Ok(value)
   }
