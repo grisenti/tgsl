@@ -1,0 +1,6 @@
+fn transform(a, op) {
+	return op(a);
+}
+
+print transform("hello", fn (a) {return a + " world!";});
+print transform(1, fn (a) {return a + 2;});

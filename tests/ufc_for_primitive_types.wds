@@ -1,0 +1,17 @@
+fn add(a, b) {
+	return a + b;
+}
+
+fn not(a) {
+	return !a;
+}
+
+fn is_null(a) {
+	return a == null;
+}
+
+print "hello".add(" world!");
+print 1.add(2);
+print true.not();
+print null.is_null();
+print "string".is_null();
