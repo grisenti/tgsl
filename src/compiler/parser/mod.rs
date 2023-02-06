@@ -31,7 +31,7 @@ impl<'src> Parser<'src> {
     if let Token::Id(id) = self.lookahead {
       let info = self.last_token_info();
       self.advance()?;
-      Ok((self.env.declare_name(id), info))
+      Ok((self.env.get_name_or_add_global(id), info))
     } else {
       Err(error_from_lexer_state(
         &self.lex,

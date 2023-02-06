@@ -1,0 +1,12 @@
+fn f(n) {
+	return g(n-1);
+}
+
+fn g(n) {
+	if (n > 0)
+		return f(n);
+	else
+		return n;
+}
+
+assert(g(1) == 0);
