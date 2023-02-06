@@ -56,6 +56,7 @@ fn line_str(source: &str, start: usize) -> (usize, String) {
     .char_indices()
     .map(|(_, c)| c)
     .take_while(|c| *c != '\n')
+    .map(|c| if c.is_whitespace() { ' ' } else { c })
     .collect();
   (line_start, line)
 }
