@@ -1,51 +1,16 @@
 //pub mod codegen;
 mod expression;
+mod handle;
 mod statement;
 
 use core::panic;
-use std::{default::Default, marker::PhantomData};
+use std::default::Default;
 
 pub use expression::*;
+pub use handle::*;
 pub use statement::*;
 
 use crate::errors::SourceInfo;
-
-#[derive(Debug, Clone, Copy)]
-pub struct ASTHandle<T> {
-  index: u32,
-  __: PhantomData<T>,
-}
-
-impl<T> ASTHandle<T> {
-  fn new(index: u32) -> Self {
-    Self {
-      index,
-      __: PhantomData {},
-    }
-  }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct HandleSlice<T> {
-  start: u32,
-  end: u32,
-  __: PhantomData<T>,
-}
-
-impl<T> HandleSlice<T> {
-  fn new(start: u32, end: u32) -> Self {
-    Self {
-      start,
-      end,
-      __: PhantomData {},
-    }
-  }
-}
-
-pub type ExprHandle = ASTHandle<Expr>;
-pub type StmtHandle = ASTHandle<Stmt>;
-pub type SourceInfoHandle = ASTHandle<SourceInfo>;
-pub type StrHandle = HandleSlice<String>;
 
 pub enum ASTNode {
   Expr(Expr),
