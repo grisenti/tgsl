@@ -29,9 +29,12 @@ impl<'src> Parser<'src> {
 
   fn match_id_or_err(&mut self) -> Result<(Identifier, SourceInfoHandle), SourceError> {
     if let Token::Id(id) = self.lookahead {
-      let info = self.last_token_info();
+      let info = self.lex.prev_token_info();
       self.advance()?;
-      Ok((self.env.get_name_or_add_global(id), info))
+      Ok((
+        self.env.declare_name_or_err(id, info)?,
+        self.ast.add_source_info(info),
+      ))
     } else {
       Err(error_from_lexer_state(
         &self.lex,

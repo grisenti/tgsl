@@ -13,7 +13,7 @@ pub struct Environment {
 }
 
 impl Environment {
-  fn declare_name(&mut self, name: &str) -> Identifier {
+  fn declare_global_name(&mut self, name: &str) -> Identifier {
     let id = Identifier(self.last_id);
     self.global.insert(name.to_string(), id);
     self.last_id += 1;
@@ -37,7 +37,26 @@ impl Environment {
       .find_map(|scope| scope.get(name))
       .or_else(|| self.global.get(name))
       .cloned()
-      .unwrap_or_else(|| self.declare_name(name))
+      .unwrap_or_else(|| self.declare_global_name(name))
+  }
+
+  pub fn declare_name_or_err(
+    &mut self,
+    name: &str,
+    name_src_info: SourceInfo,
+  ) -> Result<Identifier, SourceError> {
+    let innermost = self.scopes.last_mut().unwrap_or(&mut self.global);
+    if innermost.contains_key(name) {
+      Err(error_from_source_info(
+        &name_src_info,
+        format!("cannot redeclare name '{name}' in the same scope"),
+      ))
+    } else {
+      let id = Identifier(self.last_id);
+      innermost.insert(name.to_string(), id);
+      self.last_id += 1;
+      Ok(id)
+    }
   }
 
   pub fn get_type_or_add(&mut self, name: &str) -> Type {
