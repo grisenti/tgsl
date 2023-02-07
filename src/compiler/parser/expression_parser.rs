@@ -194,16 +194,18 @@ impl<'src> Parser<'src> {
     let parameters = if self.lookahead != Token::Basic(')') {
       self.parse_function_params(call_start)
     } else {
-      Ok(Vec::new())
+      Ok((Vec::new(), Vec::new()))
     };
     self.match_or_err(Token::Basic(')'))?;
     let return_type = self.parse_function_return_type()?;
     let block = self.parse_block()?;
     if let Stmt::Block(body) = self.ast.get_statement(block) {
       self.env.pop();
+      let (parameters, mut parameter_types) = parameters?;
+      parameter_types.push(return_type);
       Ok(self.ast.add_expression(Expr::Closure {
-        parameters: parameters?,
-        return_type,
+        parameters,
+        fn_type: Type::Function(parameter_types),
         body,
       }))
     } else {

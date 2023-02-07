@@ -1,26 +1,31 @@
-#[derive(Debug, Clone, Copy)]
+use std::any::Any;
+
+use super::Literal;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UserTypeId {
   pub id: u32,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
   Str,
   Num,
   Bool,
   User(UserTypeId),
+  Function(Vec<Type>),
 
   Any,
   Undefined,
 }
 
 impl Type {
-  pub fn from_name(name: &str) -> Option<Self> {
-    match name {
-      "str" => Some(Type::Str),
-      "num" => Some(Type::Num),
-      "bool" => Some(Type::Bool),
-      _ => None,
+  pub fn from_literal(lit: Literal) -> Self {
+    match lit {
+      Literal::String(_) => Type::Str,
+      Literal::Number(_) => Type::Num,
+      Literal::True | Literal::False => Type::Bool,
+      Literal::Null => Type::Any,
     }
   }
 }

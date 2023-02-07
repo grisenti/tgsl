@@ -140,12 +140,8 @@ impl Interpreter {
         name_info: _,
         parameters,
         body,
-        return_type: _,
-      } => self.add_function(
-        id,
-        parameters.iter().cloned().map(|(c, _)| c).collect(),
-        body,
-      ),
+        ..
+      } => self.add_function(id, parameters, body),
       Stmt::Return { expr, src_info: _ } => {
         Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?)))
       }
@@ -153,6 +149,7 @@ impl Interpreter {
         name,
         name_info: _,
         members,
+        type_id: _,
       } => {
         self.env.borrow_mut().set(
           name,

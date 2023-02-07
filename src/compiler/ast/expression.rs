@@ -86,7 +86,7 @@ impl OperatorPair {
   }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub struct Identifier(pub u32);
 
 #[derive(Debug, Clone)]
@@ -114,8 +114,8 @@ pub enum Expr {
     value: ExprHandle,
   },
   Closure {
-    parameters: Vec<(Identifier, Type)>,
-    return_type: Type,
+    parameters: Vec<Identifier>,
+    fn_type: Type,
     body: Vec<StmtHandle>,
   },
   FnCall {

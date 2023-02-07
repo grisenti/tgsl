@@ -161,23 +161,23 @@ impl<'src> Parser<'src> {
   pub(super) fn parse_function_params(
     &mut self,
     call_start: SourceInfo,
-  ) -> Result<Vec<(Identifier, Type)>, SourceError> {
-    let mut parameters = Vec::new();
+  ) -> Result<(Vec<Identifier>, Vec<Type>), SourceError> {
+    let mut parameter_ids = Vec::new();
+    let mut parameter_types = Vec::new();
     loop {
-      let param_id = self.match_id_or_err()?.0;
-      let param_type = self.parse_type_specifier()?;
-      parameters.push((param_id, param_type));
+      parameter_ids.push(self.match_id_or_err()?.0);
+      parameter_types.push(self.parse_type_specifier()?);
       if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
         break;
       }
     }
-    if parameters.len() > 255 {
+    if parameter_ids.len() > 255 {
       Err(error_from_source_info(
         &call_start,
         "function cannot have more than 255 parameters".to_string(),
       ))
     } else {
-      Ok(parameters)
+      Ok((parameter_ids, parameter_types))
     }
   }
 
@@ -199,18 +199,20 @@ impl<'src> Parser<'src> {
     let parameters = if self.lookahead != Token::Basic(')') {
       self.parse_function_params(call_start)
     } else {
-      Ok(Vec::new())
+      Ok((Vec::new(), Vec::new()))
     };
     self.match_or_err(Token::Basic(')'))?;
     let return_type = self.parse_function_return_type()?;
     let block = self.parse_block()?;
     if let Stmt::Block(body) = self.ast.get_statement(block) {
       self.env.pop();
+      let (parameters, mut parameter_types) = parameters?;
+      parameter_types.push(return_type);
       Ok(self.ast.add_statement(Stmt::Function {
         id: name_id,
         name_info,
-        parameters: parameters?,
-        return_type,
+        fn_type: Type::Function(parameter_types),
+        parameters,
         body,
       }))
     } else {
@@ -221,6 +223,11 @@ impl<'src> Parser<'src> {
   fn parse_struct_decl(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::Struct);
     self.advance()?;
+    let type_id = if let Token::Id(name) = self.lookahead {
+      self.env.get_type_or_add(name)
+    } else {
+      Type::User(UserTypeId { id: 0 })
+    };
     let (name_id, name_info) = self.match_id_or_err()?;
     self.match_or_err(Token::Basic('{'))?;
     let mut members = Vec::new();
@@ -234,6 +241,7 @@ impl<'src> Parser<'src> {
     Ok(self.ast.add_statement(Stmt::Struct {
       name: name_id,
       name_info,
+      type_id,
       members,
     }))
   }

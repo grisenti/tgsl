@@ -100,7 +100,7 @@ impl<'src> Parser<'src> {
   fn match_type_name_or_err(&mut self) -> Result<Type, SourceError> {
     if let Token::Id(type_name) = self.lookahead {
       self.advance()?;
-      Ok(Type::from_name(type_name).unwrap_or_else(|| self.env.get_type_or_add(type_name)))
+      Ok(self.env.get_type_or_add(type_name))
     } else {
       Err(error_from_lexer_state(
         &self.lex,
