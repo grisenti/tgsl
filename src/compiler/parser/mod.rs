@@ -85,6 +85,39 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn id_str_or_err(&mut self) -> Result<StrHandle, SourceError> {
+    if let Token::Id(name) = self.lookahead {
+      self.advance()?;
+      Ok(self.ast.add_str(name))
+    } else {
+      Err(error_from_lexer_state(
+        &self.lex,
+        format!("expected identifier, got {}", self.lookahead),
+      ))
+    }
+  }
+
+  fn match_type_name_or_err(&mut self) -> Result<Type, SourceError> {
+    if let Token::Id(type_name) = self.lookahead {
+      self.advance()?;
+      Ok(Type::from_name(type_name).unwrap_or_else(|| self.env.get_type_or_add(type_name)))
+    } else {
+      Err(error_from_lexer_state(
+        &self.lex,
+        format!("expected type name, got {}", self.lookahead),
+      ))
+    }
+  }
+
+  fn parse_type_specifier(&mut self) -> Result<Type, SourceError> {
+    if self.lookahead == Token::Basic(':') {
+      self.advance()?;
+      self.match_type_name_or_err()
+    } else {
+      Ok(Type::Any)
+    }
+  }
+
   fn syncronize_or_errors(&mut self, mut errors: SrcErrVec) -> Result<SrcErrVec, SourceError> {
     let mut stop = false;
     while !stop {

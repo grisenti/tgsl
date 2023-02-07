@@ -98,6 +98,7 @@ impl Interpreter {
         identifier,
         id_info: _,
         expression,
+        ..
       } => {
         self.install_identifier(identifier, expression)?;
         Ok(None)
@@ -139,10 +140,12 @@ impl Interpreter {
         name_info: _,
         parameters,
         body,
-      } => {
-        self.add_function(id, parameters, body)?;
-        Ok(None)
-      }
+        return_type: _,
+      } => self.add_function(
+        id,
+        parameters.iter().cloned().map(|(c, _)| c).collect(),
+        body,
+      ),
       Stmt::Return { expr, src_info: _ } => {
         Ok(Some(EarlyOut::Return(self.interpret_expression(expr)?)))
       }
@@ -155,7 +158,10 @@ impl Interpreter {
           name,
           ExprValue::Func(Rc::new(InterpreterFn {
             arity: members.len() as u32,
-            callable: Box::new(NativeStruct::new(&self.ast, &members)),
+            callable: Box::new(NativeStruct::new(
+              &self.ast,
+              members.iter().cloned().map(|(c, _)| c).collect(),
+            )),
           })),
         );
         Ok(None)

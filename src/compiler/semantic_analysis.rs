@@ -37,6 +37,7 @@ impl SemanticAnalizer {
         identifier,
         id_info: _,
         expression,
+        ..
       } => self.analyze_var_decl(ast, identifier, expression)?,
       Stmt::While {
         info: _,
@@ -68,6 +69,7 @@ impl SemanticAnalizer {
         name_info: _,
         parameters: _,
         body,
+        ..
       } => {
         self.function_depth += 1;
         for s in body {
@@ -98,7 +100,9 @@ impl SemanticAnalizer {
 
   pub fn analyze_expr(&mut self, ast: &AST, expr: ExprHandle) -> SemAnalysisRes {
     match ast.get_expression(expr) {
-      Expr::Closure { parameters, body } => {
+      Expr::Closure {
+        parameters, body, ..
+      } => {
         self.function_depth += 1;
         for s in body {
           self.analyze_stmt(ast, s)?;

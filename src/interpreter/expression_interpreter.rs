@@ -213,7 +213,9 @@ impl Interpreter {
           .borrow_mut()
           .update_value_or_err(id, self.ast.get_source_info(id_info), rhs)
       }
-      Expr::Closure { parameters, body } => self.create_closure(parameters, body),
+      Expr::Closure {
+        parameters, body, ..
+      } => self.create_closure(parameters.iter().cloned().map(|(c, _)| c).collect(), body),
       Expr::FnCall {
         func,
         call_info,

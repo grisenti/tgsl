@@ -165,6 +165,28 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn parse_function_arguments(
+    &mut self,
+    call_start: SourceInfo,
+  ) -> Result<Vec<Identifier>, SourceError> {
+    let mut parameters = Vec::new();
+    loop {
+      let param_id = self.match_id_or_err()?.0;
+      parameters.push(param_id);
+      if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
+        break;
+      }
+    }
+    if parameters.len() > 255 {
+      Err(error_from_source_info(
+        &call_start,
+        "function cannot have more than 255 parameters".to_string(),
+      ))
+    } else {
+      Ok(parameters)
+    }
+  }
+
   fn parse_closure(&mut self) -> ExprRes {
     let call_start = self.lex.prev_token_info();
     self.env.push();
@@ -175,11 +197,13 @@ impl<'src> Parser<'src> {
       Ok(Vec::new())
     };
     self.match_or_err(Token::Basic(')'))?;
+    let return_type = self.parse_function_return_type()?;
     let block = self.parse_block()?;
     if let Stmt::Block(body) = self.ast.get_statement(block) {
       self.env.pop();
       Ok(self.ast.add_expression(Expr::Closure {
         parameters: parameters?,
+        return_type,
         body,
       }))
     } else {

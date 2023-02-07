@@ -10,7 +10,7 @@ pub(super) struct NativeStruct {
 }
 
 impl NativeStruct {
-  pub(super) fn new(ast: &AST, members: &[StrHandle]) -> Self {
+  pub(super) fn new(ast: &AST, members: Vec<StrHandle>) -> Self {
     Self {
       members: Vec::from_iter(members.iter().map(|handle| {
         (

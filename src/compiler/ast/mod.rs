@@ -2,13 +2,14 @@
 mod expression;
 mod handle;
 mod statement;
+mod types;
 
-use core::panic;
 use std::default::Default;
 
 pub use expression::*;
 pub use handle::*;
 pub use statement::*;
+pub use types::*;
 
 use crate::errors::SourceInfo;
 
@@ -17,6 +18,7 @@ pub enum ASTNode {
   Stmt(Stmt),
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Default)]
 pub struct AST {
   strings: String,

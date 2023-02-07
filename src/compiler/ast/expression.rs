@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::compiler::lexer::Token;
 
-use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle, AST};
+use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle, Type, AST};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Operator {
@@ -114,7 +114,8 @@ pub enum Expr {
     value: ExprHandle,
   },
   Closure {
-    parameters: Vec<Identifier>,
+    parameters: Vec<(Identifier, Type)>,
+    return_type: Type,
     body: Vec<StmtHandle>,
   },
   FnCall {

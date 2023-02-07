@@ -14,6 +14,7 @@ pub enum Token<'src> {
   Geq,
   Same,
   Different,
+  ThinArrow,
 
   // keywords
   And,
@@ -260,6 +261,7 @@ impl<'src> Lexer<'src> {
       '>' => Ok(self.match_wide_or_single_operator(&[('=', Token::Geq)])),
       '=' => Ok(self.match_wide_or_single_operator(&[('=', Token::Same)])),
       '!' => Ok(self.match_wide_or_single_operator(&[('=', Token::Different)])),
+      '-' => Ok(self.match_wide_or_single_operator(&[('>', Token::ThinArrow)])),
       '"' => self.process_string(),
       c if is_first_id_charachter(c) => Ok(self.process_identifier()),
       c if c.is_ascii_digit() => Ok(self.process_number()),

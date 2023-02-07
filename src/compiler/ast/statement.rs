@@ -1,4 +1,4 @@
-use super::{ExprHandle, Identifier, SourceInfoHandle, StmtHandle, StrHandle};
+use super::{types::Type, ExprHandle, Identifier, SourceInfoHandle, StmtHandle, StrHandle};
 
 #[derive(Debug, Clone)]
 pub struct Method {
@@ -12,6 +12,7 @@ pub enum Stmt {
   VarDecl {
     identifier: Identifier,
     id_info: SourceInfoHandle,
+    var_type: Type,
     expression: Option<ExprHandle>,
   },
   Expr(ExprHandle),
@@ -31,7 +32,8 @@ pub enum Stmt {
   Function {
     id: Identifier,
     name_info: SourceInfoHandle,
-    parameters: Vec<Identifier>,
+    return_type: Type,
+    parameters: Vec<(Identifier, Type)>,
     body: Vec<StmtHandle>,
   },
   Break(SourceInfoHandle),
@@ -42,6 +44,6 @@ pub enum Stmt {
   Struct {
     name: Identifier,
     name_info: SourceInfoHandle,
-    members: Vec<StrHandle>,
+    members: Vec<(StrHandle, Type)>,
   },
 }

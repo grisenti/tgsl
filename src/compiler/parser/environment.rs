@@ -28,6 +28,10 @@ impl Environment {
       .unwrap_or_else(|| self.declare_name(name))
   }
 
+  pub fn get_type_or_add(&mut self, name: &str) -> Type {
+    Type::User(UserTypeId { id: 1 })
+  }
+
   pub fn pop(&mut self) {
     self.scopes.pop();
   }
