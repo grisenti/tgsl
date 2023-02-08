@@ -148,17 +148,15 @@ impl Interpreter {
       Stmt::Struct {
         name,
         name_info: _,
-        members,
+        member_names: members,
         type_id: _,
+        ..
       } => {
         self.env.borrow_mut().set(
           name,
           ExprValue::Func(Rc::new(InterpreterFn {
             arity: members.len() as u32,
-            callable: Box::new(NativeStruct::new(
-              &self.ast,
-              members.iter().cloned().map(|(c, _)| c).collect(),
-            )),
+            callable: Box::new(NativeStruct::new(&self.ast, members)),
           })),
         );
         Ok(None)

@@ -47,6 +47,7 @@ pub enum Stmt {
     name: Identifier,
     type_id: StructId,
     name_info: SourceInfoHandle,
-    members: Vec<(StrHandle, Type)>,
+    member_names: Vec<StrHandle>,
+    member_types: Vec<Type>,
   },
 }

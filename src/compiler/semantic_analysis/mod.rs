@@ -1,3 +1,4 @@
+use core::panic;
 use std::collections::{hash_map::Entry, HashMap};
 
 use super::{ast::*, error_from_source_info};
@@ -26,6 +27,19 @@ pub struct SemanticAnalizer {
 impl SemanticAnalizer {
   fn emit_error(&mut self, err: SourceError) {
     self.errors.push(err);
+  }
+
+  fn get_struct_members(&mut self, id: StructId, ast: &AST) -> (Vec<StrHandle>, Vec<Type>) {
+    if let Stmt::Struct {
+      member_names,
+      member_types,
+      ..
+    } = ast.get_statement(self.structs.get(&id).unwrap().clone())
+    {
+      (member_names, member_types)
+    } else {
+      panic!();
+    }
   }
 
   pub fn set_type(&mut self, id: Identifier, value: Type) {
@@ -100,7 +114,8 @@ impl SemanticAnalizer {
           parameters.len(),
           args.len()
         ),
-      ))
+      ));
+      return Type::Error;
     }
     for (arg_num, ((param_type, param_id), arg)) in
       fn_type.into_iter().zip(parameters).zip(args).enumerate()
@@ -176,6 +191,10 @@ impl SemanticAnalizer {
         self.loop_depth += 1;
         self.analyze_stmt(ast, loop_body)?;
         self.loop_depth -= 1;
+      }
+      Stmt::Struct { type_id, name, .. } => {
+        self.structs.insert(type_id, stmt);
+        self.type_map.insert(name, Type::Struct(type_id));
       }
       Stmt::IfBranch {
         if_info,
@@ -270,6 +289,33 @@ impl SemanticAnalizer {
               panic!();
             }
           }
+          Type::Struct(id) => {
+            /*
+            let struct_handle = self.structs.get(&id).unwrap();
+            if let Stmt::Struct {
+              name,
+              type_id,
+              name_info,
+              member_names,
+              member_types,
+            } = ast.get_statement(struct_handle.clone())
+            {
+              if member_types.len() != {}
+              for (argument_type, member_type) in args.iter().zip(member_types) {
+                if *argument_type != member_type {
+                  self.errors.push(error_from_source_info(
+                    &ast.get_source_info(name_info),
+                    "error".to_string(),
+                  ))
+                }
+              }
+              Type::Struct(id)
+            } else {
+              panic!()
+            }
+            */
+            Type::Struct(id)
+          }
           _ => {
             self.emit_error(error_from_source_info(
               &ast.get_source_info(call_info),
@@ -280,6 +326,36 @@ impl SemanticAnalizer {
         };
         self.function_depth -= 1;
         ret
+      }
+      Expr::Binary {
+        left,
+        operator,
+        right,
+      } => self.analyze_expr(ast, left),
+      Expr::Unary { operator, right } => self.analyze_expr(ast, right),
+      Expr::Dot {
+        lhs,
+        name,
+        identifier,
+        name_info,
+      } => {
+        let left = self.analyze_expr(ast, lhs);
+        let name = ast.get_str(name);
+        if let Type::Struct(id) = left {
+          let (names, types) = self.get_struct_members(id, ast);
+          if let Some((_, member_type)) = names
+            .iter()
+            .zip(types)
+            .map(|(handle, t)| (ast.get_str(handle.clone()), t))
+            .find(|(s, _)| *s == name)
+          {
+            member_type
+          } else {
+            panic!()
+          }
+        } else {
+          panic!();
+        }
       }
       _ => Type::Undefined,
     }

@@ -223,23 +223,32 @@ impl<'src> Parser<'src> {
   fn parse_struct_decl(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::Struct);
     self.advance()?;
+    let name_info = self.lex.prev_token_info();
     let struct_name = self.id_str_or_err()?;
-    let type_id = self.env.get_struct_id_or_add(self.ast.get_str(struct_name));
-    let (name_id, name_info) = self.match_id_or_err()?;
+    let type_id = self
+      .env
+      .get_struct_id_or_add(self.ast.get_str(struct_name.clone()));
+    let name_id = self
+      .env
+      .declare_name_or_err(self.ast.get_str(struct_name.clone()), name_info.clone())?;
     self.match_or_err(Token::Basic('{'))?;
-    let mut members = Vec::new();
+    let mut member_names = Vec::new();
+    let mut member_types = Vec::new();
     while self.lookahead != Token::Basic('}') {
-      let member = self.id_str_or_err()?;
+      let name = self.id_str_or_err()?;
       let member_type = self.parse_type_specifier()?;
-      members.push((member, member_type));
+      member_names.push(name);
+      member_types.push(member_type);
       self.match_or_err(Token::Basic(','))?;
     }
     self.match_or_err(Token::Basic('}'))?;
+    let name_info = self.ast.add_source_info(name_info);
     Ok(self.ast.add_statement(Stmt::Struct {
       name: name_id,
       name_info,
       type_id,
-      members,
+      member_names,
+      member_types,
     }))
   }
 
