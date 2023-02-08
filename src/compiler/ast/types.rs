@@ -1,22 +1,24 @@
 use std::any::Any;
 
-use super::Literal;
+use super::{ExprHandle, Literal, StmtHandle};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct UserTypeId {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StructId {
   pub id: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
   Str,
   Num,
   Bool,
-  User(UserTypeId),
-  Function(Vec<Type>),
-
+  Struct(StructId),
+  NamedFunction(StmtHandle),
+  AnonymusFunction(ExprHandle),
+  //FunctionType(Vec<Type>)
   Any,
   Undefined,
+  Error,
 }
 
 impl Type {

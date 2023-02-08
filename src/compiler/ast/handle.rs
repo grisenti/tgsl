@@ -19,11 +19,23 @@ impl<T> ASTHandle<T> {
   }
 }
 
+impl<T> PartialEq for ASTHandle<T> {
+  fn eq(&self, other: &Self) -> bool {
+    self.index == other.index
+  }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ASTSliceHandle<T> {
   pub(super) start: u32,
   pub(super) end: u32,
   __: PhantomData<T>,
+}
+
+impl<T> PartialEq for ASTSliceHandle<T> {
+  fn eq(&self, other: &Self) -> bool {
+    self.start == other.start && self.end == other.end
+  }
 }
 
 impl<T> ASTSliceHandle<T> {

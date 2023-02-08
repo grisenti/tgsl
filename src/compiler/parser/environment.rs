@@ -2,14 +2,14 @@ use super::*;
 use std::collections::HashMap;
 
 pub type Scope = HashMap<String, Identifier>;
-type TypeMap = HashMap<String, Type>;
+type StructMap = HashMap<String, StructId>;
 
 pub struct Environment {
   global: Scope,
   scopes: Vec<Scope>,
   last_id: u32,
   last_user_type_id: u32,
-  user_types: TypeMap,
+  structs: StructMap,
 }
 
 impl Environment {
@@ -20,11 +20,11 @@ impl Environment {
     id
   }
 
-  fn declare_user_type(&mut self, name: &str) -> Type {
-    let id = Type::User(UserTypeId {
+  fn declare_user_type(&mut self, name: &str) -> StructId {
+    let id = StructId {
       id: self.last_user_type_id,
-    });
-    self.user_types.insert(name.to_string(), id.clone());
+    };
+    self.structs.insert(name.to_string(), id);
     self.last_user_type_id += 1;
     id
   }
@@ -59,9 +59,9 @@ impl Environment {
     }
   }
 
-  pub fn get_type_or_add(&mut self, name: &str) -> Type {
+  pub fn get_struct_id_or_add(&mut self, name: &str) -> StructId {
     self
-      .user_types
+      .structs
       .get(name)
       .cloned()
       .unwrap_or_else(|| self.declare_user_type(name))
@@ -83,11 +83,7 @@ impl Environment {
     Self {
       global: Scope::new(),
       scopes: Vec::new(),
-      user_types: TypeMap::from([
-        ("str".to_string(), Type::Str),
-        ("num".to_string(), Type::Num),
-        ("bool".to_string(), Type::Bool),
-      ]),
+      structs: StructMap::new(),
       last_id: 0,
       last_user_type_id: 0,
     }

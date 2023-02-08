@@ -201,12 +201,12 @@ impl<'src> Parser<'src> {
     let block = self.parse_block()?;
     if let Stmt::Block(body) = self.ast.get_statement(block) {
       self.env.pop();
-      let (parameters, mut parameter_types) = parameters?;
-      parameter_types.push(return_type);
+      let (parameters, mut fn_type) = parameters?;
+      fn_type.push(return_type);
       Ok(self.ast.add_expression(Expr::Closure {
         parameters,
-        fn_type: Type::Function(parameter_types),
         body,
+        fn_type,
       }))
     } else {
       panic!()

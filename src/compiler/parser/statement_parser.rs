@@ -206,12 +206,12 @@ impl<'src> Parser<'src> {
     let block = self.parse_block()?;
     if let Stmt::Block(body) = self.ast.get_statement(block) {
       self.env.pop();
-      let (parameters, mut parameter_types) = parameters?;
-      parameter_types.push(return_type);
+      let (parameters, mut fn_type) = parameters?;
+      fn_type.push(return_type);
       Ok(self.ast.add_statement(Stmt::Function {
         id: name_id,
         name_info,
-        fn_type: Type::Function(parameter_types),
+        fn_type,
         parameters,
         body,
       }))
@@ -223,11 +223,8 @@ impl<'src> Parser<'src> {
   fn parse_struct_decl(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::Struct);
     self.advance()?;
-    let type_id = if let Token::Id(name) = self.lookahead {
-      self.env.get_type_or_add(name)
-    } else {
-      Type::User(UserTypeId { id: 0 })
-    };
+    let struct_name = self.id_str_or_err()?;
+    let type_id = self.env.get_struct_id_or_add(self.ast.get_str(struct_name));
     let (name_id, name_info) = self.match_id_or_err()?;
     self.match_or_err(Token::Basic('{'))?;
     let mut members = Vec::new();

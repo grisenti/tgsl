@@ -1,5 +1,5 @@
 use super::{
-  types::Type, ExprHandle, Identifier, SourceInfoHandle, StmtHandle, StrHandle, UserTypeId,
+  types::Type, ExprHandle, Identifier, SourceInfoHandle, StmtHandle, StrHandle, StructId,
 };
 
 #[derive(Debug, Clone)]
@@ -35,7 +35,7 @@ pub enum Stmt {
     id: Identifier,
     name_info: SourceInfoHandle,
     parameters: Vec<Identifier>,
-    fn_type: Type,
+    fn_type: Vec<Type>,
     body: Vec<StmtHandle>,
   },
   Break(SourceInfoHandle),
@@ -45,7 +45,7 @@ pub enum Stmt {
   },
   Struct {
     name: Identifier,
-    type_id: Type,
+    type_id: StructId,
     name_info: SourceInfoHandle,
     members: Vec<(StrHandle, Type)>,
   },

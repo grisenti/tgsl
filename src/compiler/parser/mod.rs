@@ -103,7 +103,12 @@ impl<'src> Parser<'src> {
   fn match_type_name_or_err(&mut self) -> Result<Type, SourceError> {
     if let Token::Id(type_name) = self.lookahead {
       self.advance()?;
-      Ok(self.env.get_type_or_add(type_name))
+      match type_name {
+        "str" => Ok(Type::Str),
+        "num" => Ok(Type::Num),
+        "bool" => Ok(Type::Bool),
+        other => Ok(Type::Struct(self.env.get_struct_id_or_add(other))),
+      }
     } else {
       Err(error_from_lexer_state(
         &self.lex,

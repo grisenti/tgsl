@@ -115,7 +115,7 @@ pub enum Expr {
   },
   Closure {
     parameters: Vec<Identifier>,
-    fn_type: Type,
+    fn_type: Vec<Type>,
     body: Vec<StmtHandle>,
   },
   FnCall {
