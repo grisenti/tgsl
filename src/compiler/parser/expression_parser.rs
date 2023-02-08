@@ -138,7 +138,7 @@ impl<'src> Parser<'src> {
     let lhs = self.parse_binary_operation(0)?;
     if let Some((_, eq_src_info)) = self.match_next(Token::Basic('='))? {
       let rhs = self.parse_binary_operation(0)?;
-      match self.ast.get_expression(lhs) {
+      match lhs.get(&self.ast) {
         Expr::Variable { id, id_info } => Ok(self.ast.add_expression(Expr::Assignment {
           id,
           id_info,
@@ -156,7 +156,7 @@ impl<'src> Parser<'src> {
           value: rhs,
         })),
         _ => Err(error_from_source_info(
-          &self.ast.get_source_info(eq_src_info),
+          &eq_src_info.get(&self.ast),
           "left hand side of assignment is not a valid target".to_string(),
         )),
       }
@@ -199,7 +199,7 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic(')'))?;
     let return_type = self.parse_function_return_type()?;
     let block = self.parse_block()?;
-    if let Stmt::Block(body) = self.ast.get_statement(block) {
+    if let Stmt::Block(body) = block.get(&self.ast) {
       self.env.pop();
       let (parameters, mut fn_type) = parameters?;
       fn_type.push(return_type);
@@ -242,7 +242,7 @@ mod test {
     let mut parser = create_parser("1");
     let literal = parser.parse_expression().unwrap();
     assert!(matches!(
-      parser.ast.get_expression(literal),
+      literal.get(&parser.ast),
       Expr::Literal {
         literal: Literal::Number(n),
         info: _
@@ -255,11 +255,11 @@ mod test {
     let mut parser = create_parser("\"str\"");
     let literal = parser.parse_expression().unwrap();
     assert!(matches!(
-      parser.ast.get_expression(literal),
+      literal.get(&parser.ast),
       Expr::Literal {
         literal: Literal::String(s),
         info: _
-      } if parser.ast.get_str(s.clone()) == "str"
+      } if s.get(&parser.ast) == "str"
     ))
   }
 
@@ -268,7 +268,7 @@ mod test {
     let mut parser = create_parser("1 + 1");
     let binexp = parser.parse_expression().unwrap();
     assert!(
-      matches!(parser.ast.get_expression(binexp), Expr::Binary{left: _, operator, right: _} if operator.op == Operator::Basic('+'))
+      matches!(binexp.get(&parser.ast), Expr::Binary{left: _, operator, right: _} if operator.op == Operator::Basic('+'))
     );
   }
 
@@ -285,7 +285,7 @@ mod test {
     ];
     let mut binexp = parser.parse_expression().unwrap();
     for op in operators {
-      match parser.ast.get_expression(binexp) {
+      match binexp.get(&parser.ast) {
         Expr::Binary {
           left,
           operator,
@@ -310,7 +310,7 @@ mod test {
     let mut parser = create_parser("id = 2");
     let assignment = parser.parse_expression().unwrap();
     assert!(matches!(
-      parser.ast.get_expression(assignment),
+      assignment.get(&parser.ast),
       Expr::Assignment {
         id: _,
         id_info: _,
@@ -323,7 +323,7 @@ mod test {
   fn parse_identifier() {
     let mut parser = create_parser("identifier");
     let variable = parser.parse_expression().unwrap();
-    match parser.ast.get_expression(variable) {
+    match variable.get(&parser.ast) {
       Expr::Variable { id, id_info: _ } => {
         assert_eq!(id.0, 0)
       }

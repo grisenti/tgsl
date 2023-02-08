@@ -40,7 +40,7 @@ impl Interpreter {
   fn handle_literal_expression(&self, literal: Literal) -> ExprResult {
     match literal {
       Literal::Number(num) => Ok(ExprValue::Num(num)),
-      Literal::String(s) => Ok(ExprValue::Str(self.ast.get_str(s).to_string())),
+      Literal::String(s) => Ok(ExprValue::Str(s.get(&self.ast).to_string())),
       Literal::True => Ok(ExprValue::Boolean(true)),
       Literal::False => Ok(ExprValue::Boolean(false)),
       Literal::Null => Ok(ExprValue::Null),
@@ -73,7 +73,7 @@ impl Interpreter {
       ExprValue::PartialCall { func, args } => (args, func),
       _ => {
         return Err(Self::runtime_error(
-          &self.ast.get_source_info(call_info),
+          &call_info.get(&self.ast),
           format!("cannot call {func_val:?}, only functions"),
         ))
       }
@@ -85,7 +85,7 @@ impl Interpreter {
       func.callable.call(self, argument_values)
     } else {
       Err(Self::runtime_error(
-        &self.ast.get_source_info(call_info),
+        &call_info.get(&self.ast),
         format!(
           "incorrect number of function arguments (arguments: {} - arity: {})",
           argument_values.len(),
@@ -109,10 +109,10 @@ impl Interpreter {
       })
     } else {
       Err(Self::runtime_error(
-        &self.ast.get_source_info(name_info),
+        &name_info.get(&self.ast),
         format!(
           "{} is neither an object member nor a viable function",
-          self.ast.get_str(name)
+          name.get(&self.ast)
         ),
       ))
     }
@@ -127,10 +127,7 @@ impl Interpreter {
   ) -> ExprResult {
     let lhs = self.interpret_expression(object)?;
     if let ExprValue::ClassInstance(instance) = lhs {
-      if let Some(val) = instance.get(
-        self.ast.get_str(name.clone()),
-        &self.ast.get_source_info(name_info),
-      ) {
+      if let Some(val) = instance.get(name.get(&self.ast), &name_info.get(&self.ast)) {
         Ok(val)
       } else {
         self.dot_call(ExprValue::ClassInstance(instance), name, id, name_info)
@@ -148,7 +145,7 @@ impl Interpreter {
     match self.interpret_expression(expr)? {
       ExprValue::ClassInstance(instance) => Ok(instance),
       other => Err(Self::runtime_error(
-        &self.ast.get_source_info(info),
+        &info.get(&self.ast),
         format!("cannot access member of {other:?}"),
       )),
     }
@@ -163,11 +160,7 @@ impl Interpreter {
   ) -> ExprResult {
     let mut instance = self.class_instance_or_err(object, name_info)?;
     let value = self.interpret_expression(value)?;
-    instance.set(
-      self.ast.get_str(name),
-      &self.ast.get_source_info(name_info),
-      value,
-    )
+    instance.set(name.get(&self.ast), &name_info.get(&self.ast), value)
   }
 
   fn create_closure(&mut self, parameters: Vec<Identifier>, body: Vec<StmtHandle>) -> ExprResult {
@@ -185,33 +178,25 @@ impl Interpreter {
   }
 
   pub(super) fn interpret_expression(&mut self, exp: ExprHandle) -> ExprResult {
-    match self.ast.get_expression(exp) {
+    match exp.get(&self.ast) {
       Expr::Literal { literal, info: _ } => self.handle_literal_expression(literal),
       Expr::Binary {
         left,
         operator,
         right,
-      } => self.handle_binary_expression(
-        left,
-        operator.op,
-        self.ast.get_source_info(operator.src_info),
-        right,
-      ),
-      Expr::Unary { operator, right } => self.handle_unary_expression(
-        operator.op,
-        self.ast.get_source_info(operator.src_info),
-        right,
-      ),
-      Expr::Variable { id, id_info } => self
-        .env
-        .borrow()
-        .get_or_err(id, self.ast.get_source_info(id_info)),
+      } => {
+        self.handle_binary_expression(left, operator.op, operator.src_info.get(&self.ast), right)
+      }
+      Expr::Unary { operator, right } => {
+        self.handle_unary_expression(operator.op, operator.src_info.get(&self.ast), right)
+      }
+      Expr::Variable { id, id_info } => self.env.borrow().get_or_err(id, id_info.get(&self.ast)),
       Expr::Assignment { id, id_info, value } => {
         let rhs = self.interpret_expression(value)?;
         self
           .env
           .borrow_mut()
-          .update_value_or_err(id, self.ast.get_source_info(id_info), rhs)
+          .update_value_or_err(id, id_info.get(&self.ast), rhs)
       }
       Expr::Closure {
         parameters, body, ..

@@ -204,7 +204,7 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic(')'))?;
     let return_type = self.parse_function_return_type()?;
     let block = self.parse_block()?;
-    if let Stmt::Block(body) = self.ast.get_statement(block) {
+    if let Stmt::Block(body) = block.get(&self.ast) {
       self.env.pop();
       let (parameters, mut fn_type) = parameters?;
       fn_type.push(return_type);
@@ -225,12 +225,10 @@ impl<'src> Parser<'src> {
     self.advance()?;
     let name_info = self.lex.prev_token_info();
     let struct_name = self.id_str_or_err()?;
-    let type_id = self
-      .env
-      .get_struct_id_or_add(self.ast.get_str(struct_name.clone()));
+    let type_id = self.env.get_struct_id_or_add(struct_name.get(&self.ast));
     let name_id = self
       .env
-      .declare_name_or_err(self.ast.get_str(struct_name.clone()), name_info.clone())?;
+      .declare_name_or_err(struct_name.get(&self.ast), name_info)?;
     self.match_or_err(Token::Basic('{'))?;
     let mut member_names = Vec::new();
     let mut member_types = Vec::new();

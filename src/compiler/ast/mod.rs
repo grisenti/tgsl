@@ -32,24 +32,6 @@ impl AST {
     Self::default()
   }
 
-  pub fn get_statement(&self, handle: StmtHandle) -> Stmt {
-    assert!(handle.index < self.nodes.len() as u32);
-    if let ASTNode::Stmt(s) = &self.nodes[handle.index as usize] {
-      s.clone()
-    } else {
-      panic!("statement handle refers to a node thats not a statement");
-    }
-  }
-
-  pub fn get_expression(&self, handle: ExprHandle) -> Expr {
-    assert!(handle.index < self.nodes.len() as u32);
-    if let ASTNode::Expr(s) = &self.nodes[handle.index as usize] {
-      s.clone()
-    } else {
-      panic!("expression handle refers to a node thats not an expression");
-    }
-  }
-
   pub fn add_expression(&mut self, expr: Expr) -> ExprHandle {
     self.nodes.push(ASTNode::Expr(expr));
     ExprHandle::new((self.nodes.len() - 1) as u32)
@@ -58,10 +40,6 @@ impl AST {
   pub fn add_statement(&mut self, stmt: Stmt) -> StmtHandle {
     self.nodes.push(ASTNode::Stmt(stmt));
     StmtHandle::new((self.nodes.len() - 1) as u32)
-  }
-
-  pub fn get_str(&self, handle: StrHandle) -> &str {
-    &self.strings[handle.start as usize..handle.end as usize]
   }
 
   pub fn add_str(&mut self, s: &str) -> StrHandle {
@@ -82,10 +60,5 @@ impl AST {
 
   pub fn get_program(&self) -> &Vec<StmtHandle> {
     &self.program
-  }
-
-  pub fn get_source_info(&self, handle: SourceInfoHandle) -> SourceInfo {
-    assert!(handle.index < self.source_ptrs.len() as u32);
-    self.source_ptrs[handle.index as usize]
   }
 }

@@ -1,54 +1,66 @@
-use std::marker::PhantomData;
+use crate::{compiler::ast::ASTNode, errors::SourceInfo};
 
-use crate::errors::SourceInfo;
+use super::{Expr, Stmt, AST};
 
-use super::{Expr, Stmt};
+macro_rules! generate_ast_handle {
+  ($name:ident) => {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct $name {
+      pub(super) index: u32,
+    }
 
-#[derive(Debug, Clone, Copy)]
-pub struct ASTHandle<T> {
-  pub(super) index: u32,
-  __: PhantomData<T>,
+    impl $name {
+      pub(super) fn new(index: u32) -> Self {
+        Self { index }
+      }
+    }
+  };
 }
 
-impl<T> ASTHandle<T> {
-  pub(super) fn new(index: u32) -> Self {
-    Self {
-      index,
-      __: PhantomData {},
+generate_ast_handle!(ExprHandle);
+impl ExprHandle {
+  pub fn get(&self, ast: &AST) -> Expr {
+    assert!(self.index < ast.nodes.len() as u32);
+    if let ASTNode::Expr(e) = &ast.nodes[self.index as usize] {
+      e.clone()
+    } else {
+      panic!("expression handle refers to a node thats not an expression");
     }
   }
 }
 
-impl<T> PartialEq for ASTHandle<T> {
-  fn eq(&self, other: &Self) -> bool {
-    self.index == other.index
+generate_ast_handle!(StmtHandle);
+impl StmtHandle {
+  pub fn get(&self, ast: &AST) -> Stmt {
+    assert!(self.index < ast.nodes.len() as u32);
+    if let ASTNode::Stmt(s) = &ast.nodes[self.index as usize] {
+      s.clone()
+    } else {
+      panic!("statement handle refers to a node thats not a statement");
+    }
   }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct ASTSliceHandle<T> {
+generate_ast_handle!(SourceInfoHandle);
+impl SourceInfoHandle {
+  pub fn get(&self, ast: &AST) -> SourceInfo {
+    assert!(self.index < ast.source_ptrs.len() as u32);
+    ast.source_ptrs[self.index as usize]
+  }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StrHandle {
   pub(super) start: u32,
   pub(super) end: u32,
-  __: PhantomData<T>,
 }
 
-impl<T> PartialEq for ASTSliceHandle<T> {
-  fn eq(&self, other: &Self) -> bool {
-    self.start == other.start && self.end == other.end
-  }
-}
-
-impl<T> ASTSliceHandle<T> {
+impl StrHandle {
   pub(super) fn new(start: u32, end: u32) -> Self {
-    Self {
-      start,
-      end,
-      __: PhantomData {},
-    }
+    Self { start, end }
+  }
+
+  pub fn get<'ast>(&self, ast: &'ast AST) -> &'ast str {
+    &ast.strings[self.start as usize..self.end as usize]
   }
 }
-
-pub type ExprHandle = ASTHandle<Expr>;
-pub type StmtHandle = ASTHandle<Stmt>;
-pub type SourceInfoHandle = ASTHandle<SourceInfo>;
-pub type StrHandle = ASTSliceHandle<String>;

@@ -56,7 +56,7 @@ pub enum Literal {
 impl Literal {
   pub fn display(&self, ast: &AST) -> String {
     match self {
-      Self::String(s) => format!("\"{}\"", ast.get_str(s.clone())),
+      Self::String(s) => format!("\"{}\"", s.get(ast)),
       Self::Number(num) => format!("{num}"),
       _ => format!("{self:?}").to_lowercase(),
     }

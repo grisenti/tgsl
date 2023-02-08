@@ -9,7 +9,7 @@ impl Interpreter {
     match self.interpret_expression(formula)? {
       ExprValue::Boolean(val) => Ok(val),
       val => Err(Self::runtime_error(
-        &self.ast.get_source_info(info),
+        &info.get(&self.ast),
         format!("expected boolean, got {val:?}"),
       )),
     }
@@ -93,7 +93,7 @@ impl Interpreter {
   }
 
   pub(super) fn interpret_statement(&mut self, stmt: StmtHandle) -> StmtRes {
-    match self.ast.get_statement(stmt) {
+    match stmt.get(&self.ast) {
       Stmt::VarDecl {
         identifier,
         id_info: _,

@@ -4,16 +4,6 @@ use std::collections::{hash_map::Entry, HashMap};
 use super::{ast::*, error_from_source_info};
 use crate::errors::{SourceError, SourceInfo};
 
-pub type StmtAnalisysRes = Result<Option<Type>, SourceError>;
-type ExprAnalisysRes = Result<Type, SourceError>;
-
-#[derive(Clone)]
-
-struct Function {
-  fn_type: Vec<Type>,
-  body: ExprHandle,
-}
-
 type TypeMap = HashMap<Identifier, Type>;
 
 pub struct SemanticAnalizer {
@@ -34,7 +24,7 @@ impl SemanticAnalizer {
       member_names,
       member_types,
       ..
-    } = ast.get_statement(self.structs.get(&id).unwrap().clone())
+    } = self.structs.get(&id).unwrap().get(ast)
     {
       (member_names, member_types)
     } else {
@@ -76,12 +66,10 @@ impl SemanticAnalizer {
     identifier: Identifier,
     expression: Option<ExprHandle>,
   ) {
-    if let Some(Expr::Variable { id, id_info }) =
-      expression.map(|handle| ast.get_expression(handle))
-    {
+    if let Some(Expr::Variable { id, id_info }) = expression.map(|handle| handle.get(ast)) {
       if id == identifier {
         self.emit_error(error_from_source_info(
-          &ast.get_source_info(id_info),
+          &id_info.get(ast),
           "cannot initialize identifier with itself".to_string(),
         ));
       }
@@ -108,7 +96,7 @@ impl SemanticAnalizer {
   ) -> Type {
     if args.len() != parameters.len() {
       self.emit_error(error_from_source_info(
-        &ast.get_source_info(call_info),
+        &call_info.get(ast),
         format!(
           "incorrect number of arguments for function call (required {}, provided {})",
           parameters.len(),
@@ -122,7 +110,7 @@ impl SemanticAnalizer {
     {
       if arg != param_type && param_type != Type::Any {
         self.emit_error(error_from_source_info(
-          &ast.get_source_info(call_info),
+          &call_info.get(ast),
           format!(
             "mismatched types. Argument {} should be of type {param_type:?}",
             arg_num + 1
@@ -140,7 +128,7 @@ impl SemanticAnalizer {
           return_type = ret;
         } else {
           self.emit_error(error_from_source_info(
-            &ast.get_source_info(call_info),
+            &call_info.get(ast),
             "inconsistent return types".to_string(),
           ))
         }
@@ -162,7 +150,7 @@ impl SemanticAnalizer {
       let rhs = self.analyze_expr(ast, expr);
       if declared_type != rhs && declared_type != Type::Any {
         self.emit_error(error_from_source_info(
-          &ast.get_source_info(id_info),
+          &id_info.get(ast),
           format!("cannot assign expression of type {rhs:?} to type {declared_type:?}"),
         ));
       }
@@ -170,11 +158,11 @@ impl SemanticAnalizer {
     } else {
       declared_type
     };
-    self.set_type_or_err(identifier, var_type, ast.get_source_info(id_info));
+    self.set_type_or_err(identifier, var_type, id_info.get(ast));
   }
 
   pub fn analyze_stmt(&mut self, ast: &AST, stmt: StmtHandle) -> Option<Type> {
-    match ast.get_statement(stmt.clone()) {
+    match stmt.clone().get(ast) {
       Stmt::VarDecl {
         identifier,
         id_info,
@@ -187,7 +175,7 @@ impl SemanticAnalizer {
         loop_body,
       } => {
         let condition_type = self.analyze_expr(ast, condition);
-        self.check_valid_condition_type(ast.get_source_info(info), condition_type);
+        self.check_valid_condition_type(info.get(ast), condition_type);
         self.loop_depth += 1;
         self.analyze_stmt(ast, loop_body)?;
         self.loop_depth -= 1;
@@ -203,7 +191,7 @@ impl SemanticAnalizer {
         else_branch,
       } => {
         let condition_type = self.analyze_expr(ast, condition);
-        self.check_valid_condition_type(ast.get_source_info(if_info), condition_type);
+        self.check_valid_condition_type(if_info.get(ast), condition_type);
         self.analyze_stmt(ast, true_branch);
         if let Some(stmt) = else_branch {
           self.analyze_stmt(ast, stmt)?;
@@ -220,7 +208,7 @@ impl SemanticAnalizer {
       Stmt::Break(info) => {
         if self.loop_depth == 0 {
           self.emit_error(error_from_source_info(
-            &ast.get_source_info(info),
+            &info.get(ast),
             "cannot have break outside of loop body".to_string(),
           ));
         }
@@ -228,7 +216,7 @@ impl SemanticAnalizer {
       Stmt::Return { expr, src_info } => {
         if self.function_depth == 0 {
           self.emit_error(error_from_source_info(
-            &ast.get_source_info(src_info),
+            &src_info.get(ast),
             "cannot have return outside of function body".to_string(),
           ))
         }
@@ -243,11 +231,11 @@ impl SemanticAnalizer {
   }
 
   pub fn analyze_expr(&mut self, ast: &AST, expr: ExprHandle) -> Type {
-    match ast.get_expression(expr.clone()) {
+    match expr.clone().get(ast) {
       Expr::Closure { .. } => Type::AnonymusFunction(expr),
       Expr::Assignment { id, id_info, value } => {
         let value_type = self.analyze_expr(ast, value);
-        self.set_type_or_err(id, value_type.clone(), ast.get_source_info(id_info));
+        self.set_type_or_err(id, value_type.clone(), id_info.get(ast));
         value_type
       }
       Expr::Variable { id, .. } => self.get_type(id),
@@ -270,7 +258,7 @@ impl SemanticAnalizer {
               body,
               parameters,
               ..
-            } = ast.get_statement(stmt)
+            } = stmt.get(ast)
             {
               self.call_function(ast, fn_type, body, args, parameters, call_info)
             } else {
@@ -282,7 +270,7 @@ impl SemanticAnalizer {
               body,
               fn_type,
               parameters,
-            } = ast.get_expression(expr)
+            } = expr.get(ast)
             {
               self.call_function(ast, fn_type, body, args, parameters, call_info)
             } else {
@@ -304,7 +292,7 @@ impl SemanticAnalizer {
               for (argument_type, member_type) in args.iter().zip(member_types) {
                 if *argument_type != member_type {
                   self.errors.push(error_from_source_info(
-                    &ast.get_source_info(name_info),
+                    &name_info.get(ast),
                     "error".to_string(),
                   ))
                 }
@@ -318,7 +306,7 @@ impl SemanticAnalizer {
           }
           _ => {
             self.emit_error(error_from_source_info(
-              &ast.get_source_info(call_info),
+              &call_info.get(ast),
               format!("cannot call type {func:?}"),
             ));
             Type::Undefined
@@ -340,13 +328,13 @@ impl SemanticAnalizer {
         name_info,
       } => {
         let left = self.analyze_expr(ast, lhs);
-        let name = ast.get_str(name);
+        let name = name.get(ast);
         if let Type::Struct(id) = left {
           let (names, types) = self.get_struct_members(id, ast);
           if let Some((_, member_type)) = names
             .iter()
             .zip(types)
-            .map(|(handle, t)| (ast.get_str(handle.clone()), t))
+            .map(|(handle, t)| (handle.get(ast), t))
             .find(|(s, _)| *s == name)
           {
             member_type

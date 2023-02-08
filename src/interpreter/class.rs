@@ -12,12 +12,11 @@ pub(super) struct NativeStruct {
 impl NativeStruct {
   pub(super) fn new(ast: &AST, members: Vec<StrHandle>) -> Self {
     Self {
-      members: Vec::from_iter(members.iter().map(|handle| {
-        (
-          ast.get_str(handle.clone()).to_string(),
-          ExprValue::Undefined,
-        )
-      })),
+      members: Vec::from_iter(
+        members
+          .iter()
+          .map(|handle| (handle.get(ast).to_string(), ExprValue::Undefined)),
+      ),
     }
   }
 }
