@@ -149,7 +149,6 @@ impl Interpreter {
         name,
         name_info: _,
         member_names: members,
-        type_id: _,
         ..
       } => {
         self.env.borrow_mut().set(

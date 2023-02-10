@@ -1,15 +1,43 @@
 use core::panic;
-use std::collections::{hash_map::Entry, HashMap};
+use std::{
+  collections::{hash_map::Entry, HashMap},
+  hash::Hash,
+};
 
 use super::{ast::*, error_from_source_info};
 use crate::errors::{SourceError, SourceInfo};
 
+#[derive(Clone)]
+struct Function {
+  paramenter_ids: Vec<Identifier>,
+  fn_types: Vec<Type>,
+  body: Vec<StmtHandle>,
+}
+
+#[derive(Clone)]
+struct Struct {
+  member_names: Vec<StrHandle>,
+  member_types: Vec<Type>,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct InstancedFunction {
+  id: Identifier,
+  parameter_types: Vec<Type>,
+}
+
 type TypeMap = HashMap<Identifier, Type>;
+type StructMap = HashMap<Identifier, Struct>;
+type FunctionMap = HashMap<Identifier, Function>;
+// maps instantiated functions to return types
+type InstantiatedFunctions = HashMap<InstancedFunction, Type>;
 
 pub struct SemanticAnalizer {
   loop_depth: u32,
   function_depth: u32,
-  structs: HashMap<StructId, StmtHandle>,
+  structs: StructMap,
+  functions: FunctionMap,
+  instantiated_functions: InstantiatedFunctions,
   type_map: TypeMap,
   errors: Vec<SourceError>,
 }
@@ -19,17 +47,13 @@ impl SemanticAnalizer {
     self.errors.push(err);
   }
 
-  fn get_struct_members(&mut self, id: StructId, ast: &AST) -> (Vec<StrHandle>, Vec<Type>) {
-    if let Stmt::Struct {
-      member_names,
-      member_types,
-      ..
-    } = self.structs.get(&id).unwrap().get(ast)
-    {
-      (member_names, member_types)
-    } else {
-      panic!();
-    }
+  fn get_struct_member(
+    &mut self,
+    struct_id: Identifier,
+    name: StrHandle,
+    ast: &AST,
+  ) -> Option<Type> {
+    todo!()
   }
 
   pub fn set_type(&mut self, id: Identifier, value: Type) {
@@ -88,25 +112,38 @@ impl SemanticAnalizer {
   fn call_function(
     &mut self,
     ast: &AST,
-    fn_type: Vec<Type>,
-    body: Vec<StmtHandle>,
+    id: Identifier,
     args: Vec<Type>,
-    parameters: Vec<Identifier>,
     call_info: SourceInfoHandle,
   ) -> Type {
-    if args.len() != parameters.len() {
+    if let Some(ret_val) = self.instantiated_functions.get(&InstancedFunction {
+      id,
+      parameter_types: args.clone(),
+    }) {
+      return ret_val.clone();
+    }
+    println!("instancing function {id:?}");
+    let Function {
+      paramenter_ids,
+      fn_types,
+      body,
+    } = self.functions.get(&id).cloned().unwrap();
+    if args.len() != paramenter_ids.len() {
       self.emit_error(error_from_source_info(
         &call_info.get(ast),
         format!(
           "incorrect number of arguments for function call (required {}, provided {})",
-          parameters.len(),
+          paramenter_ids.len(),
           args.len()
         ),
       ));
       return Type::Error;
     }
-    for (arg_num, ((param_type, param_id), arg)) in
-      fn_type.into_iter().zip(parameters).zip(args).enumerate()
+    for (arg_num, ((param_type, param_id), arg)) in fn_types
+      .into_iter()
+      .zip(paramenter_ids)
+      .zip(args.clone())
+      .enumerate()
     {
       if arg != param_type && param_type != Type::Any {
         self.emit_error(error_from_source_info(
@@ -123,7 +160,7 @@ impl SemanticAnalizer {
     }
     let mut return_type = Type::Undefined;
     for stmt in body {
-      if let Some(ret) = self.analyze_stmt(ast, stmt) {
+      if let Some(ret) = self.analyze_stmt(ast, stmt.clone()) {
         if return_type == Type::Undefined || return_type == ret {
           return_type = ret;
         } else {
@@ -134,6 +171,13 @@ impl SemanticAnalizer {
         }
       }
     }
+    self.instantiated_functions.insert(
+      InstancedFunction {
+        id,
+        parameter_types: args,
+      },
+      return_type.clone(),
+    );
     return_type
   }
 
@@ -180,9 +224,27 @@ impl SemanticAnalizer {
         self.analyze_stmt(ast, loop_body)?;
         self.loop_depth -= 1;
       }
-      Stmt::Struct { type_id, name, .. } => {
-        self.structs.insert(type_id, stmt);
-        self.type_map.insert(name, Type::Struct(type_id));
+      Stmt::Struct {
+        name,
+        name_info,
+        member_names,
+        member_types,
+      } => {
+        self.structs.insert(
+          name,
+          Struct {
+            member_names: member_names.clone(),
+            member_types: member_types.clone(),
+          },
+        );
+        self.instantiated_functions.insert(
+          InstancedFunction {
+            id: name,
+            parameter_types: member_types,
+          },
+          Type::Struct(name),
+        );
+        self.set_type(name, Type::Function(name))
       }
       Stmt::IfBranch {
         if_info,
@@ -202,8 +264,22 @@ impl SemanticAnalizer {
           self.analyze_stmt(ast, s)?;
         }
       }
-      Stmt::Function { id, .. } => {
-        self.set_type(id, Type::NamedFunction(stmt));
+      Stmt::Function {
+        id,
+        name_info,
+        parameters,
+        fn_type,
+        body,
+      } => {
+        self.functions.insert(
+          id,
+          Function {
+            paramenter_ids: parameters,
+            fn_types: fn_type,
+            body,
+          },
+        );
+        self.set_type(id, Type::Function(id));
       }
       Stmt::Break(info) => {
         if self.loop_depth == 0 {
@@ -251,66 +327,14 @@ impl SemanticAnalizer {
           .iter()
           .map(|arg| self.analyze_expr(ast, arg.clone()))
           .collect();
-        let ret = match func {
-          Type::NamedFunction(stmt) => {
-            if let Stmt::Function {
-              fn_type,
-              body,
-              parameters,
-              ..
-            } = stmt.get(ast)
-            {
-              self.call_function(ast, fn_type, body, args, parameters, call_info)
-            } else {
-              panic!();
-            }
-          }
-          Type::AnonymusFunction(expr) => {
-            if let Expr::Closure {
-              body,
-              fn_type,
-              parameters,
-            } = expr.get(ast)
-            {
-              self.call_function(ast, fn_type, body, args, parameters, call_info)
-            } else {
-              panic!();
-            }
-          }
-          Type::Struct(id) => {
-            /*
-            let struct_handle = self.structs.get(&id).unwrap();
-            if let Stmt::Struct {
-              name,
-              type_id,
-              name_info,
-              member_names,
-              member_types,
-            } = ast.get_statement(struct_handle.clone())
-            {
-              if member_types.len() != {}
-              for (argument_type, member_type) in args.iter().zip(member_types) {
-                if *argument_type != member_type {
-                  self.errors.push(error_from_source_info(
-                    &name_info.get(ast),
-                    "error".to_string(),
-                  ))
-                }
-              }
-              Type::Struct(id)
-            } else {
-              panic!()
-            }
-            */
-            Type::Struct(id)
-          }
-          _ => {
-            self.emit_error(error_from_source_info(
-              &call_info.get(ast),
-              format!("cannot call type {func:?}"),
-            ));
-            Type::Undefined
-          }
+        let ret = if let Type::Function(id) = func {
+          self.call_function(ast, id, args, call_info)
+        } else {
+          self.emit_error(error_from_source_info(
+            &call_info.get(ast),
+            format!("cannot call type {func:?}"),
+          ));
+          Type::Error
         };
         self.function_depth -= 1;
         ret
@@ -328,15 +352,8 @@ impl SemanticAnalizer {
         name_info,
       } => {
         let left = self.analyze_expr(ast, lhs);
-        let name = name.get(ast);
         if let Type::Struct(id) = left {
-          let (names, types) = self.get_struct_members(id, ast);
-          if let Some((_, member_type)) = names
-            .iter()
-            .zip(types)
-            .map(|(handle, t)| (handle.get(ast), t))
-            .find(|(s, _)| *s == name)
-          {
+          if let Some(member_type) = self.get_struct_member(id, name, ast) {
             member_type
           } else {
             panic!()
@@ -354,6 +371,8 @@ impl SemanticAnalizer {
       loop_depth: 0,
       function_depth: 0,
       structs: HashMap::new(),
+      functions: HashMap::new(),
+      instantiated_functions: HashMap::new(),
       errors: Vec::new(),
       type_map: HashMap::new(),
     };

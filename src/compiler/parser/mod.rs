@@ -107,7 +107,7 @@ impl<'src> Parser<'src> {
         "str" => Ok(Type::Str),
         "num" => Ok(Type::Num),
         "bool" => Ok(Type::Bool),
-        other => Ok(Type::Struct(self.env.get_struct_id_or_add(other))),
+        other => Ok(Type::Struct(self.env.get_name_or_add_global(type_name))),
       }
     } else {
       Err(error_from_lexer_state(

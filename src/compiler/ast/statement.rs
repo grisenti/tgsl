@@ -1,6 +1,4 @@
-use super::{
-  types::Type, ExprHandle, Identifier, SourceInfoHandle, StmtHandle, StrHandle, StructId,
-};
+use super::{types::Type, ExprHandle, Identifier, SourceInfoHandle, StmtHandle, StrHandle};
 
 #[derive(Debug, Clone)]
 pub struct Method {
@@ -45,7 +43,6 @@ pub enum Stmt {
   },
   Struct {
     name: Identifier,
-    type_id: StructId,
     name_info: SourceInfoHandle,
     member_names: Vec<StrHandle>,
     member_types: Vec<Type>,

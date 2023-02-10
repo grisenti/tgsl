@@ -2,14 +2,11 @@ use super::*;
 use std::collections::HashMap;
 
 pub type Scope = HashMap<String, Identifier>;
-type StructMap = HashMap<String, StructId>;
 
 pub struct Environment {
   global: Scope,
   scopes: Vec<Scope>,
   last_id: u32,
-  last_user_type_id: u32,
-  structs: StructMap,
 }
 
 impl Environment {
@@ -17,15 +14,6 @@ impl Environment {
     let id = Identifier(self.last_id);
     self.global.insert(name.to_string(), id);
     self.last_id += 1;
-    id
-  }
-
-  fn declare_user_type(&mut self, name: &str) -> StructId {
-    let id = StructId {
-      id: self.last_user_type_id,
-    };
-    self.structs.insert(name.to_string(), id);
-    self.last_user_type_id += 1;
     id
   }
 
@@ -59,12 +47,8 @@ impl Environment {
     }
   }
 
-  pub fn get_struct_id_or_add(&mut self, name: &str) -> StructId {
-    self
-      .structs
-      .get(name)
-      .cloned()
-      .unwrap_or_else(|| self.declare_user_type(name))
+  pub fn declare_anonymous_closure(&mut self) -> Identifier {
+    self.declare_global_name(&format!("{{{}}}", self.last_id))
   }
 
   pub fn pop(&mut self) {
@@ -83,9 +67,7 @@ impl Environment {
     Self {
       global: Scope::new(),
       scopes: Vec::new(),
-      structs: StructMap::new(),
       last_id: 0,
-      last_user_type_id: 0,
     }
   }
 }
