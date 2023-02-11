@@ -175,9 +175,9 @@ impl SemanticAnalizer {
     let mut return_type = Type::Undefined;
     for stmt in body {
       if let Some(ret) = self.analyze_stmt(ast, stmt) {
-        if return_type == Type::Undefined || return_type == ret {
+        if return_type == Type::Undefined {
           return_type = ret;
-        } else {
+        } else if return_type != ret {
           self.emit_error(error_from_source_info(
             &call_info.get(ast),
             "inconsistent return types".to_string(),
@@ -268,9 +268,24 @@ impl SemanticAnalizer {
       } => {
         let condition_type = self.analyze_expr(ast, condition);
         self.check_valid_condition_type(if_info.get(ast), condition_type);
-        self.analyze_stmt(ast, true_branch);
-        if let Some(stmt) = else_branch {
-          self.analyze_stmt(ast, stmt)?;
+        let ret_true = self.analyze_stmt(ast, true_branch);
+        let ret_false = if let Some(stmt) = else_branch {
+          self.analyze_stmt(ast, stmt)
+        } else {
+          Some(Type::Any)
+        };
+        if let (Some(true_branch), Some(false_branch)) = (ret_true.clone(), ret_false.clone()) {
+          if true_branch == false_branch {
+            return Some(true_branch);
+          } else {
+            self.emit_error(error_from_source_info(
+              &if_info.get(ast),
+              "inconsistent return types in if statement".to_string(),
+            ));
+            return Some(Type::Error);
+          }
+        } else {
+          return ret_true.or(ret_false);
         }
       }
       Stmt::Block(stmts) => {
