@@ -352,11 +352,10 @@ impl SemanticAnalizer {
           None
         }
       }
-      Stmt::Expr(expr) => {
+      Stmt::Print(expr) | Stmt::Expr(expr) => {
         self.analyze_expr(ast, expr);
         None
       }
-      _ => None,
     }
   }
 
@@ -467,7 +466,43 @@ impl SemanticAnalizer {
           self.dot_call(ast, identifier, left, name_info, name)
         }
       }
-      _ => Type::Undefined,
+      Expr::Set {
+        object,
+        name,
+        name_info,
+        value,
+      } => {
+        let lhs = self.analyze_expr(ast, object);
+        let rhs = self.analyze_expr(ast, value);
+        if let Type::Struct(id) = lhs {
+          if let Some(member_type) = self.get_struct_member(id, name, ast) {
+            if member_type == rhs {
+              member_type
+            } else {
+              self.emit_error(error_from_source_info(
+                &name_info.get(ast),
+                format!(
+                  "member '{}' is of type {member_type:?}, cannot assing value of type {rhs:?}",
+                  name.get(ast)
+                ),
+              ));
+              Type::Error
+            }
+          } else {
+            self.emit_error(error_from_source_info(
+              &name_info.get(ast),
+              format!("{} is not a member of type {lhs:?}", name.get(ast)),
+            ));
+            Type::Error
+          }
+        } else {
+          self.emit_error(error_from_source_info(
+            &name_info.get(ast),
+            format!("cannot set propriety for type {lhs:?}"),
+          ));
+          Type::Error
+        }
+      }
     }
   }
 
