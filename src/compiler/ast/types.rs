@@ -9,8 +9,6 @@ pub enum Type {
   Bool,
   Struct(Identifier),
   Function(Identifier),
-  NamedFunction(StmtHandle),
-  AnonymusFunction(ExprHandle),
   //FunctionType(Vec<Type>)
   Any,
   Undefined,

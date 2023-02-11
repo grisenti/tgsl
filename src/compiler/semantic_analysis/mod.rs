@@ -308,7 +308,23 @@ impl SemanticAnalizer {
 
   pub fn analyze_expr(&mut self, ast: &AST, expr: ExprHandle) -> Type {
     match expr.clone().get(ast) {
-      Expr::Closure { .. } => Type::AnonymusFunction(expr),
+      Expr::Closure {
+        id,
+        parameters,
+        fn_type,
+        body,
+      } => {
+        self.functions.insert(
+          id,
+          Function {
+            paramenter_ids: parameters,
+            fn_types: fn_type,
+            body,
+          },
+        );
+        self.set_type(id, Type::Function(id));
+        Type::Function(id)
+      }
       Expr::Assignment { id, id_info, value } => {
         let value_type = self.analyze_expr(ast, value);
         self.set_type_or_err(id, value_type.clone(), id_info.get(ast));

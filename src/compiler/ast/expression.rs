@@ -114,6 +114,7 @@ pub enum Expr {
     value: ExprHandle,
   },
   Closure {
+    id: Identifier,
     parameters: Vec<Identifier>,
     fn_type: Vec<Type>,
     body: Vec<StmtHandle>,

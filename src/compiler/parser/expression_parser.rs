@@ -203,7 +203,9 @@ impl<'src> Parser<'src> {
       self.env.pop();
       let (parameters, mut fn_type) = parameters?;
       fn_type.push(return_type);
+      let id = self.env.declare_anonymous_closure();
       Ok(self.ast.add_expression(Expr::Closure {
+        id,
         parameters,
         body,
         fn_type,
