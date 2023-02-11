@@ -1,4 +1,5 @@
 use std::{
+  any,
   collections::{hash_map::Entry, HashMap},
   hash::Hash,
 };
@@ -31,8 +32,13 @@ type FunctionMap = HashMap<Identifier, Function>;
 // maps instantiated functions to return types
 type InstantiatedFunctions = HashMap<InstancedFunction, Type>;
 
+enum AnalyzerState {
+  Function(SourceInfoHandle),
+  Loop,
+}
+
 pub struct SemanticAnalizer {
-  loop_depth: u32,
+  state: Vec<AnalyzerState>,
   function_depth: u32,
   structs: StructMap,
   functions: FunctionMap,
@@ -219,6 +225,25 @@ impl SemanticAnalizer {
     self.set_type_or_err(identifier, var_type, id_info.get(ast));
   }
 
+  pub fn check_return_types(&mut self, ast: &AST, returns: Vec<Option<Type>>) -> Option<Type> {
+    let mut ret_types = returns.iter().filter_map(|v| v.as_ref());
+    if let Some(first) = ret_types.next() {
+      if ret_types.all(|ret| ret == first || *ret == Type::Any) {
+        Some(first.clone())
+      } else if let Some(AnalyzerState::Function(info)) = self.state.last() {
+        self.emit_error(error_from_source_info(
+          &info.get(ast),
+          "inconsistent return types in function".to_string(),
+        ));
+        Some(Type::Error)
+      } else {
+        panic!();
+      }
+    } else {
+      None
+    }
+  }
+
   pub fn analyze_stmt(&mut self, ast: &AST, stmt: StmtHandle) -> Option<Type> {
     match stmt.clone().get(ast) {
       Stmt::VarDecl {
@@ -226,7 +251,10 @@ impl SemanticAnalizer {
         id_info,
         var_type,
         expression,
-      } => self.check_var_decl(ast, identifier, id_info, expression, var_type),
+      } => {
+        self.check_var_decl(ast, identifier, id_info, expression, var_type);
+        None
+      }
       Stmt::While {
         info,
         condition,
@@ -234,9 +262,10 @@ impl SemanticAnalizer {
       } => {
         let condition_type = self.analyze_expr(ast, condition);
         self.check_valid_condition_type(info.get(ast), condition_type);
-        self.loop_depth += 1;
-        self.analyze_stmt(ast, loop_body)?;
-        self.loop_depth -= 1;
+        self.state.push(AnalyzerState::Loop);
+        let ret = self.analyze_stmt(ast, loop_body);
+        self.state.pop();
+        ret
       }
       Stmt::Struct {
         name,
@@ -258,7 +287,8 @@ impl SemanticAnalizer {
           },
           Type::Struct(name),
         );
-        self.set_type(name, Type::Function(name))
+        self.set_type(name, Type::Function(name));
+        None
       }
       Stmt::IfBranch {
         if_info,
@@ -272,26 +302,16 @@ impl SemanticAnalizer {
         let ret_false = if let Some(stmt) = else_branch {
           self.analyze_stmt(ast, stmt)
         } else {
-          Some(Type::Any)
+          None
         };
-        if let (Some(true_branch), Some(false_branch)) = (ret_true.clone(), ret_false.clone()) {
-          if true_branch == false_branch {
-            return Some(true_branch);
-          } else {
-            self.emit_error(error_from_source_info(
-              &if_info.get(ast),
-              "inconsistent return types in if statement".to_string(),
-            ));
-            return Some(Type::Error);
-          }
-        } else {
-          return ret_true.or(ret_false);
-        }
+        self.check_return_types(ast, vec![ret_true, ret_false])
       }
       Stmt::Block(stmts) => {
+        let mut return_types = Vec::new();
         for s in stmts {
-          self.analyze_stmt(ast, s)?;
+          return_types.push(self.analyze_stmt(ast, s))
         }
+        self.check_return_types(ast, return_types)
       }
       Stmt::Function {
         id,
@@ -309,30 +329,34 @@ impl SemanticAnalizer {
           },
         );
         self.set_type(id, Type::Function(id));
+        None
       }
       Stmt::Break(info) => {
-        if self.loop_depth == 0 {
+        if !matches!(self.state.last(), Some(AnalyzerState::Loop)) {
           self.emit_error(error_from_source_info(
             &info.get(ast),
             "cannot have break outside of loop body".to_string(),
           ));
         }
+        None
       }
       Stmt::Return { expr, src_info } => {
-        if self.function_depth == 0 {
+        if let Some(AnalyzerState::Function(_)) = self.state.last() {
+          Some(self.analyze_expr(ast, expr))
+        } else {
           self.emit_error(error_from_source_info(
             &src_info.get(ast),
             "cannot have return outside of function body".to_string(),
-          ))
+          ));
+          None
         }
-        return Some(self.analyze_expr(ast, expr));
       }
       Stmt::Expr(expr) => {
         self.analyze_expr(ast, expr);
+        None
       }
-      _ => {}
+      _ => None,
     }
-    None
   }
 
   fn dot_call(
@@ -391,7 +415,7 @@ impl SemanticAnalizer {
         call_info,
         arguments,
       } => {
-        self.function_depth += 1;
+        self.state.push(AnalyzerState::Function(call_info));
         let func = self.analyze_expr(ast, func);
         let ret = match func {
           Type::Function(id) => {
@@ -416,7 +440,7 @@ impl SemanticAnalizer {
             Type::Error
           }
         };
-        self.function_depth -= 1;
+        self.state.pop();
         ret
       }
       Expr::Binary {
@@ -448,7 +472,7 @@ impl SemanticAnalizer {
 
   pub fn analyze(ast: &AST) -> Result<(), SourceError> {
     let mut analizer = Self {
-      loop_depth: 0,
+      state: Vec::new(),
       function_depth: 0,
       structs: HashMap::new(),
       functions: HashMap::new(),
