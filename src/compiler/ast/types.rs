@@ -9,7 +9,11 @@ pub enum Type {
   Bool,
   Struct(Identifier),
   Function(Identifier),
-  //FunctionType(Vec<Type>)
+  PartialCall {
+    func_id: Identifier,
+    partial_arguments: Vec<Type>,
+  },
+  //FunctionType(Vec<Type>),
   Any,
   Undefined,
   Error,

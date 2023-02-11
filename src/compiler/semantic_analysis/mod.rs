@@ -317,6 +317,31 @@ impl SemanticAnalizer {
     None
   }
 
+  fn dot_call(
+    &mut self,
+    ast: &AST,
+    id: Identifier,
+    lhs: Type,
+    name_info: SourceInfoHandle,
+    name: StrHandle,
+  ) -> Type {
+    if self.functions.contains_key(&id) {
+      Type::PartialCall {
+        func_id: id,
+        partial_arguments: vec![lhs],
+      }
+    } else {
+      self.emit_error(error_from_source_info(
+        &name_info.get(ast),
+        format!(
+          "identifier {} is neither a struct member nor a function",
+          name.get(ast)
+        ),
+      ));
+      Type::Error
+    }
+  }
+
   pub fn analyze_expr(&mut self, ast: &AST, expr: ExprHandle) -> Type {
     match expr.clone().get(ast) {
       Expr::Closure {
@@ -350,18 +375,28 @@ impl SemanticAnalizer {
       } => {
         self.function_depth += 1;
         let func = self.analyze_expr(ast, func);
-        let args = arguments
-          .iter()
-          .map(|arg| self.analyze_expr(ast, arg.clone()))
-          .collect();
-        let ret = if let Type::Function(id) = func {
-          self.call_function(ast, id, args, call_info)
-        } else {
-          self.emit_error(error_from_source_info(
-            &call_info.get(ast),
-            format!("cannot call type {func:?}"),
-          ));
-          Type::Error
+        let ret = match func {
+          Type::Function(id) => {
+            let args = arguments
+              .iter()
+              .map(|arg| self.analyze_expr(ast, *arg))
+              .collect();
+            self.call_function(ast, id, args, call_info)
+          }
+          Type::PartialCall {
+            func_id,
+            mut partial_arguments,
+          } => {
+            partial_arguments.extend(arguments.iter().map(|arg| self.analyze_expr(ast, *arg)));
+            self.call_function(ast, func_id, partial_arguments, call_info)
+          }
+          _ => {
+            self.emit_error(error_from_source_info(
+              &call_info.get(ast),
+              format!("cannot call type {func:?}"),
+            ));
+            Type::Error
+          }
         };
         self.function_depth -= 1;
         ret
@@ -383,10 +418,10 @@ impl SemanticAnalizer {
           if let Some(member_type) = self.get_struct_member(id, name, ast) {
             member_type
           } else {
-            panic!()
+            self.dot_call(ast, identifier, left, name_info, name)
           }
         } else {
-          panic!();
+          self.dot_call(ast, identifier, left, name_info, name)
         }
       }
       _ => Type::Undefined,
