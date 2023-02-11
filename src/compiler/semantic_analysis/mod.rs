@@ -32,6 +32,21 @@ type FunctionMap = HashMap<Identifier, Function>;
 // maps instantiated functions to return types
 type InstantiatedFunctions = HashMap<InstancedFunction, Type>;
 
+const ARITHMETIC_OPERATORS: [Operator; 4] = [
+  Operator::Basic('+'),
+  Operator::Basic('-'),
+  Operator::Basic('*'),
+  Operator::Basic('/'),
+];
+const COMP_OPERATORS: [Operator; 5] = [
+  Operator::Basic('<'),
+  Operator::Basic('>'),
+  Operator::Leq,
+  Operator::Geq,
+  Operator::Same,
+];
+const LOGICAL_OPERATORS: [Operator; 2] = [Operator::Or, Operator::And];
+
 enum AnalyzerState {
   Function(SourceInfoHandle),
   Loop,
@@ -384,6 +399,48 @@ impl SemanticAnalizer {
     }
   }
 
+  fn binary_operation(
+    &mut self,
+    ast: &AST,
+    lhs: ExprHandle,
+    op: OperatorPair,
+    rhs: ExprHandle,
+  ) -> Type {
+    let lhs = self.analyze_expr(ast, lhs);
+    let rhs = self.analyze_expr(ast, rhs);
+    let OperatorPair { op, src_info } = op;
+    match (lhs, op, rhs) {
+      (Type::Num, bin_op, Type::Num) if ARITHMETIC_OPERATORS.contains(&bin_op) => Type::Num,
+      (Type::Str, Operator::Basic('+'), Type::Str) => Type::Str,
+      (Type::Num, comp_op, Type::Num) if COMP_OPERATORS.contains(&comp_op) => Type::Bool,
+      (Type::Str, comp_op, Type::Str) if COMP_OPERATORS.contains(&comp_op) => Type::Bool,
+      (Type::Bool, logical_op, Type::Bool) if LOGICAL_OPERATORS.contains(&logical_op) => Type::Bool,
+      (lhs, op, rhs) => {
+        self.emit_error(error_from_source_info(
+          &src_info.get(ast),
+          format!("cannot apply operator {op:?} to operands {lhs:?} and {rhs:?}"),
+        ));
+        Type::Error
+      }
+    }
+  }
+
+  fn unary_operation(&mut self, ast: &AST, op: OperatorPair, rhs: ExprHandle) -> Type {
+    let rhs = self.analyze_expr(ast, rhs);
+    let OperatorPair { op, src_info } = op;
+    match (op, rhs) {
+      (Operator::Basic('-'), Type::Num) => Type::Num,
+      (Operator::Basic('!'), Type::Bool) => Type::Bool,
+      (op, rhs) => {
+        self.emit_error(error_from_source_info(
+          &src_info.get(ast),
+          format!("cannot apply operator {op:?} to operand {rhs:?}"),
+        ));
+        Type::Error
+      }
+    }
+  }
+
   pub fn analyze_expr(&mut self, ast: &AST, expr: ExprHandle) -> Type {
     match expr.clone().get(ast) {
       Expr::Closure {
@@ -445,10 +502,10 @@ impl SemanticAnalizer {
       }
       Expr::Binary {
         left,
-        operator: _,
-        right: _,
-      } => self.analyze_expr(ast, left),
-      Expr::Unary { operator: _, right } => self.analyze_expr(ast, right),
+        operator,
+        right,
+      } => self.binary_operation(ast, left, operator, right),
+      Expr::Unary { operator, right } => self.unary_operation(ast, operator, right),
       Expr::Dot {
         lhs,
         name,
