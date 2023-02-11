@@ -1,5 +1,3 @@
-use std::collections::hash_map::Entry;
-
 use super::*;
 
 type StructMembers = Vec<(String, ExprValue)>;
@@ -61,7 +59,7 @@ impl ClassInstance {
     }
   }
 
-  pub fn get(&self, name: &str, name_info: &SourceInfo) -> Option<ExprValue> {
+  pub fn get(&self, name: &str, _name_info: &SourceInfo) -> Option<ExprValue> {
     self
       .value
       .borrow()

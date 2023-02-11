@@ -1,6 +1,4 @@
-use std::any::Any;
-
-use super::{ExprHandle, Identifier, Literal, StmtHandle};
+use super::{Identifier, Literal};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {

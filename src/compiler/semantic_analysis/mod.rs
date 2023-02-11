@@ -1,4 +1,3 @@
-use core::panic;
 use std::{
   collections::{hash_map::Entry, HashMap},
   hash::Hash,
@@ -98,11 +97,15 @@ impl SemanticAnalizer {
   fn check_self_assignment(
     &mut self,
     ast: &AST,
-    identifier: Identifier,
+    lhs_id: Identifier,
     expression: Option<ExprHandle>,
   ) {
-    if let Some(Expr::Variable { id, id_info }) = expression.map(|handle| handle.get(ast)) {
-      if id == identifier {
+    if let Some(Expr::Variable {
+      id: rhs_id,
+      id_info,
+    }) = expression.map(|handle| handle.get(ast))
+    {
+      if rhs_id == lhs_id {
         self.emit_error(error_from_source_info(
           &id_info.get(ast),
           "cannot initialize identifier with itself".to_string(),
@@ -237,14 +240,14 @@ impl SemanticAnalizer {
       }
       Stmt::Struct {
         name,
-        name_info,
+        name_info: _,
         member_names,
         member_types,
       } => {
         self.structs.insert(
           name,
           Struct {
-            member_names: member_names.clone(),
+            member_names,
             member_types: member_types.clone(),
           },
         );
@@ -277,7 +280,7 @@ impl SemanticAnalizer {
       }
       Stmt::Function {
         id,
-        name_info,
+        name_info: _,
         parameters,
         fn_type,
         body,
@@ -403,10 +406,10 @@ impl SemanticAnalizer {
       }
       Expr::Binary {
         left,
-        operator,
-        right,
+        operator: _,
+        right: _,
       } => self.analyze_expr(ast, left),
-      Expr::Unary { operator, right } => self.analyze_expr(ast, right),
+      Expr::Unary { operator: _, right } => self.analyze_expr(ast, right),
       Expr::Dot {
         lhs,
         name,
@@ -439,7 +442,7 @@ impl SemanticAnalizer {
       type_map: HashMap::new(),
     };
     for stmt in ast.get_program() {
-      analizer.analyze_stmt(ast, stmt.clone());
+      analizer.analyze_stmt(ast, *stmt);
     }
     if analizer.errors.is_empty() {
       Ok(())

@@ -1,5 +1,3 @@
-use crate::compiler::lexer::Lexer;
-
 #[derive(Clone, Copy, Debug)]
 pub struct SourceInfo {
   pub line_no: u32,
