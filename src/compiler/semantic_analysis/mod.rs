@@ -83,12 +83,13 @@ impl SemanticAnalizer {
           e.insert(value_type);
         }
         Type::Error => {}
-        other => {
+        other if *other != value_type => {
           self.errors.push(error_from_source_info(
             &name_info,
             format!("cannot assign value of type {other:?} to identifier of type {value_type:?}"),
           ));
         }
+        _ => {}
       },
       Entry::Vacant(v) => {
         v.insert(value_type);
@@ -222,7 +223,7 @@ impl SemanticAnalizer {
     } else {
       declared_type
     };
-    self.set_type_or_err(identifier, var_type, id_info.get(ast));
+    self.set_type(identifier, var_type);
   }
 
   pub fn check_return_types(&mut self, ast: &AST, returns: Vec<Option<Type>>) -> Option<Type> {
