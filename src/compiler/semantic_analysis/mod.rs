@@ -174,7 +174,7 @@ impl SemanticAnalizer {
     }
     let mut return_type = Type::Undefined;
     for stmt in body {
-      if let Some(ret) = self.analyze_stmt(ast, stmt.clone()) {
+      if let Some(ret) = self.analyze_stmt(ast, stmt) {
         if return_type == Type::Undefined || return_type == ret {
           return_type = ret;
         } else {
@@ -203,7 +203,7 @@ impl SemanticAnalizer {
     expression: Option<ExprHandle>,
     declared_type: Type,
   ) {
-    self.check_self_assignment(ast, identifier, expression.clone());
+    self.check_self_assignment(ast, identifier, expression);
     let var_type = if let Some(expr) = expression {
       let rhs = self.analyze_expr(ast, expr);
       if declared_type != rhs && declared_type != Type::Any {

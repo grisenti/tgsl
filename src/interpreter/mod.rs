@@ -165,7 +165,7 @@ impl Interpreter {
   ) -> IntepreterResult {
     let value = exp_opt
       .as_ref()
-      .map(|exp| self.interpret_expression(exp.clone()))
+      .map(|exp| self.interpret_expression(*exp))
       .unwrap_or(Ok(ExprValue::Undefined))?;
     self.env.borrow_mut().set(id, value);
     Ok(())
@@ -187,7 +187,7 @@ impl Interpreter {
 
   pub fn interpret(&mut self) -> Result<(), SourceError> {
     for stmt in self.ast.get_program().clone() {
-      self.interpret_statement(stmt.clone())?;
+      self.interpret_statement(stmt)?;
     }
     Ok(())
   }

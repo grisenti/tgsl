@@ -37,8 +37,8 @@ impl Interpreter {
     condition: ExprHandle,
     body: StmtHandle,
   ) -> StmtRes {
-    while self.bool_or_err(condition.clone(), info)? {
-      match self.interpret_statement(body.clone())? {
+    while self.bool_or_err(condition, info)? {
+      match self.interpret_statement(body)? {
         Some(EarlyOut::Break) => break,
         Some(EarlyOut::Return(val)) => return Ok(Some(EarlyOut::Return(val))),
         _ => {}

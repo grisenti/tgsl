@@ -20,7 +20,7 @@ pub enum Operator {
 impl Display for Operator {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::Basic(c) => write!(f, "{}", c),
+      Self::Basic(c) => write!(f, "{c}"),
       Self::Leq => write!(f, "<="),
       Self::Geq => write!(f, ">="),
       Self::Same => write!(f, "=="),
