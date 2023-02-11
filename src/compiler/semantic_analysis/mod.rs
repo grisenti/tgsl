@@ -53,7 +53,18 @@ impl SemanticAnalizer {
     name: StrHandle,
     ast: &AST,
   ) -> Option<Type> {
-    todo!()
+    let s = self.structs[&struct_id].clone();
+    let name = name.get(ast);
+    if let Some((_, member_type)) = s
+      .member_names
+      .iter()
+      .zip(s.member_types)
+      .find(|(member_name, _)| member_name.get(ast) == name)
+    {
+      Some(member_type)
+    } else {
+      None
+    }
   }
 
   pub fn set_type(&mut self, id: Identifier, value: Type) {
