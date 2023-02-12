@@ -1,0 +1,9 @@
+fn f(a) {
+	a(f);
+}
+
+fn g(b) {
+	b(g);
+}
+
+g(f); // recursion limit
