@@ -11,7 +11,7 @@ pub enum Type {
     func_id: Identifier,
     partial_arguments: Vec<Type>,
   },
-  //FunctionType(Vec<Type>),
+  FunctionType(Vec<Type>),
   Any,
   Undefined,
   Error,

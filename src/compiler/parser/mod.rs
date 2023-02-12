@@ -100,20 +100,42 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn match_type_name_or_err(&mut self) -> Result<Type, SourceError> {
-    if let Token::Id(type_name) = self.lookahead {
-      self.advance()?;
-      match type_name {
-        "str" => Ok(Type::Str),
-        "num" => Ok(Type::Num),
-        "bool" => Ok(Type::Bool),
-        _ => Ok(Type::Struct(self.env.get_name_or_add_global(type_name))),
+  fn parse_function_param_types(&mut self) -> Result<Vec<Type>, SourceError> {
+    self.match_or_err(Token::Basic('('))?;
+
+    let mut result = Vec::new();
+    loop {
+      result.push(self.match_type_name_or_err()?);
+      if self.match_next(Token::Basic(','))?.is_none() {
+        break;
       }
-    } else {
-      Err(error_from_lexer_state(
+    }
+    self.match_or_err(Token::Basic(')'))?;
+    Ok(result)
+  }
+
+  fn match_type_name_or_err(&mut self) -> Result<Type, SourceError> {
+    match self.lookahead {
+      Token::Id(type_name) => {
+        self.advance()?;
+        match type_name {
+          "str" => Ok(Type::Str),
+          "num" => Ok(Type::Num),
+          "bool" => Ok(Type::Bool),
+          _ => Ok(Type::Struct(self.env.get_name_or_add_global(type_name))),
+        }
+      }
+      Token::Fn => {
+        self.advance()?;
+        let mut params = self.parse_function_param_types()?;
+        self.match_or_err(Token::ThinArrow)?;
+        params.push(self.match_type_name_or_err()?);
+        Ok(Type::FunctionType(params))
+      }
+      _ => Err(error_from_lexer_state(
         &self.lex,
         format!("expected type name, got {}", self.lookahead),
-      ))
+      )),
     }
   }
 

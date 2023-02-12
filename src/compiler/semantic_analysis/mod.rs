@@ -67,6 +67,35 @@ impl SemanticAnalizer {
     self.errors.push(err);
   }
 
+  fn equal_types(&self, value: &Type, specifier: &Type) -> bool {
+    dbg!(value);
+    dbg!(specifier);
+    match (value, specifier) {
+      (Type::Function(id), Type::FunctionType(specifier_types)) => {
+        let Function {
+          fn_types: value_types,
+          ..
+        } = self.functions.get(&id).unwrap();
+        dbg!(value_types);
+        if value_types.len() != specifier_types.len() {
+          false
+        } else {
+          for (a, b) in value_types.iter().zip(specifier_types) {
+            if !self.equal_types(a, b) || *b == Type::Any {
+              return false;
+            }
+          }
+          true
+        }
+      }
+      (_, Type::Any) => true,
+      //this is for lambda parameters. Should maybe make a distinction between value types and parameter types
+      (Type::Any, _) => true,
+      (Type::FunctionType(_), _) => panic!(),
+      (a, b) => a == b,
+    }
+  }
+
   fn get_struct_member(
     &mut self,
     struct_id: Identifier,
@@ -181,7 +210,7 @@ impl SemanticAnalizer {
       .zip(args.clone())
       .enumerate()
     {
-      if arg != param_type && param_type != Type::Any {
+      if !self.equal_types(&arg, &param_type) {
         self.emit_error(error_from_source_info(
           &call_info.get(ast),
           format!(
@@ -228,7 +257,7 @@ impl SemanticAnalizer {
     self.check_self_assignment(ast, identifier, expression);
     let var_type = if let Some(expr) = expression {
       let rhs = self.analyze_expr(ast, expr);
-      if declared_type != rhs && declared_type != Type::Any {
+      if !self.equal_types(&rhs, &declared_type) {
         self.emit_error(error_from_source_info(
           &id_info.get(ast),
           format!("cannot assign expression of type {rhs:?} to type {declared_type:?}"),
@@ -244,7 +273,7 @@ impl SemanticAnalizer {
   pub fn check_return_types(&mut self, ast: &AST, returns: Vec<Option<Type>>) -> Option<Type> {
     let mut ret_types = returns.iter().filter_map(|v| v.as_ref());
     if let Some(first) = ret_types.next() {
-      if ret_types.all(|ret| ret == first || *ret == Type::Any) {
+      if ret_types.all(|ret| self.equal_types(ret, first)) {
         Some(first.clone())
       } else if let Some(AnalyzerState::Function(info)) = self.state.last() {
         self.emit_error(error_from_source_info(
@@ -533,7 +562,7 @@ impl SemanticAnalizer {
         let rhs = self.analyze_expr(ast, value);
         if let Type::Struct(id) = lhs {
           if let Some(member_type) = self.get_struct_member(id, name, ast) {
-            if member_type == rhs {
+            if self.equal_types(&rhs, &member_type) {
               member_type
             } else {
               self.emit_error(error_from_source_info(
