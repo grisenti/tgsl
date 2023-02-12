@@ -68,8 +68,6 @@ impl SemanticAnalizer {
   }
 
   fn equal_types(&self, value: &Type, specifier: &Type) -> bool {
-    dbg!(value);
-    dbg!(specifier);
     match (value, specifier) {
       (Type::Function(id), Type::FunctionType(specifier_types)) => {
         let Function {
@@ -186,6 +184,15 @@ impl SemanticAnalizer {
       parameter_types: args.clone(),
     }) {
       return ret_val.clone();
+    }
+    // TODO: think of something smarter
+    if self.function_depth > 100 {
+      self.emit_error(SourceError::from_source_info(
+        &SourceInfo::temporary(),
+        "function instantiation limit reached".to_string(),
+        crate::errors::SourceErrorType::Compilation,
+      ));
+      return Type::Error;
     }
     println!("instancing function {id:?}");
     let Function {
@@ -502,6 +509,7 @@ impl SemanticAnalizer {
         arguments,
       } => {
         self.state.push(AnalyzerState::Function(call_info));
+        self.function_depth += 1;
         let func = self.analyze_expr(ast, func);
         let ret = match func {
           Type::Function(id) => {
@@ -526,6 +534,7 @@ impl SemanticAnalizer {
             Type::Error
           }
         };
+        self.function_depth -= 1;
         self.state.pop();
         ret
       }
