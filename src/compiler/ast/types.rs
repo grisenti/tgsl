@@ -8,7 +8,7 @@ pub enum Type {
   Struct(Identifier),
   Function(Identifier),
   PartialCall {
-    func_id: Identifier,
+    func_types: Vec<Type>,
     partial_arguments: Vec<Type>,
   },
   FunctionType(Vec<Type>),

@@ -7,13 +7,6 @@ use super::{ast::*, error_from_source_info};
 use crate::errors::{SourceError, SourceInfo};
 
 #[derive(Clone)]
-struct Function {
-  paramenter_ids: Vec<Identifier>,
-  fn_types: Vec<Type>,
-  body: Vec<StmtHandle>,
-}
-
-#[derive(Clone)]
 struct Struct {
   member_names: Vec<StrHandle>,
   member_types: Vec<Type>,
@@ -27,7 +20,7 @@ struct InstancedFunction {
 
 type TypeMap = HashMap<Identifier, Type>;
 type StructMap = HashMap<Identifier, Struct>;
-type FunctionMap = HashMap<Identifier, Function>;
+type FunctionMap = HashMap<Identifier, Vec<Type>>;
 // maps instantiated functions to return types
 type InstantiatedFunctions = HashMap<InstancedFunction, Type>;
 
@@ -68,27 +61,7 @@ impl SemanticAnalizer {
 
   fn equal_types(&self, value: &Type, specifier: &Type) -> bool {
     match (value, specifier) {
-      (Type::Function(id), Type::FunctionType(specifier_types)) => {
-        let Function {
-          fn_types: value_types,
-          ..
-        } = self.functions.get(&id).unwrap();
-        dbg!(value_types);
-        if value_types.len() != specifier_types.len() {
-          false
-        } else {
-          for (a, b) in value_types.iter().zip(specifier_types) {
-            if !self.equal_types(a, b) || *b == Type::Any {
-              return false;
-            }
-          }
-          true
-        }
-      }
       (_, Type::Any) => true,
-      //this is for lambda parameters. Should maybe make a distinction between value types and parameter types
-      (Type::Any, _) => true,
-      (Type::FunctionType(_), _) => panic!(),
       (a, b) => a == b,
     }
   }
@@ -171,52 +144,26 @@ impl SemanticAnalizer {
     }
   }
 
-  fn call_function(
+  fn check_function_call(
     &mut self,
     ast: &AST,
-    id: Identifier,
+    fn_types: Vec<Type>,
     args: Vec<Type>,
     call_info: SourceInfoHandle,
   ) -> Type {
-    if let Some(ret_val) = self.instantiated_functions.get(&InstancedFunction {
-      id,
-      parameter_types: args.clone(),
-    }) {
-      return ret_val.clone();
-    }
-    // TODO: think of something smarter
-    if self.function_depth > 100 {
-      self.emit_error(SourceError::from_source_info(
-        &SourceInfo::temporary(),
-        "function instantiation limit reached".to_string(),
-        crate::errors::SourceErrorType::Compilation,
-      ));
-      return Type::Error;
-    }
-    println!("instancing function {id:?}");
-    let Function {
-      paramenter_ids,
-      fn_types,
-      body,
-    } = self.functions.get(&id).cloned().unwrap();
-    if args.len() != paramenter_ids.len() {
+    if args.len() != fn_types.len() - 1 {
       self.emit_error(error_from_source_info(
         &call_info.get(ast),
         format!(
           "incorrect number of arguments for function call (required {}, provided {})",
-          paramenter_ids.len(),
+          fn_types.len() - 1,
           args.len()
         ),
       ));
       return Type::Error;
     }
-    for (arg_num, ((param_type, param_id), arg)) in fn_types
-      .into_iter()
-      .zip(paramenter_ids)
-      .zip(args.clone())
-      .enumerate()
-    {
-      if !self.equal_types(&arg, &param_type) {
+    for (arg_num, (param_type, arg_type)) in fn_types.iter().zip(&args).enumerate() {
+      if !self.equal_types(arg_type, param_type) {
         self.emit_error(error_from_source_info(
           &call_info.get(ast),
           format!(
@@ -225,31 +172,37 @@ impl SemanticAnalizer {
           ),
         ));
         return Type::Error;
-      } else {
-        self.set_type(param_id, arg)
       }
     }
-    let mut return_type = Type::Undefined;
-    for stmt in body {
-      if let Some(ret) = self.analyze_stmt(ast, stmt) {
-        if return_type == Type::Undefined {
-          return_type = ret;
-        } else if return_type != ret {
+    fn_types.last().unwrap().clone()
+  }
+
+  fn check_function(
+    &mut self,
+    ast: &AST,
+    id: Identifier,
+    fn_types: Vec<Type>,
+    parameter_ids: &[Identifier],
+    body: &[StmtHandle],
+  ) {
+    for (param_id, param_type) in parameter_ids.iter().zip(&fn_types) {
+      self.type_map.insert(*param_id, param_type.clone());
+    }
+    let return_type = fn_types.last().unwrap();
+    for stmt in body.iter() {
+      if let Some(ret) = self.analyze_stmt(ast, *stmt) {
+        if *return_type != ret {
           self.emit_error(error_from_source_info(
-            &call_info.get(ast),
+            &SourceInfo::temporary(),
             "inconsistent return types".to_string(),
           ))
         }
       }
     }
-    self.instantiated_functions.insert(
-      InstancedFunction {
-        id,
-        parameter_types: args,
-      },
-      return_type.clone(),
-    );
-    return_type
+    self
+      .type_map
+      .insert(id, Type::FunctionType(fn_types.clone()));
+    self.functions.insert(id, fn_types);
   }
 
   fn check_var_decl(
@@ -366,20 +319,16 @@ impl SemanticAnalizer {
       }
       Stmt::Function {
         id,
-        name_info: _,
+        name_info,
         parameters,
         fn_type,
         body,
       } => {
-        self.functions.insert(
-          id,
-          Function {
-            paramenter_ids: parameters,
-            fn_types: fn_type,
-            body,
-          },
-        );
-        self.set_type(id, Type::Function(id));
+        self.state.push(AnalyzerState::Function(name_info));
+        self.function_depth += 1;
+        self.check_function(ast, id, fn_type, &parameters, &body);
+        self.function_depth -= 1;
+        self.state.pop();
         None
       }
       Stmt::Break(info) => {
@@ -417,9 +366,9 @@ impl SemanticAnalizer {
     name_info: SourceInfoHandle,
     name: StrHandle,
   ) -> Type {
-    if self.functions.contains_key(&id) {
+    if let Some(Type::FunctionType(types)) = self.type_map.get(&id) {
       Type::PartialCall {
-        func_id: id,
+        func_types: types.clone(),
         partial_arguments: vec![lhs],
       }
     } else {
@@ -484,16 +433,8 @@ impl SemanticAnalizer {
         fn_type,
         body,
       } => {
-        self.functions.insert(
-          id,
-          Function {
-            paramenter_ids: parameters,
-            fn_types: fn_type,
-            body,
-          },
-        );
-        self.set_type(id, Type::Function(id));
-        Type::Function(id)
+        self.check_function(ast, id, fn_type.clone(), &parameters, &body);
+        Type::FunctionType(fn_type)
       }
       Expr::Assignment { id, id_info, value } => {
         let value_type = self.analyze_expr(ast, value);
@@ -510,20 +451,18 @@ impl SemanticAnalizer {
         self.state.push(AnalyzerState::Function(call_info));
         self.function_depth += 1;
         let func = self.analyze_expr(ast, func);
+        let arguments = arguments.iter().map(|arg| self.analyze_expr(ast, *arg));
         let ret = match func {
-          Type::Function(id) => {
-            let args = arguments
-              .iter()
-              .map(|arg| self.analyze_expr(ast, *arg))
-              .collect();
-            self.call_function(ast, id, args, call_info)
-          }
           Type::PartialCall {
-            func_id,
+            func_types,
             mut partial_arguments,
           } => {
-            partial_arguments.extend(arguments.iter().map(|arg| self.analyze_expr(ast, *arg)));
-            self.call_function(ast, func_id, partial_arguments, call_info)
+            partial_arguments.extend(arguments);
+            self.check_function_call(ast, func_types, partial_arguments, call_info)
+          }
+          Type::FunctionType(types) => {
+            let args = arguments.collect::<Vec<Type>>();
+            self.check_function_call(ast, types, args, call_info)
           }
           _ => {
             self.emit_error(error_from_source_info(
@@ -533,8 +472,6 @@ impl SemanticAnalizer {
             Type::Error
           }
         };
-        self.function_depth -= 1;
-        self.state.pop();
         ret
       }
       Expr::Binary {
