@@ -135,7 +135,7 @@ impl<'src> Parser<'src> {
     assert!(self.lookahead == Token::Var);
     self.advance()?;
     let (identifier, id_info) = self.match_id_or_err()?;
-    let var_type = self.parse_type_specifier()?;
+    let var_type = self.parse_type_specifier_or_err()?;
     let ret = if self.lookahead == Token::Basic('=') {
       self.advance()?; // consume '='
       Stmt::VarDecl {
@@ -164,7 +164,7 @@ impl<'src> Parser<'src> {
     let mut parameter_types = Vec::new();
     loop {
       parameter_ids.push(self.match_id_or_err()?.0);
-      parameter_types.push(self.parse_type_specifier()?);
+      parameter_types.push(self.parse_type_specifier_or_err()?);
       if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
         break;
       }
@@ -180,10 +180,13 @@ impl<'src> Parser<'src> {
   }
 
   pub(super) fn parse_function_return_type(&mut self) -> Result<Type, SourceError> {
+    self.match_or_err(Token::ThinArrow)?;
+    self.match_type_name_or_err()?;
+
     if self.match_next(Token::ThinArrow)?.is_some() {
       self.match_type_name_or_err()
     } else {
-      Ok(Type::Any)
+      Ok(Type::Undefined)
     }
   }
 
@@ -227,7 +230,7 @@ impl<'src> Parser<'src> {
     let mut member_types = Vec::new();
     while self.lookahead != Token::Basic('}') {
       let name = self.id_str_or_err()?;
-      let member_type = self.parse_type_specifier()?;
+      let member_type = self.parse_type_specifier_or_err()?;
       member_names.push(name);
       member_types.push(member_type);
       self.match_or_err(Token::Basic(','))?;

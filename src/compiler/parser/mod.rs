@@ -139,13 +139,9 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_type_specifier(&mut self) -> Result<Type, SourceError> {
-    if self.lookahead == Token::Basic(':') {
-      self.advance()?;
-      self.match_type_name_or_err()
-    } else {
-      Ok(Type::Any)
-    }
+  fn parse_type_specifier_or_err(&mut self) -> Result<Type, SourceError> {
+    self.match_or_err(Token::Basic(':'))?;
+    self.match_type_name_or_err()
   }
 
   fn syncronize_or_errors(&mut self, mut errors: SrcErrVec) -> Result<SrcErrVec, SourceError> {
