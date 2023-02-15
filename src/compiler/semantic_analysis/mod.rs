@@ -12,17 +12,9 @@ struct Struct {
   member_types: Vec<Type>,
 }
 
-#[derive(Hash, PartialEq, Eq)]
-struct InstancedFunction {
-  id: Identifier,
-  parameter_types: Vec<Type>,
-}
-
 type TypeMap = HashMap<Identifier, Type>;
 type StructMap = HashMap<Identifier, Struct>;
 type FunctionMap = HashMap<Identifier, Vec<Type>>;
-// maps instantiated functions to return types
-type InstantiatedFunctions = HashMap<InstancedFunction, Type>;
 
 const ARITHMETIC_OPERATORS: [Operator; 4] = [
   Operator::Basic('+'),
@@ -49,7 +41,6 @@ pub struct SemanticAnalizer {
   function_depth: u32,
   structs: StructMap,
   functions: FunctionMap,
-  instantiated_functions: InstantiatedFunctions,
   type_map: TypeMap,
   errors: Vec<SourceError>,
 }
@@ -284,14 +275,9 @@ impl SemanticAnalizer {
             member_types: member_types.clone(),
           },
         );
-        self.instantiated_functions.insert(
-          InstancedFunction {
-            id: name,
-            parameter_types: member_types,
-          },
-          Type::Struct(name),
-        );
-        self.set_type(name, Type::Function(name));
+        let mut constructor_types = member_types;
+        constructor_types.push(Type::Struct(name));
+        self.set_type(name, Type::FunctionType(constructor_types));
         None
       }
       Stmt::IfBranch {
@@ -543,7 +529,6 @@ impl SemanticAnalizer {
       function_depth: 0,
       structs: HashMap::new(),
       functions: HashMap::new(),
-      instantiated_functions: HashMap::new(),
       errors: Vec::new(),
       type_map: HashMap::new(),
     };
