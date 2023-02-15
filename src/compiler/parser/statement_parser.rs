@@ -136,6 +136,7 @@ impl<'src> Parser<'src> {
     self.advance()?;
     let (identifier, id_info) = self.match_id_or_err()?;
     let var_type = self.parse_type_specifier_or_err()?;
+    self.env.set_type(identifier, var_type.clone());
     let ret = if self.lookahead == Token::Basic('=') {
       self.advance()?; // consume '='
       Stmt::VarDecl {
@@ -163,8 +164,11 @@ impl<'src> Parser<'src> {
     let mut parameter_ids = Vec::new();
     let mut parameter_types = Vec::new();
     loop {
-      parameter_ids.push(self.match_id_or_err()?.0);
-      parameter_types.push(self.parse_type_specifier_or_err()?);
+      let mem_id = self.match_id_or_err()?.0;
+      let mem_type = self.parse_type_specifier_or_err()?;
+      parameter_ids.push(mem_id);
+      parameter_types.push(mem_type.clone());
+      self.env.set_type(mem_id, mem_type);
       if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
         break;
       }
@@ -203,6 +207,9 @@ impl<'src> Parser<'src> {
       self.env.pop();
       let (parameters, mut fn_type) = parameters?;
       fn_type.push(return_type);
+      self
+        .env
+        .set_type(name_id, Type::FunctionType(fn_type.clone()));
       Ok(self.ast.add_statement(Stmt::Function {
         id: name_id,
         name_info,
@@ -230,6 +237,11 @@ impl<'src> Parser<'src> {
       self.match_or_err(Token::Basic(','))?;
     }
     self.match_or_err(Token::Basic('}'))?;
+    let mut constructor_type = member_types.clone();
+    constructor_type.push(Type::Struct(name_id));
+    self
+      .env
+      .set_type(name_id, Type::FunctionType(constructor_type));
     Ok(self.ast.add_statement(Stmt::Struct {
       name: name_id,
       name_info,

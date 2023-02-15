@@ -1,7 +1,4 @@
-use std::{
-  collections::{hash_map::Entry, HashMap},
-  hash::Hash,
-};
+use std::collections::HashMap;
 
 use super::{ast::*, error_from_source_info};
 use crate::errors::{SourceError, SourceInfo};
@@ -12,7 +9,6 @@ struct Struct {
   member_types: Vec<Type>,
 }
 
-type TypeMap = HashMap<Identifier, Type>;
 type StructMap = HashMap<Identifier, Struct>;
 type FunctionMap = HashMap<Identifier, Vec<Type>>;
 
@@ -41,7 +37,7 @@ pub struct SemanticAnalizer {
   function_depth: u32,
   structs: StructMap,
   functions: FunctionMap,
-  type_map: TypeMap,
+  type_map: Vec<Type>,
   errors: Vec<SourceError>,
 }
 
@@ -77,33 +73,24 @@ impl SemanticAnalizer {
     }
   }
 
-  pub fn set_type(&mut self, id: Identifier, value: Type) {
-    self.type_map.insert(id, value);
-  }
-
   pub fn set_type_or_err(&mut self, id: Identifier, value_type: Type, name_info: SourceInfo) {
-    match self.type_map.entry(id) {
-      Entry::Occupied(mut e) => match e.get() {
-        Type::Any => {
-          e.insert(value_type);
-        }
-        Type::Error => {}
-        other if *other != value_type => {
-          self.errors.push(error_from_source_info(
-            &name_info,
-            format!("cannot assign value of type {other:?} to identifier of type {value_type:?}"),
-          ));
-        }
-        _ => {}
-      },
-      Entry::Vacant(v) => {
-        v.insert(value_type);
+    match &self.type_map[id.0 as usize] {
+      Type::Any => {
+        self.type_map[id.0 as usize] = value_type;
       }
+      Type::Error => {}
+      other if *other != value_type => {
+        self.errors.push(error_from_source_info(
+          &name_info,
+          format!("cannot assign value of type {other:?} to identifier of type {value_type:?}"),
+        ));
+      }
+      _ => {}
     }
   }
 
   pub fn get_type(&self, id: Identifier) -> Type {
-    self.type_map.get(&id).unwrap().clone()
+    self.type_map[id.0 as usize].clone()
   }
 
   fn check_self_assignment(
@@ -176,9 +163,6 @@ impl SemanticAnalizer {
     parameter_ids: &[Identifier],
     body: &[StmtHandle],
   ) {
-    for (param_id, param_type) in parameter_ids.iter().zip(&fn_types) {
-      self.type_map.insert(*param_id, param_type.clone());
-    }
     let return_type = fn_types.last().unwrap();
     for stmt in body.iter() {
       if let Some(ret) = self.analyze_stmt(ast, *stmt) {
@@ -190,9 +174,6 @@ impl SemanticAnalizer {
         }
       }
     }
-    self
-      .type_map
-      .insert(id, Type::FunctionType(fn_types.clone()));
     self.functions.insert(id, fn_types);
   }
 
@@ -202,22 +183,12 @@ impl SemanticAnalizer {
     identifier: Identifier,
     id_info: SourceInfoHandle,
     expression: Option<ExprHandle>,
-    declared_type: Type,
   ) {
     self.check_self_assignment(ast, identifier, expression);
-    let var_type = if let Some(expr) = expression {
+    if let Some(expr) = expression {
       let rhs = self.analyze_expr(ast, expr);
-      if !self.equal_types(&rhs, &declared_type) {
-        self.emit_error(error_from_source_info(
-          &id_info.get(ast),
-          format!("cannot assign expression of type {rhs:?} to type {declared_type:?}"),
-        ));
-      }
-      rhs
-    } else {
-      declared_type
-    };
-    self.set_type(identifier, var_type);
+      self.set_type_or_err(identifier, rhs, id_info.get(ast));
+    }
   }
 
   pub fn check_return_types(&mut self, ast: &AST, returns: Vec<Option<Type>>) -> Option<Type> {
@@ -244,10 +215,10 @@ impl SemanticAnalizer {
       Stmt::VarDecl {
         identifier,
         id_info,
-        var_type,
+        var_type: _,
         expression,
       } => {
-        self.check_var_decl(ast, identifier, id_info, expression, var_type);
+        self.check_var_decl(ast, identifier, id_info, expression);
         None
       }
       Stmt::While {
@@ -272,12 +243,9 @@ impl SemanticAnalizer {
           name,
           Struct {
             member_names,
-            member_types: member_types.clone(),
+            member_types,
           },
         );
-        let mut constructor_types = member_types;
-        constructor_types.push(Type::Struct(name));
-        self.set_type(name, Type::FunctionType(constructor_types));
         None
       }
       Stmt::IfBranch {
@@ -352,9 +320,9 @@ impl SemanticAnalizer {
     name_info: SourceInfoHandle,
     name: StrHandle,
   ) -> Type {
-    if let Some(Type::FunctionType(types)) = self.type_map.get(&id) {
+    if let Type::FunctionType(types) = self.get_type(id) {
       Type::PartialCall {
-        func_types: types.clone(),
+        func_types: types,
         partial_arguments: vec![lhs],
       }
     } else {
@@ -523,14 +491,14 @@ impl SemanticAnalizer {
     }
   }
 
-  pub fn analyze(ast: &AST) -> Result<(), SourceError> {
+  pub fn analyze(ast: &AST, types: Vec<Type>) -> Result<(), SourceError> {
     let mut analizer = Self {
       state: Vec::new(),
       function_depth: 0,
       structs: HashMap::new(),
       functions: HashMap::new(),
       errors: Vec::new(),
-      type_map: HashMap::new(),
+      type_map: types,
     };
     for stmt in ast.get_program() {
       analizer.analyze_stmt(ast, *stmt);

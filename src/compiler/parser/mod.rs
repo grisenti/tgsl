@@ -2,13 +2,17 @@ mod environment;
 mod expression_parser;
 mod statement_parser;
 
-use std::collections::HashMap;
-
 use self::environment::Environment;
+use self::environment::FinalizedEnvironment;
 
 use super::ast::*;
 use super::lexer::*;
 use super::*;
+
+pub struct ParseResult {
+  pub ast: AST,
+  pub final_env: FinalizedEnvironment,
+}
 
 pub struct Parser<'src> {
   env: Environment,
@@ -173,7 +177,7 @@ impl<'src> Parser<'src> {
     }
   }
 
-  pub fn parse(mut self) -> Result<(AST, HashMap<String, Identifier>), SourceError> {
+  pub fn parse(mut self) -> Result<ParseResult, SourceError> {
     let mut errors = Vec::new();
     if let Err(e) = self.advance() {
       errors.push(e)
@@ -188,7 +192,10 @@ impl<'src> Parser<'src> {
       }
     }
     if errors.is_empty() {
-      Ok((self.ast, self.env.get_global()))
+      Ok(ParseResult {
+        ast: self.ast,
+        final_env: self.env.finalize(),
+      })
     } else {
       Err(SourceError::from_err_vec(errors))
     }

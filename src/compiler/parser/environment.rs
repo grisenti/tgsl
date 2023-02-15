@@ -6,7 +6,13 @@ pub type Scope = HashMap<String, Identifier>;
 pub struct Environment {
   global: Scope,
   scopes: Vec<Scope>,
+  types: Vec<Type>,
   last_id: u32,
+}
+
+pub struct FinalizedEnvironment {
+  pub global_scope: Scope,
+  pub type_map: Vec<Type>,
 }
 
 impl Environment {
@@ -15,6 +21,14 @@ impl Environment {
     self.global.insert(name.to_string(), id);
     self.last_id += 1;
     id
+  }
+
+  pub fn set_type(&mut self, id: Identifier, new_type: Type) {
+    let index = id.0 as usize;
+    if self.types.len() <= index {
+      self.types.resize(index + 1, Type::Any);
+    }
+    self.types[index] = new_type;
   }
 
   pub fn get_name_or_add_global(&mut self, name: &str) -> Identifier {
@@ -59,15 +73,20 @@ impl Environment {
     self.scopes.push(HashMap::new())
   }
 
-  pub fn get_global(self) -> Scope {
-    self.global
-  }
-
   pub fn new() -> Self {
     Self {
       global: Scope::new(),
       scopes: Vec::new(),
+      types: Vec::new(),
       last_id: 0,
+    }
+  }
+
+  pub fn finalize(mut self) -> FinalizedEnvironment {
+    self.types.resize(self.last_id as usize + 1, Type::Any);
+    FinalizedEnvironment {
+      global_scope: self.global,
+      type_map: self.types,
     }
   }
 }

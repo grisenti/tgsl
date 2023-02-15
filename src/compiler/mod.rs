@@ -5,7 +5,7 @@ use crate::errors::*;
 use self::{
   ast::{Identifier, AST},
   lexer::Lexer,
-  parser::Parser,
+  parser::{ParseResult, Parser},
   semantic_analysis::SemanticAnalizer,
 };
 
@@ -24,11 +24,11 @@ pub struct CompilerResult {
 impl Compiler {
   pub fn compile(program: &str) -> Result<CompilerResult, SourceError> {
     let parser = Parser::new(Lexer::new(program));
-    let (ast, global_environment) = parser.parse()?;
-    SemanticAnalizer::analyze(&ast)?;
+    let ParseResult { ast, final_env } = parser.parse()?;
+    SemanticAnalizer::analyze(&ast, final_env.type_map)?;
     Ok(CompilerResult {
       ast,
-      global_environment,
+      global_environment: final_env.global_scope,
     })
   }
 }
