@@ -26,7 +26,7 @@ impl Environment {
   pub fn set_type(&mut self, id: Identifier, new_type: Type) {
     let index = id.0 as usize;
     if self.types.len() <= index {
-      self.types.resize(index + 1, Type::Any);
+      self.types.resize(index + 1, Type::Unknown);
     }
     self.types[index] = new_type;
   }
@@ -83,7 +83,7 @@ impl Environment {
   }
 
   pub fn finalize(mut self) -> FinalizedEnvironment {
-    self.types.resize(self.last_id as usize + 1, Type::Any);
+    self.types.resize(self.last_id as usize + 1, Type::Unknown);
     FinalizedEnvironment {
       global_scope: self.global,
       type_map: self.types,

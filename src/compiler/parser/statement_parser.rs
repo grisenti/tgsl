@@ -207,9 +207,7 @@ impl<'src> Parser<'src> {
       self.env.pop();
       let (parameters, mut fn_type) = parameters?;
       fn_type.push(return_type);
-      self
-        .env
-        .set_type(name_id, Type::FunctionType(fn_type.clone()));
+      self.env.set_type(name_id, Type::Function(fn_type.clone()));
       Ok(self.ast.add_statement(Stmt::Function {
         id: name_id,
         name_info,
@@ -239,9 +237,7 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic('}'))?;
     let mut constructor_type = member_types.clone();
     constructor_type.push(Type::Struct(name_id));
-    self
-      .env
-      .set_type(name_id, Type::FunctionType(constructor_type));
+    self.env.set_type(name_id, Type::Function(constructor_type));
     Ok(self.ast.add_statement(Stmt::Struct {
       name: name_id,
       name_info,

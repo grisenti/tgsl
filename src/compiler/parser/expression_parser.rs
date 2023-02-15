@@ -182,7 +182,7 @@ impl<'src> Parser<'src> {
       let (parameters, mut fn_type) = parameters?;
       fn_type.push(return_type);
       let id = self.env.declare_anonymous_closure();
-      self.env.set_type(id, Type::FunctionType(fn_type.clone()));
+      self.env.set_type(id, Type::Function(fn_type.clone()));
       Ok(self.ast.add_expression(Expr::Closure {
         id,
         parameters,

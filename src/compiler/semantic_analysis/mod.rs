@@ -48,7 +48,7 @@ impl SemanticAnalizer {
 
   fn equal_types(&self, value: &Type, specifier: &Type) -> bool {
     match (value, specifier) {
-      (_, Type::Any) => true,
+      (_, Type::Unknown) => true,
       (a, b) => a == b,
     }
   }
@@ -75,7 +75,7 @@ impl SemanticAnalizer {
 
   pub fn set_type_or_err(&mut self, id: Identifier, value_type: Type, name_info: SourceInfo) {
     match &self.type_map[id.0 as usize] {
-      Type::Any => {
+      Type::Unknown => {
         self.type_map[id.0 as usize] = value_type;
       }
       Type::Error => {}
@@ -320,7 +320,7 @@ impl SemanticAnalizer {
     name_info: SourceInfoHandle,
     name: StrHandle,
   ) -> Type {
-    if let Type::FunctionType(types) = self.get_type(id) {
+    if let Type::Function(types) = self.get_type(id) {
       Type::PartialCall {
         func_types: types,
         partial_arguments: vec![lhs],
@@ -388,7 +388,7 @@ impl SemanticAnalizer {
         body,
       } => {
         self.check_function(ast, id, fn_type.clone(), &parameters, &body);
-        Type::FunctionType(fn_type)
+        Type::Function(fn_type)
       }
       Expr::Assignment { id, id_info, value } => {
         let value_type = self.analyze_expr(ast, value);
@@ -414,7 +414,7 @@ impl SemanticAnalizer {
             partial_arguments.extend(arguments);
             self.check_function_call(ast, func_types, partial_arguments, call_info)
           }
-          Type::FunctionType(types) => {
+          Type::Function(types) => {
             let args = arguments.collect::<Vec<Type>>();
             self.check_function_call(ast, types, args, call_info)
           }

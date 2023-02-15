@@ -134,7 +134,7 @@ impl<'src> Parser<'src> {
         let mut params = self.parse_function_param_types()?;
         self.match_or_err(Token::ThinArrow)?;
         params.push(self.match_type_name_or_err()?);
-        Ok(Type::FunctionType(params))
+        Ok(Type::Function(params))
       }
       _ => Err(error_from_lexer_state(
         &self.lex,
