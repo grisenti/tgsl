@@ -108,10 +108,12 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic('('))?;
 
     let mut result = Vec::new();
-    loop {
-      result.push(self.match_type_name_or_err()?);
-      if self.match_next(Token::Basic(','))?.is_none() {
-        break;
+    if self.lookahead != Token::Basic(')') {
+      loop {
+        result.push(self.match_type_name_or_err()?);
+        if self.match_next(Token::Basic(','))?.is_none() {
+          break;
+        }
       }
     }
     self.match_or_err(Token::Basic(')'))?;
