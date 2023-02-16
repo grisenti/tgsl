@@ -160,6 +160,7 @@ impl Interpreter {
         );
         Ok(None)
       }
+      _ => Ok(None),
     }
   }
 }

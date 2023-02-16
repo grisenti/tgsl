@@ -36,6 +36,11 @@ pub enum Stmt {
     fn_type: Vec<Type>,
     body: Vec<StmtHandle>,
   },
+  ExternFunction {
+    id: Identifier,
+    name_info: SourceInfoHandle,
+    fn_type: Vec<Type>,
+  },
   Break(SourceInfoHandle),
   Return {
     expr: ExprHandle,

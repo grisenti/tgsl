@@ -249,11 +249,30 @@ impl<'src> Parser<'src> {
     }))
   }
 
+  fn parse_extern_function(&mut self) -> StmtRes {
+    assert_eq!(self.lookahead, Token::Extern);
+    self.advance()?;
+    self.match_or_err(Token::Fn)?;
+    let (name_id, name_info) = self.match_id_or_err()?;
+    let mut function_type = self.parse_function_param_types()?;
+    function_type.push(self.parse_function_return_type()?);
+    self
+      .env
+      .set_type(name_id, Type::Function(function_type.clone()));
+    self.match_or_err(Token::Basic(';'))?;
+    Ok(self.ast.add_statement(Stmt::ExternFunction {
+      id: name_id,
+      name_info,
+      fn_type: function_type,
+    }))
+  }
+
   pub(super) fn parse_decl(&mut self) -> StmtRes {
     let ret = match self.lookahead {
       Token::Var => self.parse_var_decl()?,
       Token::Fn => self.parse_function_decl()?,
       Token::Struct => self.parse_struct_decl()?,
+      Token::Extern => self.parse_extern_function()?,
       _ => self.parse_statement()?,
     };
     Ok(ret)

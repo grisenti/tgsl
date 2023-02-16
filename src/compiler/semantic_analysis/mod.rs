@@ -356,6 +356,7 @@ impl SemanticAnalizer {
         self.analyze_expr(ast, expr);
         None
       }
+      Stmt::ExternFunction { .. } => None,
     }
   }
 
