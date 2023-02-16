@@ -135,7 +135,7 @@ impl<'src> Parser<'src> {
     assert!(self.lookahead == Token::Var);
     self.advance()?;
     let (identifier, id_info) = self.match_id_or_err()?;
-    let var_type = self.parse_type_specifier_or_err()?;
+    let var_type = self.parse_opt_type_specifier()?;
     self.env.set_type(identifier, var_type.clone());
     let ret = if self.lookahead == Token::Basic('=') {
       self.advance()?; // consume '='

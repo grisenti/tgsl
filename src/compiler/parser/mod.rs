@@ -150,6 +150,14 @@ impl<'src> Parser<'src> {
     self.match_type_name_or_err()
   }
 
+  fn parse_opt_type_specifier(&mut self) -> Result<Type, SourceError> {
+    if self.match_next(Token::Basic(':'))?.is_some() {
+      self.match_type_name_or_err()
+    } else {
+      Ok(Type::Unknown)
+    }
+  }
+
   fn syncronize_or_errors(&mut self, mut errors: SrcErrVec) -> Result<SrcErrVec, SourceError> {
     let mut stop = false;
     while !stop {
