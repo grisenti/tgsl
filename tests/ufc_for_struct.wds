@@ -1,0 +1,16 @@
+extern fn assert(bool);
+
+struct A {
+	a: num,
+	b: str,
+	c: bool,
+}
+
+fn get_a_member(a: A) -> num {
+	return a.a;
+}
+
+var x = A(1, "two", false);
+
+assert(x.get_a_member() == 1);
+

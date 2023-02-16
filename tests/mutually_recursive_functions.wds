@@ -1,0 +1,8 @@
+fn f(n: num) -> num {
+	return g(n - 1);
+}
+
+fn g(n: num) -> num {
+	if (n < 1) return 1;
+	return f(n);
+}

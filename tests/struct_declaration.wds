@@ -1,0 +1,6 @@
+struct A {
+	a: num,
+	b: str,
+	c: bool,
+}
+

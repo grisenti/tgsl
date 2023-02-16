@@ -85,4 +85,12 @@ mod test {
   test_file!(primitive_operations);
   test_file!(ufc_for_primitive_types);
   test_file!(recursive_function);
+  test_file!(struct_declaration);
+  test_file!(struct_construction);
+  test_file!(struct_member_access);
+  test_file!(ufc_for_struct);
+  test_file!(mutually_recursive_functions);
+  test_file!(nested_structs);
+  test_file!(conditional_return_types);
+  test_file!(if_condition);
 }

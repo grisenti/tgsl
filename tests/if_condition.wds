@@ -1,0 +1,16 @@
+extern fn assert(bool);
+
+var x;
+if (2 < 3)
+	x = 1;
+else
+	x = -1;
+
+assert(x == 1);
+
+if (2 < 3) {
+	if (3 > 2)
+		x = -1;
+}
+
+assert(x == -1);
