@@ -84,5 +84,5 @@ mod test {
   test_file!(passing_closures);
   test_file!(primitive_operations);
   test_file!(ufc_for_primitive_types);
-  test_file!(mutually_recursive);
+  test_file!(recursive_function);
 }

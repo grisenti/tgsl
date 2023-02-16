@@ -1,4 +1,6 @@
-fn add(a, b) {
+extern fn assert(bool);
+
+fn add(a: num, b: num) -> num{
 	return a + b;
 }
 

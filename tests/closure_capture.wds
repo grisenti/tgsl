@@ -1,6 +1,8 @@
-fn f () {
+extern fn assert(bool);
+
+fn f() -> fn() -> num {
   var y = 1;
-  return fn () {
+  return fn () -> num {
     y = y + 1;
     return y;
   };

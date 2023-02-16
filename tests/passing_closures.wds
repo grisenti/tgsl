@@ -1,6 +1,7 @@
-fn transform(a, op) {
+extern fn assert(bool);
+
+fn transform(a: str, op: fn(str) -> str) -> str {
 	return op(a);
 }
 
-assert(transform("hello", fn (a) {return a + " world!";}) == "hello world!");
-assert(transform(1, fn (a) {return a + 2;}) == 3);
+assert(transform("hello", fn (a: str) -> str {return a + " world!";}) == "hello world!");
