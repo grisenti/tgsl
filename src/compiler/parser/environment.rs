@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub type Scope = HashMap<String, Identifier>;
 
@@ -7,6 +7,7 @@ pub struct Environment {
   global: Scope,
   scopes: Vec<Scope>,
   types: Vec<Type>,
+  declared: HashSet<Identifier>,
   last_id: u32,
 }
 
@@ -16,9 +17,9 @@ pub struct FinalizedEnvironment {
 }
 
 impl Environment {
-  fn declare_global_name(&mut self, name: &str) -> Identifier {
+  fn declare_global_name(&mut self, name: String) -> Identifier {
     let id = Identifier(self.last_id);
-    self.global.insert(name.to_string(), id);
+    self.global.insert(name, id);
     self.last_id += 1;
     id
   }
@@ -39,7 +40,7 @@ impl Environment {
       .find_map(|scope| scope.get(name))
       .or_else(|| self.global.get(name))
       .cloned()
-      .unwrap_or_else(|| self.declare_global_name(name))
+      .unwrap_or_else(|| self.declare_global_name(name.to_string()))
   }
 
   pub fn declare_name_or_err(
@@ -48,11 +49,16 @@ impl Environment {
     name_src_info: SourceInfo,
   ) -> Result<Identifier, SourceError> {
     let innermost = self.scopes.last_mut().unwrap_or(&mut self.global);
-    if innermost.contains_key(name) {
-      Err(error_from_source_info(
-        &name_src_info,
-        format!("cannot redeclare name '{name}' in the same scope"),
-      ))
+    if let Some(id) = innermost.get(name).cloned() {
+      if self.declared.contains(&id) {
+        Err(error_from_source_info(
+          &name_src_info,
+          format!("cannot redeclare name '{name}' in the same scope"),
+        ))
+      } else {
+        self.declared.insert(id);
+        Ok(id)
+      }
     } else {
       let id = Identifier(self.last_id);
       innermost.insert(name.to_string(), id);
@@ -62,7 +68,7 @@ impl Environment {
   }
 
   pub fn declare_anonymous_closure(&mut self) -> Identifier {
-    self.declare_global_name(&format!("{{{}}}", self.last_id))
+    self.declare_global_name(format!("{{{}}}", self.last_id))
   }
 
   pub fn pop(&mut self) {
@@ -78,6 +84,7 @@ impl Environment {
       global: Scope::new(),
       scopes: Vec::new(),
       types: Vec::new(),
+      declared: HashSet::new(),
       last_id: 0,
     }
   }
