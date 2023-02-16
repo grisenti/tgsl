@@ -215,7 +215,7 @@ impl SemanticAnalizer {
         }
       }
     }
-    if !unconditional_return {
+    if !unconditional_return && *return_type != Type::Nothing {
       self.emit_error(error_from_source_info(
         &self.function_stack.last().unwrap().get(ast),
         "function only has conditional return types".to_string(),

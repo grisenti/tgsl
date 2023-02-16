@@ -12,6 +12,7 @@ pub enum Type {
   },
   Function(Vec<Type>),
   Unknown,
+  Nothing,
   Error,
 }
 

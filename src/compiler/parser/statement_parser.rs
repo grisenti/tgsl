@@ -184,8 +184,11 @@ impl<'src> Parser<'src> {
   }
 
   pub(super) fn parse_function_return_type(&mut self) -> Result<Type, SourceError> {
-    self.match_or_err(Token::ThinArrow)?;
-    self.match_type_name_or_err()
+    if self.match_next(Token::ThinArrow)?.is_some() {
+      self.match_type_name_or_err()
+    } else {
+      Ok(Type::Nothing)
+    }
   }
 
   fn parse_function_decl(&mut self) -> StmtRes {
