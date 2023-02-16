@@ -27,14 +27,48 @@ const COMP_OPERATORS: [Operator; 5] = [
 ];
 const LOGICAL_OPERATORS: [Operator; 2] = [Operator::Or, Operator::And];
 
+enum ReturnType {
+  Conditional(Type),
+  Unconditional(Type),
+  Error,
+}
+
+fn to_conditional(opt_ret: Option<ReturnType>) -> Option<ReturnType> {
+  if let Some(ReturnType::Unconditional(ret_type)) = opt_ret {
+    Some(ReturnType::Conditional(ret_type))
+  } else {
+    opt_ret
+  }
+}
+
+impl ReturnType {
+  fn merge(self, other: ReturnType) -> Option<Self> {
+    match (self, other) {
+      (ReturnType::Unconditional(t1), ReturnType::Conditional(t2)) if t1 == t2 => {
+        Some(ReturnType::Unconditional(t1))
+      }
+      (ReturnType::Conditional(t1), ReturnType::Unconditional(t2)) if t1 == t2 => {
+        Some(ReturnType::Unconditional(t1))
+      }
+      (ReturnType::Unconditional(t1), ReturnType::Unconditional(t2)) if t1 == t2 => {
+        Some(ReturnType::Unconditional(t1))
+      }
+      (ReturnType::Conditional(t1), ReturnType::Conditional(t2)) if t1 == t2 => {
+        Some(ReturnType::Conditional(t1))
+      }
+      _ => None,
+    }
+  }
+}
+
 enum AnalyzerState {
   Function(SourceInfoHandle),
   Loop,
 }
 
 pub struct SemanticAnalizer {
-  state: Vec<AnalyzerState>,
-  function_depth: u32,
+  function_stack: Vec<SourceInfoHandle>,
+  loop_depth: u32,
   structs: StructMap,
   functions: FunctionMap,
   type_map: Vec<Type>,
@@ -145,7 +179,7 @@ impl SemanticAnalizer {
         self.emit_error(error_from_source_info(
           &call_info.get(ast),
           format!(
-            "mismatched types. Argument {} should be of type {param_type:?}",
+            "mismatched types in function call. Argument {} should be of type {param_type:?}",
             arg_num + 1
           ),
         ));
@@ -160,19 +194,32 @@ impl SemanticAnalizer {
     ast: &AST,
     id: Identifier,
     fn_types: Vec<Type>,
-    parameter_ids: &[Identifier],
     body: &[StmtHandle],
   ) {
     let return_type = fn_types.last().unwrap();
+    let mut unconditional_return = false;
     for stmt in body.iter() {
       if let Some(ret) = self.analyze_stmt(ast, *stmt) {
-        if *return_type != ret {
-          self.emit_error(error_from_source_info(
-            &SourceInfo::temporary(),
-            "inconsistent return types".to_string(),
-          ))
+        match ret {
+          ReturnType::Conditional(val) if val == *return_type => {}
+          ReturnType::Unconditional(val) if val == *return_type => unconditional_return = true,
+          ReturnType::Error => unconditional_return = true,
+          _ => {
+            self.emit_error(error_from_source_info(
+              &self.function_stack.last().unwrap().get(ast),
+              "inconsistent return types".to_string(),
+            ));
+            unconditional_return = true;
+            break;
+          }
         }
       }
+    }
+    if !unconditional_return {
+      self.emit_error(error_from_source_info(
+        &self.function_stack.last().unwrap().get(ast),
+        "function only has conditional return types".to_string(),
+      ));
     }
     self.functions.insert(id, fn_types);
   }
@@ -191,26 +238,28 @@ impl SemanticAnalizer {
     }
   }
 
-  pub fn check_return_types(&mut self, ast: &AST, returns: Vec<Option<Type>>) -> Option<Type> {
-    let mut ret_types = returns.iter().filter_map(|v| v.as_ref());
+  fn check_return_types(
+    &mut self,
+    ast: &AST,
+    returns: Vec<Option<ReturnType>>,
+  ) -> Option<ReturnType> {
+    let mut ret_types = returns.into_iter().filter_map(|v| v);
     if let Some(first) = ret_types.next() {
-      if ret_types.all(|ret| self.equal_types(ret, first)) {
-        Some(first.clone())
-      } else if let Some(AnalyzerState::Function(info)) = self.state.last() {
+      if let Some(ret_type) = ret_types.try_fold(first, |acc, elem| elem.merge(acc)) {
+        Some(ret_type)
+      } else {
         self.emit_error(error_from_source_info(
-          &info.get(ast),
+          &SourceInfo::temporary(),
           "inconsistent return types in function".to_string(),
         ));
-        Some(Type::Error)
-      } else {
-        panic!();
+        Some(ReturnType::Error)
       }
     } else {
       None
     }
   }
 
-  pub fn analyze_stmt(&mut self, ast: &AST, stmt: StmtHandle) -> Option<Type> {
+  fn analyze_stmt(&mut self, ast: &AST, stmt: StmtHandle) -> Option<ReturnType> {
     match stmt.clone().get(ast) {
       Stmt::VarDecl {
         identifier,
@@ -228,10 +277,10 @@ impl SemanticAnalizer {
       } => {
         let condition_type = self.analyze_expr(ast, condition);
         self.check_valid_condition_type(info.get(ast), condition_type);
-        self.state.push(AnalyzerState::Loop);
+        self.loop_depth += 1;
         let ret = self.analyze_stmt(ast, loop_body);
-        self.state.pop();
-        ret
+        self.loop_depth -= 1;
+        to_conditional(ret)
       }
       Stmt::Struct {
         name,
@@ -256,7 +305,7 @@ impl SemanticAnalizer {
       } => {
         let condition_type = self.analyze_expr(ast, condition);
         self.check_valid_condition_type(if_info.get(ast), condition_type);
-        let ret_true = self.analyze_stmt(ast, true_branch);
+        let ret_true = to_conditional(self.analyze_stmt(ast, true_branch));
         let ret_false = if let Some(stmt) = else_branch {
           self.analyze_stmt(ast, stmt)
         } else {
@@ -278,15 +327,13 @@ impl SemanticAnalizer {
         fn_type,
         body,
       } => {
-        self.state.push(AnalyzerState::Function(name_info));
-        self.function_depth += 1;
-        self.check_function(ast, id, fn_type, &parameters, &body);
-        self.function_depth -= 1;
-        self.state.pop();
+        self.function_stack.push(name_info);
+        self.check_function(ast, id, fn_type, &body);
+        self.function_stack.pop();
         None
       }
       Stmt::Break(info) => {
-        if !matches!(self.state.last(), Some(AnalyzerState::Loop)) {
+        if self.loop_depth == 0 {
           self.emit_error(error_from_source_info(
             &info.get(ast),
             "cannot have break outside of loop body".to_string(),
@@ -295,8 +342,8 @@ impl SemanticAnalizer {
         None
       }
       Stmt::Return { expr, src_info } => {
-        if let Some(AnalyzerState::Function(_)) = self.state.last() {
-          Some(self.analyze_expr(ast, expr))
+        if self.function_stack.len() > 0 {
+          Some(ReturnType::Unconditional(self.analyze_expr(ast, expr)))
         } else {
           self.emit_error(error_from_source_info(
             &src_info.get(ast),
@@ -383,11 +430,11 @@ impl SemanticAnalizer {
     match expr.clone().get(ast) {
       Expr::Closure {
         id,
-        parameters,
+        parameters: _,
         fn_type,
         body,
       } => {
-        self.check_function(ast, id, fn_type.clone(), &parameters, &body);
+        self.check_function(ast, id, fn_type.clone(), &body);
         Type::Function(fn_type)
       }
       Expr::Assignment { id, id_info, value } => {
@@ -402,8 +449,6 @@ impl SemanticAnalizer {
         call_info,
         arguments,
       } => {
-        self.state.push(AnalyzerState::Function(call_info));
-        self.function_depth += 1;
         let func = self.analyze_expr(ast, func);
         let arguments = arguments.iter().map(|arg| self.analyze_expr(ast, *arg));
         let ret = match func {
@@ -493,8 +538,8 @@ impl SemanticAnalizer {
 
   pub fn analyze(ast: &AST, types: Vec<Type>) -> Result<(), SourceError> {
     let mut analizer = Self {
-      state: Vec::new(),
-      function_depth: 0,
+      function_stack: Vec::new(),
+      loop_depth: 0,
       structs: HashMap::new(),
       functions: HashMap::new(),
       errors: Vec::new(),
