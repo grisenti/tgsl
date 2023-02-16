@@ -431,11 +431,14 @@ impl SemanticAnalizer {
     match expr.clone().get(ast) {
       Expr::Closure {
         id,
+        info,
         parameters: _,
         fn_type,
         body,
       } => {
+        self.function_stack.push(info);
         self.check_function(ast, id, fn_type.clone(), &body);
+        self.function_stack.pop();
         Type::Function(fn_type)
       }
       Expr::Assignment { id, id_info, value } => {

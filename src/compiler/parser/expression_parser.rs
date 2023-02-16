@@ -176,6 +176,7 @@ impl<'src> Parser<'src> {
     };
     self.match_or_err(Token::Basic(')'))?;
     let return_type = self.parse_function_return_type()?;
+    let call_end = self.lex.prev_token_info();
     let block = self.parse_block()?;
     if let Stmt::Block(body) = block.get(&self.ast) {
       self.env.pop();
@@ -183,8 +184,12 @@ impl<'src> Parser<'src> {
       fn_type.push(return_type);
       let id = self.env.declare_anonymous_closure();
       self.env.set_type(id, Type::Function(fn_type.clone()));
+      let info = self
+        .ast
+        .add_source_info(SourceInfo::union(call_start, call_end));
       Ok(self.ast.add_expression(Expr::Closure {
         id,
+        info,
         parameters,
         body,
         fn_type,
