@@ -400,6 +400,7 @@ impl SemanticAnalizer {
       (Type::Str, Operator::Basic('+'), Type::Str) => Type::Str,
       (Type::Num, comp_op, Type::Num) if COMP_OPERATORS.contains(&comp_op) => Type::Bool,
       (Type::Str, comp_op, Type::Str) if COMP_OPERATORS.contains(&comp_op) => Type::Bool,
+      (Type::Bool, comp_op, Type::Bool) if comp_op == Operator::Same => Type::Bool,
       (Type::Bool, logical_op, Type::Bool) if LOGICAL_OPERATORS.contains(&logical_op) => Type::Bool,
       (lhs, op, rhs) => {
         self.emit_error(error_from_source_info(
