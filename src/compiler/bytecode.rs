@@ -24,7 +24,7 @@ pub enum OpCode {
 }
 
 impl OpCode {
-  pub fn from_numeric_op(op: Operator) -> Self {
+  pub fn from_operator(op: Operator) -> Self {
     match op {
       Operator::Basic('+') => OpCode::AddNum,
       Operator::Basic('-') => OpCode::SubNum,
@@ -35,6 +35,7 @@ impl OpCode {
   }
 }
 
+#[derive(Clone, Copy)]
 pub enum ValueType {
   Number,
   Bool,
@@ -42,12 +43,14 @@ pub enum ValueType {
   Object,
 }
 
+#[derive(Clone, Copy)]
 pub union Value {
   pub number: f64,
   pub boolean: bool,
-  pub string: ManuallyDrop<String>,
+  pub string: *mut String,
 }
 
+#[derive(Clone, Copy)]
 pub struct TaggedValue {
   pub kind: ValueType,
   pub value: Value,
@@ -63,29 +66,34 @@ impl TaggedValue {
       Literal::String(s) => Self {
         kind: ValueType::String,
         value: Value {
-          string: ManuallyDrop::new(s.get(ast).to_string()),
+          string: Box::into_raw(Box::new(s.get(ast).to_string())),
         },
       },
       _ => unimplemented!(),
     }
   }
 
-  pub fn free(&mut self) {
+  pub unsafe fn free(&mut self) {
     match self.kind {
-      ValueType::String => unsafe { ManuallyDrop::drop(&mut self.value.string) },
+      ValueType::String => unsafe {
+        let _ = Box::from_raw(self.value.string);
+      },
       _ => {}
     }
   }
 
-  pub fn clone_value(&self) -> Value {
-    match self.kind {
-      ValueType::Number => Value {
-        number: unsafe { self.value.number },
+  pub fn copy_object(&self) -> Self {
+    let value = match self.kind {
+      ValueType::String => unsafe {
+        Value {
+          string: Box::into_raw(Box::new((*self.value.string).clone())),
+        }
       },
-      ValueType::String => Value {
-        string: unsafe { self.value.string.clone() },
-      },
-      _ => todo!(),
+      _ => self.value,
+    };
+    Self {
+      kind: self.kind,
+      value,
     }
   }
 }
@@ -94,12 +102,8 @@ impl ToString for TaggedValue {
   fn to_string(&self) -> String {
     match self.kind {
       ValueType::Number => unsafe { self.value.number.to_string() },
-      ValueType::String => unsafe {
-        format!(
-          "\"{}\"",
-          ManuallyDrop::into_inner(self.value.string.clone())
-        )
-      },
+      ValueType::Bool => unsafe { self.value.boolean.to_string() },
+      ValueType::String => unsafe { format!("\"{}\"", *self.value.string) },
       _ => todo!(),
     }
   }
@@ -107,7 +111,7 @@ impl ToString for TaggedValue {
 
 pub struct Chunk {
   pub code: Vec<u8>,
-  pub constants: Vec<TaggedValue>,
+  constants: Vec<TaggedValue>,
 }
 
 impl Chunk {
@@ -122,6 +126,10 @@ impl Chunk {
     self.code.push(op as u8);
   }
 
+  pub fn get_constant(&self, index: usize) -> TaggedValue {
+    self.constants[index].copy_object()
+  }
+
   pub fn empty() -> Self {
     Self {
       code: Vec::new(),
@@ -133,7 +141,7 @@ impl Chunk {
 impl Drop for Chunk {
   fn drop(&mut self) {
     for c in &mut self.constants {
-      c.free();
+      unsafe { c.free() };
     }
   }
 }

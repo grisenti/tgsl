@@ -402,10 +402,13 @@ impl SemanticAnalizer {
     let OperatorPair { op, src_info } = op;
     match (lhs, op, rhs) {
       (Type::Num, bin_op, Type::Num) if ARITHMETIC_OPERATORS.contains(&bin_op) => {
-        unsafe { self.generated_code.push_op(OpCode::from_numeric_op(bin_op)) }
+        unsafe { self.generated_code.push_op(OpCode::from_operator(bin_op)) }
         Type::Num
       }
-      (Type::Str, Operator::Basic('+'), Type::Str) => Type::Str,
+      (Type::Str, Operator::Basic('+'), Type::Str) => {
+        unsafe { self.generated_code.push_op(OpCode::AddStr) };
+        Type::Str
+      }
       (Type::Num, comp_op, Type::Num) if COMP_OPERATORS.contains(&comp_op) => Type::Bool,
       (Type::Str, comp_op, Type::Str) if COMP_OPERATORS.contains(&comp_op) => Type::Bool,
       (Type::Bool, comp_op, Type::Bool) if comp_op == Operator::Same => Type::Bool,
@@ -570,6 +573,7 @@ impl SemanticAnalizer {
       analizer.analyze_stmt(ast, *stmt);
     }
     if analizer.errors.is_empty() {
+      unsafe { analizer.generated_code.push_op(OpCode::Return) };
       Ok(analizer.generated_code)
     } else {
       Err(SourceError::from_err_vec(analizer.errors))

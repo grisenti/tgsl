@@ -1,26 +1,26 @@
-use crate::compiler::bytecode::{Chunk, OpCode, Value};
+use crate::compiler::bytecode::{Chunk, OpCode, TaggedValue, Value, ValueType};
 
 pub struct VM {
   pc: *const u8,
   program: Chunk,
   bytes_read: usize,
-  stack: Vec<Value>,
+  stack: Vec<TaggedValue>,
 }
 
 macro_rules! binary_operation {
-  ($s:ident, $t:ident, $op:tt) => {
-    let lhs = unsafe {$s.pop().$t};
-    let rhs = unsafe {$s.pop().$t};
-	$s.push(Value{ $t: lhs $op rhs });
+  ($s:ident, $t:ident, $kind:expr, $op:tt) => {
+    let rhs = unsafe {$s.pop().value.$t};
+    let lhs = unsafe {$s.pop().value.$t};
+	$s.push(TaggedValue{ kind: $kind, value: Value{ $t: lhs $op rhs }});
   };
 }
 
 macro_rules! unary_operation {
-	($s:ident, $t:ident, $op:tt) => {
-	  let rhs = unsafe {$s.pop().$t};
-	  $s.push(Value{ number: $op rhs });
+  ($s:ident, $t:ident, $kind:expr, $op:tt) => {
+	  let rhs = unsafe {$s.pop().value.$t};
+	  $s.push(TaggedValue{ kind: $kind, value: Value{ $t: $op rhs }});
 	};
-  }
+}
 
 impl VM {
   fn read_instruction(&mut self) -> OpCode {
@@ -29,11 +29,11 @@ impl VM {
     unsafe { std::mem::transmute::<u8, OpCode>(instruction) }
   }
 
-  fn pop(&mut self) -> Value {
+  fn pop(&mut self) -> TaggedValue {
     self.stack.pop().unwrap()
   }
 
-  fn push(&mut self, val: Value) {
+  fn push(&mut self, val: TaggedValue) {
     self.stack.push(val)
   }
 
@@ -46,10 +46,9 @@ impl VM {
     val
   }
 
-  fn read_constant(&mut self) -> Value {
+  fn read_constant(&mut self) -> TaggedValue {
     let index = self.read_byte();
-    assert!(index < self.program.constants.len() as u8);
-    self.program.constants[index as usize].clone_value()
+    self.program.get_constant(index as usize)
   }
 
   pub fn run(&mut self) {
@@ -60,22 +59,38 @@ impl VM {
           self.push(c);
         }
         OpCode::AddNum => {
-          binary_operation!(self, number, +);
+          binary_operation!(self, number, ValueType::Number, +);
         }
         OpCode::SubNum => {
-          binary_operation!(self, number, -);
+          binary_operation!(self, number, ValueType::Number, -);
         }
         OpCode::MulNum => {
-          binary_operation!(self, number, *);
+          binary_operation!(self, number, ValueType::Number, *);
         }
         OpCode::DivNum => {
-          binary_operation!(self, number, /);
+          binary_operation!(self, number, ValueType::Number, -);
         }
         OpCode::NegNum => {
-          unary_operation!(self, number, -);
+          unary_operation!(self, number, ValueType::Number, -);
+        }
+        OpCode::AddStr => {
+          let mut rhs = self.pop();
+          let mut lhs = self.pop();
+          let rhs_str = unsafe { rhs.value.string };
+          let lhs_str = unsafe { lhs.value.string };
+          self.push(TaggedValue {
+            kind: ValueType::String,
+            value: Value {
+              string: Box::into_raw(Box::new(unsafe { (*lhs_str).clone() + &*rhs_str })),
+            },
+          });
+          unsafe { rhs.free() };
+          unsafe { lhs.free() };
         }
         OpCode::Return => {
-          println!("{}", unsafe { self.pop().number });
+          let mut top = self.pop();
+          println!("{}", top.to_string());
+          unsafe { top.free() };
           return;
         }
         _ => {}

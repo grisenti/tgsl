@@ -15,25 +15,12 @@ use errors::{SourceError, SourceInfo};
 use interpreter::*;
 use vm::*;
 
-fn add(_: &mut Interpreter, args: Vec<ExprValue>) -> InterpreterFnResult {
-  match (args[0].clone(), args[1].clone()) {
-    (ExprValue::Num(a), ExprValue::Num(b)) => Ok(ExprValue::Num(a + b)),
-    _ => Err(SourceError::from_source_info(
-      &SourceInfo::temporary(),
-      String::new(),
-      errors::SourceErrorType::Runtime,
-    )),
-  }
-}
-
 fn test(program: &str) -> Result<(), SourceError> {
   let ast = Compiler::compile(program)?;
-  let mut interpreter = Interpreter::new(ast);
-  interpreter.add_global_variable(
-    "add",
-    ExprValue::Func(Rc::new(InterpreterFn::foreign(add, 2))),
-  );
-  interpreter.interpret()
+  let mut vm = VM::new();
+  println!("{:?}", ast.generated_code);
+  vm.interpret(ast.generated_code);
+  Ok(())
 }
 
 fn main() {

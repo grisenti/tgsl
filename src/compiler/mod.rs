@@ -4,6 +4,7 @@ use crate::errors::*;
 
 use self::{
   ast::{Identifier, AST},
+  bytecode::Chunk,
   lexer::Lexer,
   parser::{ParseResult, Parser},
   semantic_analysis::SemanticAnalizer,
@@ -20,6 +21,7 @@ pub struct Compiler {}
 pub struct CompilerResult {
   pub ast: AST,
   pub global_environment: HashMap<String, Identifier>,
+  pub generated_code: Chunk,
 }
 
 impl Compiler {
@@ -27,10 +29,10 @@ impl Compiler {
     let parser = Parser::new(Lexer::new(program));
     let ParseResult { ast, final_env } = parser.parse()?;
     let generated_code = SemanticAnalizer::analyze(&ast, final_env.type_map)?;
-    println!("{:?}", generated_code);
     Ok(CompilerResult {
       ast,
       global_environment: final_env.global_scope,
+      generated_code,
     })
   }
 }
