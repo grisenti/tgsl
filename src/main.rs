@@ -1,14 +1,19 @@
 mod compiler;
 mod errors;
 mod interpreter;
+mod vm;
 
-use std::{fs, rc::Rc};
+use std::{fs, ops::Add, rc::Rc};
 
 //use ast::codegen::desugar;
 
-use compiler::Compiler;
+use compiler::{
+  bytecode::{Chunk, OpCode, Value},
+  Compiler,
+};
 use errors::{SourceError, SourceInfo};
 use interpreter::*;
+use vm::*;
 
 fn add(_: &mut Interpreter, args: Vec<ExprValue>) -> InterpreterFnResult {
   match (args[0].clone(), args[1].clone()) {

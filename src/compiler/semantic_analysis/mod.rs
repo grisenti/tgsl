@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use super::{ast::*, error_from_source_info};
+use super::{
+  ast::*,
+  bytecode::{Chunk, OpCode, TaggedValue, Value},
+  error_from_source_info,
+};
 use crate::errors::{SourceError, SourceInfo};
 
 #[derive(Clone)]
@@ -73,6 +77,7 @@ pub struct SemanticAnalizer {
   functions: FunctionMap,
   type_map: Vec<Type>,
   errors: Vec<SourceError>,
+  generated_code: Chunk,
 }
 
 impl SemanticAnalizer {
@@ -396,7 +401,10 @@ impl SemanticAnalizer {
     let rhs = self.analyze_expr(ast, rhs);
     let OperatorPair { op, src_info } = op;
     match (lhs, op, rhs) {
-      (Type::Num, bin_op, Type::Num) if ARITHMETIC_OPERATORS.contains(&bin_op) => Type::Num,
+      (Type::Num, bin_op, Type::Num) if ARITHMETIC_OPERATORS.contains(&bin_op) => {
+        unsafe { self.generated_code.push_op(OpCode::from_numeric_op(bin_op)) }
+        Type::Num
+      }
       (Type::Str, Operator::Basic('+'), Type::Str) => Type::Str,
       (Type::Num, comp_op, Type::Num) if COMP_OPERATORS.contains(&comp_op) => Type::Bool,
       (Type::Str, comp_op, Type::Str) if COMP_OPERATORS.contains(&comp_op) => Type::Bool,
@@ -448,7 +456,14 @@ impl SemanticAnalizer {
         value_type
       }
       Expr::Variable { id, .. } => self.get_type(id),
-      Expr::Literal { literal, .. } => Type::from_literal(literal),
+      Expr::Literal { literal, .. } => {
+        unsafe {
+          self
+            .generated_code
+            .push_constant(TaggedValue::from_literal(&literal, ast));
+        }
+        Type::from_literal(literal)
+      }
       Expr::FnCall {
         func,
         call_info,
@@ -541,7 +556,7 @@ impl SemanticAnalizer {
     }
   }
 
-  pub fn analyze(ast: &AST, types: Vec<Type>) -> Result<(), SourceError> {
+  pub fn analyze(ast: &AST, types: Vec<Type>) -> Result<Chunk, SourceError> {
     let mut analizer = Self {
       function_stack: Vec::new(),
       loop_depth: 0,
@@ -549,12 +564,13 @@ impl SemanticAnalizer {
       functions: HashMap::new(),
       errors: Vec::new(),
       type_map: types,
+      generated_code: Chunk::empty(),
     };
     for stmt in ast.get_program() {
       analizer.analyze_stmt(ast, *stmt);
     }
     if analizer.errors.is_empty() {
-      Ok(())
+      Ok(analizer.generated_code)
     } else {
       Err(SourceError::from_err_vec(analizer.errors))
     }

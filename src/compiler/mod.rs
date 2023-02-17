@@ -10,6 +10,7 @@ use self::{
 };
 
 pub mod ast;
+pub mod bytecode;
 pub mod lexer;
 pub mod parser;
 pub mod semantic_analysis;
@@ -25,7 +26,8 @@ impl Compiler {
   pub fn compile(program: &str) -> Result<CompilerResult, SourceError> {
     let parser = Parser::new(Lexer::new(program));
     let ParseResult { ast, final_env } = parser.parse()?;
-    SemanticAnalizer::analyze(&ast, final_env.type_map)?;
+    let generated_code = SemanticAnalizer::analyze(&ast, final_env.type_map)?;
+    println!("{:?}", generated_code);
     Ok(CompilerResult {
       ast,
       global_environment: final_env.global_scope,
