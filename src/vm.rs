@@ -109,6 +109,17 @@ impl VM {
           let mut top = self.pop();
           unsafe { top.free() };
         }
+        OpCode::JumpIfFalse => {
+          let condition = unsafe { self.pop().value.boolean };
+          let target = u16::from_ne_bytes([self.read_byte(), self.read_byte()]) as usize;
+          if !condition {
+            unsafe { self.pc = self.pc.add(target) }
+          }
+        }
+        OpCode::Jump => {
+          let target = u16::from_ne_bytes([self.read_byte(), self.read_byte()]) as usize;
+          unsafe { self.pc = self.pc.add(target) }
+        }
         OpCode::Return => {
           return;
         }

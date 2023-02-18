@@ -310,10 +310,22 @@ impl SemanticAnalizer {
       } => {
         let condition_type = self.analyze_expr(ast, condition);
         self.check_valid_condition_type(if_info.get(ast), condition_type);
+        let if_jump_point = self.generated_code.push_jump(OpCode::JumpIfFalse);
         let ret_true = to_conditional(self.analyze_stmt(ast, true_branch));
         let ret_false = if let Some(stmt) = else_branch {
-          self.analyze_stmt(ast, stmt)
+          let skip_else = self.generated_code.push_jump(OpCode::Jump);
+          // TODO: cleanup duplicates
+          self
+            .generated_code
+            .backpatch_current_instruction(if_jump_point);
+
+          let res = self.analyze_stmt(ast, stmt);
+          self.generated_code.backpatch_current_instruction(skip_else);
+          res
         } else {
+          self
+            .generated_code
+            .backpatch_current_instruction(if_jump_point);
           None
         };
         self.check_return_types(ast, vec![ret_true, ret_false])

@@ -8,6 +8,11 @@ pub enum OpCode {
 
   Constant,
 
+  GetGlobal,
+  SetGlobal,
+  GetLocal,
+  SetLocal,
+
   // primitive operations
   // numbers
   NegNum,
@@ -18,6 +23,9 @@ pub enum OpCode {
 
   // strings
   AddStr,
+
+  Jump,
+  JumpIfFalse,
 
   Print,
   Pop,
@@ -70,6 +78,14 @@ impl TaggedValue {
         value: Value {
           string: Box::into_raw(Box::new(s.get(ast).to_string())),
         },
+      },
+      Literal::False => Self {
+        kind: ValueType::Bool,
+        value: Value { boolean: false },
+      },
+      Literal::True => Self {
+        kind: ValueType::Bool,
+        value: Value { boolean: true },
       },
       _ => unimplemented!(),
     }
@@ -128,6 +144,21 @@ impl Chunk {
     self.code.push(op as u8);
   }
 
+  pub fn push_jump(&mut self, jump_type: OpCode) -> usize {
+    debug_assert!(matches!(jump_type, OpCode::Jump | OpCode::JumpIfFalse));
+    unsafe { self.push_op(jump_type) };
+    let index = self.code.len();
+    self.code.push(0);
+    self.code.push(0);
+    index
+  }
+
+  pub fn backpatch_current_instruction(&mut self, jump_point: usize) {
+    let split = ((self.code.len() - jump_point - 2) as u16).to_ne_bytes();
+    self.code[jump_point] = split[0];
+    self.code[jump_point + 1] = split[1];
+  }
+
   pub fn get_constant(&self, index: usize) -> TaggedValue {
     self.constants[index].copy_object()
   }
@@ -154,13 +185,19 @@ impl Debug for Chunk {
     let mut index = 0;
     while index < self.code.len() {
       let code = unsafe { std::mem::transmute::<u8, OpCode>(self.code[index]) };
+      result += &format!("{index}: ");
       match code {
         OpCode::Constant => {
           index += 1;
           result += &format!(
-            "constant: {}\n",
+            "Constant: {}\n",
             self.constants[self.code[index] as usize].to_string()
           );
+        }
+        OpCode::JumpIfFalse | OpCode::Jump => {
+          index += 2;
+          let jump_point = u16::from_ne_bytes([self.code[index - 1], self.code[index]]);
+          result += &format!("{code:?}: {}\n", index + 1 + jump_point as usize);
         }
         code => result += &format!("{:?}\n", code),
       }
