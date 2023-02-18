@@ -1,15 +1,18 @@
 use super::*;
 
-const MAX_PRECEDENCE: usize = 6;
+const MAX_BIN_OP_PRECEDENCE: usize = 4;
 
-const BIN_OP_PRECEDENCE: [[Token<'_>; 2]; MAX_PRECEDENCE] = [
-  [Token::Or, Token::Or],
-  [Token::And, Token::And],
-  [Token::Same, Token::Different],
-  [Token::Basic('<'), Token::Basic('>')],
-  [Token::Basic('+'), Token::Basic('-')],
-  [Token::Basic('*'), Token::Basic('/')],
+const BIN_OP_PRECEDENCE: [&[Token<'_>]; MAX_BIN_OP_PRECEDENCE] = [
+  &[Token::Same, Token::Different],
+  &[Token::Basic('<'), Token::Basic('>'), Token::Leq, Token::Geq],
+  &[Token::Basic('+'), Token::Basic('-')],
+  &[Token::Basic('*'), Token::Basic('/')],
 ];
+
+const MAX_LOGICAL_OP_PRECEDENCE: usize = 2;
+
+const LOGICAL_OP_PRECEDENCE: [&[Token<'_>]; MAX_LOGICAL_OP_PRECEDENCE] =
+  [&[Token::Or, Token::Or], &[Token::And, Token::And]];
 
 impl<'src> Parser<'src> {
   fn parse_primary(&mut self) -> ExprRes {
@@ -118,7 +121,7 @@ impl<'src> Parser<'src> {
   }
 
   fn parse_binary_operation(&mut self, prec: usize) -> ExprRes {
-    if prec == MAX_PRECEDENCE {
+    if prec == MAX_BIN_OP_PRECEDENCE {
       self.parse_unary()
     } else {
       let mut expr = self.parse_binary_operation(prec + 1)?;
@@ -134,10 +137,27 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn parse_logical_operation(&mut self, prec: usize) -> ExprRes {
+    if prec == MAX_LOGICAL_OP_PRECEDENCE {
+      self.parse_binary_operation(0)
+    } else {
+      let mut expr = self.parse_logical_operation(prec + 1)?;
+      while let Some((op, src_info)) = self.matches_alternatives(&LOGICAL_OP_PRECEDENCE[prec])? {
+        let right = self.parse_logical_operation(prec + 1)?;
+        expr = self.ast.add_expression(Expr::Logical {
+          left: expr,
+          operator: OperatorPair::new(to_operator(op), src_info),
+          right,
+        })
+      }
+      Ok(expr)
+    }
+  }
+
   fn parse_assignment(&mut self) -> ExprRes {
-    let lhs = self.parse_binary_operation(0)?;
+    let lhs = self.parse_logical_operation(0)?;
     if let Some((_, eq_src_info)) = self.match_next(Token::Basic('='))? {
-      let rhs = self.parse_binary_operation(0)?;
+      let rhs = self.parse_logical_operation(0)?;
       match lhs.get(&self.ast) {
         Expr::Variable { id, id_info } => Ok(self.ast.add_expression(Expr::Assignment {
           id,

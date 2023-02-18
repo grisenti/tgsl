@@ -8,11 +8,6 @@ pub enum OpCode {
 
   Constant,
 
-  GetGlobal,
-  SetGlobal,
-  GetLocal,
-  SetLocal,
-
   // primitive operations
   // numbers
   NegNum,
@@ -20,13 +15,23 @@ pub enum OpCode {
   SubNum,
   MulNum,
   DivNum,
+  LeNum,
+  GeNum,
+  LeqNum,
+  GeqNum,
+  SameNum,
+  DiffNum,
 
   // strings
   AddStr,
 
+  // bool
+  NotBool,
+
   Jump,
-  JumpIfFalse,
   BackJump,
+  JumpIfFalsePop,
+  JumpIfFalseNoPop,
 
   Print,
   Pop,
@@ -35,12 +40,18 @@ pub enum OpCode {
 }
 
 impl OpCode {
-  pub fn from_operator(op: Operator) -> Self {
+  pub fn from_numeric_operator(op: Operator) -> Self {
     match op {
       Operator::Basic('+') => OpCode::AddNum,
       Operator::Basic('-') => OpCode::SubNum,
       Operator::Basic('*') => OpCode::MulNum,
       Operator::Basic('/') => OpCode::DivNum,
+      Operator::Basic('<') => OpCode::LeNum,
+      Operator::Basic('>') => OpCode::GeNum,
+      Operator::Geq => OpCode::GeqNum,
+      Operator::Leq => OpCode::LeqNum,
+      Operator::Same => OpCode::SameNum,
+      Operator::Different => OpCode::DiffNum,
       _ => unimplemented!(),
     }
   }
@@ -146,7 +157,10 @@ impl Chunk {
   }
 
   pub fn push_jump(&mut self, jump_type: OpCode) -> usize {
-    debug_assert!(matches!(jump_type, OpCode::Jump | OpCode::JumpIfFalse));
+    debug_assert!(matches!(
+      jump_type,
+      OpCode::Jump | OpCode::JumpIfFalsePop | OpCode::JumpIfFalseNoPop
+    ));
     unsafe { self.push_op(jump_type) };
     let index = self.code.len();
     self.code.push(0);
@@ -210,7 +224,7 @@ impl Debug for Chunk {
             self.constants[self.code[index] as usize].to_string()
           );
         }
-        OpCode::JumpIfFalse | OpCode::Jump => {
+        OpCode::JumpIfFalsePop | OpCode::Jump | OpCode::JumpIfFalseNoPop => {
           index += 2;
           let jump_point = u16::from_ne_bytes([self.code[index - 1], self.code[index]]);
           result += &format!("{code:?}: {}\n", index + 1 + jump_point as usize);

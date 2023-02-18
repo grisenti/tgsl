@@ -1,6 +1,5 @@
 mod compiler;
 mod errors;
-mod interpreter;
 mod vm;
 
 use std::fs;

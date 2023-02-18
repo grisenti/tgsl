@@ -8,10 +8,10 @@ pub struct VM {
 }
 
 macro_rules! binary_operation {
-  ($s:ident, $t:ident, $kind:expr, $op:tt) => {
-    let rhs = unsafe {$s.pop().value.$t};
-    let lhs = unsafe {$s.pop().value.$t};
-	$s.push(TaggedValue{ kind: $kind, value: Value{ $t: lhs $op rhs }});
+  ($s:ident, $operator:ident, $result:ident, $kind:expr, $op:tt) => {
+    let rhs = unsafe {$s.pop().value.$operator};
+    let lhs = unsafe {$s.pop().value.$operator};
+	$s.push(TaggedValue{ kind: $kind, value: Value{ $result: lhs $op rhs }});
   };
 }
 
@@ -59,16 +59,34 @@ impl VM {
           self.push(c);
         }
         OpCode::AddNum => {
-          binary_operation!(self, number, ValueType::Number, +);
+          binary_operation!(self, number,number, ValueType::Number, +);
         }
         OpCode::SubNum => {
-          binary_operation!(self, number, ValueType::Number, -);
+          binary_operation!(self, number,number, ValueType::Number, -);
         }
         OpCode::MulNum => {
-          binary_operation!(self, number, ValueType::Number, *);
+          binary_operation!(self, number,number, ValueType::Number, *);
         }
         OpCode::DivNum => {
-          binary_operation!(self, number, ValueType::Number, /);
+          binary_operation!(self, number,number, ValueType::Number, /);
+        }
+        OpCode::LeNum => {
+          binary_operation!(self, number, boolean, ValueType::Bool, <);
+        }
+        OpCode::GeNum => {
+          binary_operation!(self, number, boolean, ValueType::Bool, >);
+        }
+        OpCode::LeqNum => {
+          binary_operation!(self, number, boolean, ValueType::Bool, <=);
+        }
+        OpCode::GeqNum => {
+          binary_operation!(self, number, boolean, ValueType::Bool, >=);
+        }
+        OpCode::SameNum => {
+          binary_operation!(self, number, boolean, ValueType::Bool, ==);
+        }
+        OpCode::DiffNum => {
+          binary_operation!(self, number, boolean, ValueType::Bool, !=);
         }
         OpCode::NegNum => {
           unary_operation!(self, number, ValueType::Number, -);
@@ -87,6 +105,9 @@ impl VM {
           unsafe { rhs.free() };
           unsafe { lhs.free() };
         }
+        OpCode::NotBool => {
+          unary_operation!(self, boolean, ValueType::Bool, !);
+        }
         OpCode::Print => {
           let mut top = self.pop();
           println!("{}", top.to_string());
@@ -96,8 +117,15 @@ impl VM {
           let mut top = self.pop();
           unsafe { top.free() };
         }
-        OpCode::JumpIfFalse => {
+        OpCode::JumpIfFalsePop => {
           let condition = unsafe { self.pop().value.boolean };
+          let target = u16::from_ne_bytes([self.read_byte(), self.read_byte()]) as usize;
+          if !condition {
+            unsafe { self.pc = self.pc.add(target) }
+          }
+        }
+        OpCode::JumpIfFalseNoPop => {
+          let condition = unsafe { self.stack.last().unwrap_unchecked().value.boolean };
           let target = u16::from_ne_bytes([self.read_byte(), self.read_byte()]) as usize;
           if !condition {
             unsafe { self.pc = self.pc.add(target) }
@@ -116,7 +144,7 @@ impl VM {
         OpCode::Return => {
           return;
         }
-        _ => {}
+        _ => todo!(),
       }
     }
   }

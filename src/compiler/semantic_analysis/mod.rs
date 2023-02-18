@@ -29,7 +29,6 @@ const COMP_OPERATORS: [Operator; 5] = [
   Operator::Geq,
   Operator::Same,
 ];
-const LOGICAL_OPERATORS: [Operator; 2] = [Operator::Or, Operator::And];
 
 enum ReturnType {
   Conditional(Type),
@@ -277,7 +276,7 @@ impl SemanticAnalizer {
       } => {
         let label = self.generated_code.get_next_instruction_label();
         let condition_type = self.analyze_expr(ast, condition);
-        let loop_condition = self.generated_code.push_jump(OpCode::JumpIfFalse);
+        let loop_condition = self.generated_code.push_jump(OpCode::JumpIfFalsePop);
         self.check_valid_condition_type(info.get(ast), condition_type);
         self.loop_depth += 1;
         let ret = self.analyze_stmt(ast, loop_body);
@@ -311,7 +310,7 @@ impl SemanticAnalizer {
       } => {
         let condition_type = self.analyze_expr(ast, condition);
         self.check_valid_condition_type(if_info.get(ast), condition_type);
-        let if_jump_point = self.generated_code.push_jump(OpCode::JumpIfFalse);
+        let if_jump_point = self.generated_code.push_jump(OpCode::JumpIfFalsePop);
         let ret_true = to_conditional(self.analyze_stmt(ast, true_branch));
         let ret_false = if let Some(stmt) = else_branch {
           let skip_else = self.generated_code.push_jump(OpCode::Jump);
@@ -421,17 +420,27 @@ impl SemanticAnalizer {
     let OperatorPair { op, src_info } = op;
     match (lhs, op, rhs) {
       (Type::Num, bin_op, Type::Num) if ARITHMETIC_OPERATORS.contains(&bin_op) => {
-        unsafe { self.generated_code.push_op(OpCode::from_operator(bin_op)) }
+        unsafe {
+          self
+            .generated_code
+            .push_op(OpCode::from_numeric_operator(bin_op))
+        }
         Type::Num
       }
       (Type::Str, Operator::Basic('+'), Type::Str) => {
         unsafe { self.generated_code.push_op(OpCode::AddStr) };
         Type::Str
       }
-      (Type::Num, comp_op, Type::Num) if COMP_OPERATORS.contains(&comp_op) => Type::Bool,
+      (Type::Num, comp_op, Type::Num) if COMP_OPERATORS.contains(&comp_op) => {
+        unsafe {
+          self
+            .generated_code
+            .push_op(OpCode::from_numeric_operator(comp_op))
+        };
+        Type::Bool
+      }
       (Type::Str, comp_op, Type::Str) if COMP_OPERATORS.contains(&comp_op) => Type::Bool,
       (Type::Bool, comp_op, Type::Bool) if comp_op == Operator::Same => Type::Bool,
-      (Type::Bool, logical_op, Type::Bool) if LOGICAL_OPERATORS.contains(&logical_op) => Type::Bool,
       (lhs, op, rhs) => {
         self.emit_error(error_from_source_info(
           &src_info.get(ast),
@@ -442,12 +451,59 @@ impl SemanticAnalizer {
     }
   }
 
+  fn logical_operation(
+    &mut self,
+    ast: &AST,
+    lhs: ExprHandle,
+    op: OperatorPair,
+    rhs: ExprHandle,
+  ) -> Type {
+    let lhs = self.analyze_expr(ast, lhs);
+    let OperatorPair { op, src_info } = op;
+    let rhs = match op {
+      Operator::And => {
+        let jump = self.generated_code.push_jump(OpCode::JumpIfFalseNoPop);
+        unsafe { self.generated_code.push_op(OpCode::Pop) };
+        let ret = self.analyze_expr(ast, rhs);
+        self.generated_code.backpatch_current_instruction(jump);
+        ret
+      }
+      Operator::Or => {
+        let check_rhs = self.generated_code.push_jump(OpCode::JumpIfFalseNoPop);
+        let skip_rhs_jump = self.generated_code.push_jump(OpCode::Jump);
+        self.generated_code.backpatch_current_instruction(check_rhs);
+        unsafe { self.generated_code.push_op(OpCode::Pop) };
+        let ret = self.analyze_expr(ast, rhs);
+        self
+          .generated_code
+          .backpatch_current_instruction(skip_rhs_jump);
+        ret
+      }
+      _ => panic!(),
+    };
+    if let (Type::Bool, Type::Bool) = (&lhs, &rhs) {
+      Type::Bool
+    } else {
+      self.emit_error(error_from_source_info(
+        &src_info.get(ast),
+        format!("cannot apply logical operator {op:?} to operands {lhs:?} and {rhs:?}"),
+      ));
+      Type::Error
+    }
+  }
+
   fn unary_operation(&mut self, ast: &AST, op: OperatorPair, rhs: ExprHandle) -> Type {
     let rhs = self.analyze_expr(ast, rhs);
     let OperatorPair { op, src_info } = op;
     match (op, rhs) {
-      (Operator::Basic('-'), Type::Num) => Type::Num,
-      (Operator::Basic('!'), Type::Bool) => Type::Bool,
+      (Operator::Basic('-'), Type::Num) => {
+        unsafe { self.generated_code.push_op(OpCode::NegNum) }
+        Type::Num
+      }
+      (Operator::Basic('!'), Type::Bool) => {
+        unsafe { self.generated_code.push_op(OpCode::NotBool) };
+        Type::Bool
+      }
       (op, rhs) => {
         self.emit_error(error_from_source_info(
           &src_info.get(ast),
@@ -520,6 +576,11 @@ impl SemanticAnalizer {
         operator,
         right,
       } => self.binary_operation(ast, left, operator, right),
+      Expr::Logical {
+        left,
+        operator,
+        right,
+      } => self.logical_operation(ast, left, operator, right),
       Expr::Unary { operator, right } => self.unary_operation(ast, operator, right),
       Expr::Dot {
         lhs,
