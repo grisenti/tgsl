@@ -106,6 +106,12 @@ impl VM {
         OpCode::Jump => {
           let target = u16::from_ne_bytes([self.read_byte(), self.read_byte()]) as usize;
           unsafe { self.pc = self.pc.add(target) }
+          self.bytes_read += target;
+        }
+        OpCode::BackJump => {
+          let target = u16::from_ne_bytes([self.read_byte(), self.read_byte()]) as usize;
+          unsafe { self.pc = self.pc.sub(target) }
+          self.bytes_read -= target;
         }
         OpCode::Return => {
           return;

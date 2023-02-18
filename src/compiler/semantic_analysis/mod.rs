@@ -275,11 +275,17 @@ impl SemanticAnalizer {
         condition,
         loop_body,
       } => {
+        let label = self.generated_code.get_next_instruction_label();
         let condition_type = self.analyze_expr(ast, condition);
+        let loop_condition = self.generated_code.push_jump(OpCode::JumpIfFalse);
         self.check_valid_condition_type(info.get(ast), condition_type);
         self.loop_depth += 1;
         let ret = self.analyze_stmt(ast, loop_body);
         self.loop_depth -= 1;
+        self.generated_code.push_back_jump(label);
+        self
+          .generated_code
+          .backpatch_current_instruction(loop_condition);
         to_conditional(ret)
       }
       Stmt::Struct {

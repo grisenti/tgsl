@@ -26,6 +26,7 @@ pub enum OpCode {
 
   Jump,
   JumpIfFalse,
+  BackJump,
 
   Print,
   Pop,
@@ -153,10 +154,25 @@ impl Chunk {
     index
   }
 
+  pub fn push_back_jump(&mut self, to: usize) {
+    assert!((self.code.len() - to + 2) <= u16::MAX as usize);
+    unsafe { self.push_op(OpCode::BackJump) };
+    // 2 added to skip jump point
+    let split = ((self.code.len() - to + 2) as u16).to_ne_bytes();
+    self.code.push(split[0]);
+    self.code.push(split[1]);
+  }
+
   pub fn backpatch_current_instruction(&mut self, jump_point: usize) {
+    assert!((self.code.len() - jump_point - 2) <= u16::MAX as usize);
     let split = ((self.code.len() - jump_point - 2) as u16).to_ne_bytes();
+    // 2 removed to skip jump point
     self.code[jump_point] = split[0];
     self.code[jump_point + 1] = split[1];
+  }
+
+  pub fn get_next_instruction_label(&self) -> usize {
+    self.code.len()
   }
 
   pub fn get_constant(&self, index: usize) -> TaggedValue {
@@ -198,6 +214,11 @@ impl Debug for Chunk {
           index += 2;
           let jump_point = u16::from_ne_bytes([self.code[index - 1], self.code[index]]);
           result += &format!("{code:?}: {}\n", index + 1 + jump_point as usize);
+        }
+        OpCode::BackJump => {
+          index += 2;
+          let jump_point = u16::from_ne_bytes([self.code[index - 1], self.code[index]]);
+          result += &format!("{code:?}: {}\n", index + 1 - jump_point as usize);
         }
         code => result += &format!("{:?}\n", code),
       }
