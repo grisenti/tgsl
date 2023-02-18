@@ -1,10 +1,23 @@
-use crate::compiler::bytecode::{Chunk, OpCode, TaggedValue, Value, ValueType};
+use std::collections::HashMap;
+
+use crate::compiler::{
+  ast::Identifier,
+  bytecode::{Chunk, OpCode, TaggedValue, Value, ValueType},
+};
 
 pub struct VM {
   pc: *const u8,
   program: Chunk,
   bytes_read: usize,
   stack: Vec<TaggedValue>,
+}
+
+macro_rules! binary_operation {
+  ($s:ident, $t:ident, $kind:expr, $op:tt) => {
+    let rhs = unsafe {$s.pop().value.$t};
+    let lhs = unsafe {$s.pop().value.$t};
+	$s.push(TaggedValue{ kind: $kind, value: Value{ $t: lhs $op rhs }});
+  };
 }
 
 macro_rules! binary_operation {
@@ -68,7 +81,7 @@ impl VM {
           binary_operation!(self, number, ValueType::Number, *);
         }
         OpCode::DivNum => {
-          binary_operation!(self, number, ValueType::Number, -);
+          binary_operation!(self, number, ValueType::Number, /);
         }
         OpCode::NegNum => {
           unary_operation!(self, number, ValueType::Number, -);
@@ -87,10 +100,16 @@ impl VM {
           unsafe { rhs.free() };
           unsafe { lhs.free() };
         }
-        OpCode::Return => {
+        OpCode::Print => {
           let mut top = self.pop();
           println!("{}", top.to_string());
           unsafe { top.free() };
+        }
+        OpCode::Pop => {
+          let mut top = self.pop();
+          unsafe { top.free() };
+        }
+        OpCode::Return => {
           return;
         }
         _ => {}

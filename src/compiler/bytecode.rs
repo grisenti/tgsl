@@ -1,6 +1,5 @@
 use super::ast::{Literal, Operator, AST};
 use core::fmt::Debug;
-use std::mem::ManuallyDrop;
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
@@ -19,6 +18,9 @@ pub enum OpCode {
 
   // strings
   AddStr,
+
+  Print,
+  Pop,
 
   Last,
 }

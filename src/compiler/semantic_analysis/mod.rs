@@ -357,8 +357,14 @@ impl SemanticAnalizer {
           None
         }
       }
-      Stmt::Print(expr) | Stmt::Expr(expr) => {
+      Stmt::Print(expr) => {
         self.analyze_expr(ast, expr);
+        unsafe { self.generated_code.push_op(OpCode::Print) };
+        None
+      }
+      Stmt::Expr(expr) => {
+        self.analyze_expr(ast, expr);
+        unsafe { self.generated_code.push_op(OpCode::Pop) };
         None
       }
       Stmt::ExternFunction { .. } => None,
