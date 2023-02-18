@@ -1,23 +1,10 @@
-use std::collections::HashMap;
-
-use crate::compiler::{
-  ast::Identifier,
-  bytecode::{Chunk, OpCode, TaggedValue, Value, ValueType},
-};
+use crate::compiler::bytecode::{Chunk, OpCode, TaggedValue, Value, ValueType};
 
 pub struct VM {
   pc: *const u8,
   program: Chunk,
   bytes_read: usize,
   stack: Vec<TaggedValue>,
-}
-
-macro_rules! binary_operation {
-  ($s:ident, $t:ident, $kind:expr, $op:tt) => {
-    let rhs = unsafe {$s.pop().value.$t};
-    let lhs = unsafe {$s.pop().value.$t};
-	$s.push(TaggedValue{ kind: $kind, value: Value{ $t: lhs $op rhs }});
-  };
 }
 
 macro_rules! binary_operation {

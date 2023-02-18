@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::{
   ast::*,
-  bytecode::{Chunk, OpCode, TaggedValue, Value},
+  bytecode::{Chunk, OpCode, TaggedValue},
   error_from_source_info,
 };
 use crate::errors::{SourceError, SourceInfo};
@@ -63,11 +63,6 @@ impl ReturnType {
       _ => None,
     }
   }
-}
-
-enum AnalyzerState {
-  Function(SourceInfoHandle),
-  Loop,
 }
 
 pub struct SemanticAnalizer {
@@ -245,7 +240,7 @@ impl SemanticAnalizer {
 
   fn check_return_types(
     &mut self,
-    ast: &AST,
+    _ast: &AST,
     returns: Vec<Option<ReturnType>>,
   ) -> Option<ReturnType> {
     let mut ret_types = returns.into_iter().filter_map(|v| v);
@@ -340,7 +335,7 @@ impl SemanticAnalizer {
       Stmt::Function {
         id,
         name_info,
-        parameters,
+        parameters: _,
         fn_type,
         body,
       } => {

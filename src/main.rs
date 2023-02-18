@@ -3,16 +3,12 @@ mod errors;
 mod interpreter;
 mod vm;
 
-use std::{fs, ops::Add, rc::Rc};
+use std::fs;
 
 //use ast::codegen::desugar;
 
-use compiler::{
-  bytecode::{Chunk, OpCode, Value},
-  Compiler,
-};
-use errors::{SourceError, SourceInfo};
-use interpreter::*;
+use compiler::Compiler;
+use errors::SourceError;
 use vm::*;
 
 fn test(program: &str) -> Result<(), SourceError> {
