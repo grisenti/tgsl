@@ -22,12 +22,13 @@ const ARITHMETIC_OPERATORS: [Operator; 4] = [
   Operator::Basic('*'),
   Operator::Basic('/'),
 ];
-const COMP_OPERATORS: [Operator; 5] = [
+const COMP_OPERATORS: [Operator; 6] = [
   Operator::Basic('<'),
   Operator::Basic('>'),
   Operator::Leq,
   Operator::Geq,
   Operator::Same,
+  Operator::Different,
 ];
 
 enum ReturnType {
@@ -439,7 +440,14 @@ impl SemanticAnalizer {
         };
         Type::Bool
       }
-      (Type::Str, comp_op, Type::Str) if COMP_OPERATORS.contains(&comp_op) => Type::Bool,
+      (Type::Str, comp_op, Type::Str) if COMP_OPERATORS.contains(&comp_op) => {
+        unsafe {
+          self
+            .generated_code
+            .push_op(OpCode::from_string_comp_operator(comp_op))
+        }
+        Type::Bool
+      }
       (Type::Bool, comp_op, Type::Bool) if comp_op == Operator::Same => Type::Bool,
       (lhs, op, rhs) => {
         self.emit_error(error_from_source_info(

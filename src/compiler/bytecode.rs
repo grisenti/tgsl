@@ -24,6 +24,12 @@ pub enum OpCode {
 
   // strings
   AddStr,
+  LeStr,
+  GeStr,
+  LeqStr,
+  GeqStr,
+  SameStr,
+  DiffStr,
 
   // bool
   NotBool,
@@ -52,7 +58,19 @@ impl OpCode {
       Operator::Leq => OpCode::LeqNum,
       Operator::Same => OpCode::SameNum,
       Operator::Different => OpCode::DiffNum,
-      _ => unimplemented!(),
+      _ => panic!(),
+    }
+  }
+
+  pub fn from_string_comp_operator(op: Operator) -> Self {
+    match op {
+      Operator::Basic('<') => OpCode::LeStr,
+      Operator::Basic('>') => OpCode::GeStr,
+      Operator::Geq => OpCode::GeqStr,
+      Operator::Leq => OpCode::LeqStr,
+      Operator::Same => OpCode::SameStr,
+      Operator::Different => OpCode::DiffStr,
+      _ => panic!(),
     }
   }
 }
