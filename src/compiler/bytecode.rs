@@ -8,6 +8,9 @@ pub enum OpCode {
 
   Constant,
 
+  GetGlobal,
+  SetGlobal,
+
   // primitive operations
   // numbers
   NegNum,
@@ -80,12 +83,14 @@ pub enum ValueType {
   Number,
   Bool,
   String,
+  GlobalId,
   Object,
 }
 
 #[derive(Clone, Copy)]
 pub union Value {
   pub number: f64,
+  pub id: u32,
   pub boolean: bool,
   pub string: *mut String,
 }
@@ -121,6 +126,13 @@ impl TaggedValue {
     }
   }
 
+  pub fn global_id(id: u32) -> Self {
+    Self {
+      kind: ValueType::GlobalId,
+      value: Value { id },
+    }
+  }
+
   pub unsafe fn free(&mut self) {
     match self.kind {
       ValueType::String => unsafe {
@@ -152,6 +164,7 @@ impl ToString for TaggedValue {
       ValueType::Number => unsafe { self.value.number.to_string() },
       ValueType::Bool => unsafe { self.value.boolean.to_string() },
       ValueType::String => unsafe { format!("\"{}\"", *self.value.string) },
+      ValueType::GlobalId => unsafe { self.value.id.to_string() },
       _ => todo!(),
     }
   }

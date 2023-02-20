@@ -5,6 +5,7 @@ pub struct VM {
   program: Chunk,
   bytes_read: usize,
   stack: Vec<TaggedValue>,
+  globals: HashMap<u32, TaggedValue>,
 }
 
 macro_rules! binary_operation {
@@ -37,6 +38,10 @@ impl VM {
     self.stack.push(val)
   }
 
+  fn top(&self) -> TaggedValue {
+    *self.stack.last().unwrap()
+  }
+
   fn read_byte(&mut self) -> u8 {
     assert!(!self.pc.is_null());
     assert!(self.bytes_read < self.program.code.len());
@@ -57,6 +62,20 @@ impl VM {
         OpCode::Constant => {
           let c = self.read_constant();
           self.push(c);
+        }
+        OpCode::GetGlobal => {
+          let id = unsafe { self.pop().value.id };
+          if let Some(value) = self.globals.get(&id) {
+            self.push(*value);
+          } else {
+            eprint!("trying to access undefined global variable");
+            return;
+          }
+        }
+        OpCode::SetGlobal => {
+          let id = unsafe { self.pop().value.id };
+          let val = self.top();
+          self.globals.insert(id, val);
         }
         OpCode::AddNum => {
           binary_operation!(self, number,number, ValueType::Number, +);
@@ -114,8 +133,8 @@ impl VM {
           unsafe { top.free() };
         }
         OpCode::Pop => {
-          let mut top = self.pop();
-          unsafe { top.free() };
+          self.pop();
+          //unsafe { top.free() };
         }
         OpCode::JumpIfFalsePop => {
           let condition = unsafe { self.pop().value.boolean };
@@ -125,7 +144,7 @@ impl VM {
           }
         }
         OpCode::JumpIfFalseNoPop => {
-          let condition = unsafe { self.stack.last().unwrap_unchecked().value.boolean };
+          let condition = unsafe { self.top().value.boolean };
           let target = u16::from_ne_bytes([self.read_byte(), self.read_byte()]) as usize;
           if !condition {
             unsafe { self.pc = self.pc.add(target) }
@@ -158,6 +177,7 @@ impl VM {
   pub fn new() -> Self {
     Self {
       pc: std::ptr::null(),
+      globals: HashMap::new(),
       program: Chunk::empty(),
       bytes_read: 0,
       stack: Vec::new(),

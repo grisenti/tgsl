@@ -235,6 +235,15 @@ impl SemanticAnalizer {
     if let Some(expr) = expression {
       let rhs = self.analyze_expr(ast, expr);
       self.set_type_or_err(identifier, rhs, id_info.get(ast));
+      if self.function_stack.len() == 0 {
+        unsafe {
+          self
+            .generated_code
+            .push_constant(TaggedValue::global_id(identifier.0));
+          self.generated_code.push_op(OpCode::SetGlobal);
+          self.generated_code.push_op(OpCode::Pop);
+        }
+      }
     }
   }
 
@@ -539,9 +548,23 @@ impl SemanticAnalizer {
       Expr::Assignment { id, id_info, value } => {
         let value_type = self.analyze_expr(ast, value);
         self.set_type_or_err(id, value_type.clone(), id_info.get(ast));
+        unsafe {
+          self
+            .generated_code
+            .push_constant(TaggedValue::global_id(id.0));
+          self.generated_code.push_op(OpCode::SetGlobal);
+        }
         value_type
       }
-      Expr::Variable { id, .. } => self.get_type(id),
+      Expr::Variable { id, .. } => {
+        unsafe {
+          self
+            .generated_code
+            .push_constant(TaggedValue::global_id(id.0));
+          self.generated_code.push_op(OpCode::GetGlobal);
+        }
+        self.get_type(id)
+      }
       Expr::Literal { literal, .. } => {
         unsafe {
           self
