@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::IndexMut, result};
 
 use super::{
   ast::*,
@@ -65,12 +65,21 @@ impl ReturnType {
   }
 }
 
+#[derive(Debug)]
+struct LocalVariable {
+  var_type: Type,
+  scope_depth: u8,
+}
+
 pub struct SemanticAnalizer {
   function_stack: Vec<SourceInfoHandle>,
+  global_types: Vec<Type>,
+  locals: Vec<LocalVariable>,
+  captures: Vec<Type>,
+  scope_depth: u8,
   loop_depth: u32,
   structs: StructMap,
   functions: FunctionMap,
-  type_map: Vec<Type>,
   errors: Vec<SourceError>,
   generated_code: Chunk,
 }
@@ -85,6 +94,27 @@ impl SemanticAnalizer {
       (_, Type::Unknown) => true,
       (a, b) => a == b,
     }
+  }
+
+  fn push_scope(&mut self) {
+    self.scope_depth += 1;
+  }
+
+  fn pop_scope(&mut self) {
+    assert!(self.scope_depth >= 1);
+    let names_in_local_scope = self
+      .locals
+      .iter()
+      .rev()
+      .take_while(|LocalVariable { scope_depth, .. }| self.scope_depth == *scope_depth)
+      .count();
+    for _ in 0..names_in_local_scope {
+      unsafe { self.generated_code.push_op(OpCode::Pop) }
+    }
+    self
+      .locals
+      .resize_with(self.locals.len() - names_in_local_scope, || panic!());
+    self.scope_depth -= 1;
   }
 
   fn get_struct_member(
@@ -107,24 +137,35 @@ impl SemanticAnalizer {
     }
   }
 
-  pub fn set_type_or_err(&mut self, id: Identifier, value_type: Type, name_info: SourceInfo) {
-    match &self.type_map[id.0 as usize] {
-      Type::Unknown => {
-        self.type_map[id.0 as usize] = value_type;
-      }
-      Type::Error => {}
-      other if *other != value_type => {
-        self.errors.push(error_from_source_info(
-          &name_info,
-          format!("cannot assign value of type {other:?} to identifier of type {value_type:?}"),
-        ));
-      }
-      _ => {}
+  fn get_type_mut_ref(&mut self, id: Identifier) -> &mut Type {
+    match id {
+      Identifier::Global(gid) => &mut self.global_types[gid as usize],
+      Identifier::Local { scope_depth, id } => &mut self.locals[id as usize].var_type,
+      Identifier::Capture(id) => &mut self.captures[id as usize],
     }
   }
 
-  pub fn get_type(&self, id: Identifier) -> Type {
-    self.type_map[id.0 as usize].clone()
+  pub fn set_type_or_err(&mut self, id: Identifier, rhs: Type, name_info: SourceInfo) {
+    let lhs = self.get_type_mut_ref(id);
+    let result = match lhs {
+      Type::Unknown => {
+        *lhs = rhs;
+        Ok(())
+      }
+      Type::Error => Ok(()),
+      lhs if *lhs != rhs => Err(error_from_source_info(
+        &name_info,
+        format!("cannot assign value of type {rhs:?} to identifier of type {lhs:?}"),
+      )),
+      _ => Ok(()), // equal types, no need to set
+    };
+    if let Err(err) = result {
+      self.emit_error(err);
+    }
+  }
+
+  pub fn get_type(&mut self, id: Identifier) -> Type {
+    self.get_type_mut_ref(id).clone()
   }
 
   fn check_self_assignment(
@@ -189,13 +230,7 @@ impl SemanticAnalizer {
     fn_types.last().unwrap().clone()
   }
 
-  fn check_function(
-    &mut self,
-    ast: &AST,
-    id: Identifier,
-    fn_types: Vec<Type>,
-    body: &[StmtHandle],
-  ) {
+  fn check_function(&mut self, ast: &AST, fn_types: Vec<Type>, body: &[StmtHandle]) {
     let return_type = fn_types.last().unwrap();
     let mut unconditional_return = false;
     for stmt in body.iter() {
@@ -221,7 +256,6 @@ impl SemanticAnalizer {
         "function only has conditional return types".to_string(),
       ));
     }
-    self.functions.insert(id, fn_types);
   }
 
   fn check_var_decl(
@@ -231,19 +265,31 @@ impl SemanticAnalizer {
     id_info: SourceInfoHandle,
     expression: Option<ExprHandle>,
   ) {
+    match identifier {
+      Identifier::Global(gid) => {} // already set
+      Identifier::Local { id, .. } => self.locals.push(LocalVariable {
+        var_type: Type::Unknown,
+        scope_depth: self.scope_depth,
+      }),
+      Identifier::Capture(_) => todo!(),
+    }
     self.check_self_assignment(ast, identifier, expression);
     if let Some(expr) = expression {
       let rhs = self.analyze_expr(ast, expr);
       self.set_type_or_err(identifier, rhs, id_info.get(ast));
-      if self.function_stack.len() == 0 {
-        unsafe {
-          self
-            .generated_code
-            .push_constant(TaggedValue::global_id(identifier.0));
-          self.generated_code.push_op(OpCode::SetGlobal);
-          self.generated_code.push_op(OpCode::Pop);
-        }
-      }
+    } else {
+      unsafe { self.generated_code.push_constant_none() }
+    }
+    match identifier {
+      Identifier::Global(gid) => unsafe {
+        self
+          .generated_code
+          .push_constant(TaggedValue::global_id(gid));
+        self.generated_code.push_op(OpCode::SetGlobal);
+        self.generated_code.push_op(OpCode::Pop);
+      },
+      Identifier::Local { .. } => {} // no operation needed, the value is already on the stack
+      Identifier::Capture(_) => todo!(),
     }
   }
 
@@ -342,21 +388,25 @@ impl SemanticAnalizer {
       }
       Stmt::Block(stmts) => {
         let mut return_types = Vec::new();
+        self.push_scope();
         for s in stmts {
           return_types.push(self.analyze_stmt(ast, s))
         }
+        self.pop_scope();
         self.check_return_types(ast, return_types)
       }
       Stmt::Function {
         id,
         name_info,
         parameters: _,
+        captures,
         fn_type,
         body,
       } => {
         self.function_stack.push(name_info);
-        self.check_function(ast, id, fn_type, &body);
+        self.check_function(ast, fn_type.clone(), &body);
         self.function_stack.pop();
+        self.functions.insert(id, fn_type);
         None
       }
       Stmt::Break(info) => {
@@ -534,34 +584,46 @@ impl SemanticAnalizer {
   pub fn analyze_expr(&mut self, ast: &AST, expr: ExprHandle) -> Type {
     match expr.clone().get(ast) {
       Expr::Closure {
-        id,
         info,
         parameters: _,
+        captures,
         fn_type,
         body,
       } => {
         self.function_stack.push(info);
-        self.check_function(ast, id, fn_type.clone(), &body);
+        self.check_function(ast, fn_type.clone(), &body);
         self.function_stack.pop();
         Type::Function(fn_type)
       }
       Expr::Assignment { id, id_info, value } => {
         let value_type = self.analyze_expr(ast, value);
         self.set_type_or_err(id, value_type.clone(), id_info.get(ast));
-        unsafe {
-          self
-            .generated_code
-            .push_constant(TaggedValue::global_id(id.0));
-          self.generated_code.push_op(OpCode::SetGlobal);
+        match id {
+          Identifier::Global(gid) => unsafe {
+            self
+              .generated_code
+              .push_constant(TaggedValue::global_id(gid));
+            self.generated_code.push_op(OpCode::SetGlobal);
+          },
+          Identifier::Local { id, .. } => unsafe {
+            self.generated_code.push_type2_op(OpCode::SetLocal, id);
+          },
+          _ => todo!(),
         }
         value_type
       }
       Expr::Variable { id, .. } => {
-        unsafe {
-          self
-            .generated_code
-            .push_constant(TaggedValue::global_id(id.0));
-          self.generated_code.push_op(OpCode::GetGlobal);
+        match id {
+          Identifier::Global(gid) => unsafe {
+            self
+              .generated_code
+              .push_constant(TaggedValue::global_id(gid));
+            self.generated_code.push_op(OpCode::GetGlobal);
+          },
+          Identifier::Local { id, .. } => unsafe {
+            self.generated_code.push_type2_op(OpCode::GetLocal, id);
+          },
+          _ => todo!(),
         }
         self.get_type(id)
       }
@@ -673,11 +735,14 @@ impl SemanticAnalizer {
   pub fn analyze(ast: &AST, types: Vec<Type>) -> Result<Chunk, SourceError> {
     let mut analizer = Self {
       function_stack: Vec::new(),
+      global_types: types,
+      locals: Vec::with_capacity(256),
+      captures: vec![Type::Unknown; 256],
+      scope_depth: 0,
       loop_depth: 0,
       structs: HashMap::new(),
       functions: HashMap::new(),
       errors: Vec::new(),
-      type_map: types,
       generated_code: Chunk::empty(),
     };
     for stmt in ast.get_program() {

@@ -20,7 +20,6 @@ pub struct Compiler {}
 
 pub struct CompilerResult {
   pub ast: AST,
-  pub global_environment: HashMap<String, Identifier>,
   pub generated_code: Chunk,
 }
 
@@ -28,10 +27,10 @@ impl Compiler {
   pub fn compile(program: &str) -> Result<CompilerResult, SourceError> {
     let parser = Parser::new(Lexer::new(program));
     let ParseResult { ast, final_env } = parser.parse()?;
-    let generated_code = SemanticAnalizer::analyze(&ast, final_env.type_map)?;
+    println!("{:?}", ast);
+    let generated_code = SemanticAnalizer::analyze(&ast, final_env.global_types)?;
     Ok(CompilerResult {
       ast,
-      global_environment: final_env.global_scope,
       generated_code,
     })
   }

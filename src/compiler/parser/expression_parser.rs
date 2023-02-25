@@ -187,7 +187,8 @@ impl<'src> Parser<'src> {
 
   fn parse_closure(&mut self) -> ExprRes {
     let call_start = self.lex.prev_token_info();
-    self.env.push();
+    self.env.push_scope();
+    self.env.push_function();
     self.match_or_err(Token::Basic('('))?;
     let parameters = if self.lookahead != Token::Basic(')') {
       self.parse_function_params(call_start)
@@ -197,26 +198,21 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic(')'))?;
     let return_type = self.parse_function_return_type()?;
     let call_end = self.lex.prev_token_info();
-    let block = self.parse_block()?;
-    if let Stmt::Block(body) = block.get(&self.ast) {
-      self.env.pop();
-      let (parameters, mut fn_type) = parameters?;
-      fn_type.push(return_type);
-      let id = self.env.declare_anonymous_closure();
-      self.env.set_type(id, Type::Function(fn_type.clone()));
-      let info = self
-        .ast
-        .add_source_info(SourceInfo::union(call_start, call_end));
-      Ok(self.ast.add_expression(Expr::Closure {
-        id,
-        info,
-        parameters,
-        body,
-        fn_type,
-      }))
-    } else {
-      panic!()
-    }
+    let body = self.parse_unscoped_block()?;
+    self.env.pop_scope();
+    let captures = self.env.pop_function();
+    let (parameters, mut fn_type) = parameters?;
+    fn_type.push(return_type);
+    let info = self
+      .ast
+      .add_source_info(SourceInfo::union(call_start, call_end));
+    Ok(self.ast.add_expression(Expr::Closure {
+      captures,
+      info,
+      parameters,
+      body,
+      fn_type,
+    }))
   }
 
   pub(super) fn parse_expression(&mut self) -> ExprRes {
@@ -231,7 +227,7 @@ impl<'src> Parser<'src> {
 #[cfg(test)]
 mod test {
   use crate::compiler::{
-    ast::{Expr, Literal, Operator},
+    ast::{Expr, Identifier, Literal, Operator},
     lexer::Lexer,
     parser::Parser,
   };
@@ -331,7 +327,7 @@ mod test {
     let variable = parser.parse_expression().unwrap();
     match variable.get(&parser.ast) {
       Expr::Variable { id, id_info: _ } => {
-        assert_eq!(id.0, 0)
+        assert_eq!(id, Identifier::Global(0))
       }
       a => panic!("expected variable, got {a:?}"),
     }

@@ -10,9 +10,9 @@ impl<'src> Parser<'src> {
     ret
   }
 
-  pub(super) fn parse_block(&mut self) -> StmtRes {
+  pub(super) fn parse_unscoped_block(&mut self) -> Result<Vec<StmtHandle>, SourceError> {
+    // FIXME: this is very similar to the one below
     self.match_or_err(Token::Basic('{'))?;
-    self.env.push();
     let mut statements = Vec::new();
     let mut errors = Vec::new();
     while self.lookahead != Token::Basic('}') && !self.is_at_end() {
@@ -24,7 +24,29 @@ impl<'src> Parser<'src> {
         }
       }
     }
-    self.env.pop();
+    self.match_or_err(Token::Basic('}'))?;
+    if errors.is_empty() {
+      Ok(statements)
+    } else {
+      Err(SourceError::from_err_vec(errors))
+    }
+  }
+
+  fn parse_block(&mut self) -> StmtRes {
+    self.match_or_err(Token::Basic('{'))?;
+    self.env.push_scope();
+    let mut statements = Vec::new();
+    let mut errors = Vec::new();
+    while self.lookahead != Token::Basic('}') && !self.is_at_end() {
+      match self.parse_decl() {
+        Ok(stmt) => statements.push(stmt),
+        Err(err) => {
+          errors.push(err);
+          errors = self.syncronize_or_errors(errors)?;
+        }
+      }
+    }
+    self.env.pop_scope();
     self.match_or_err(Token::Basic('}'))?;
     if errors.is_empty() {
       Ok(self.ast.add_statement(Stmt::Block(statements)))
@@ -81,7 +103,7 @@ impl<'src> Parser<'src> {
     let info = self.last_token_info();
     self.advance()?; //consume for
     self.match_or_err(Token::Basic('('))?;
-    self.env.push(); // for statement scope
+    self.env.push_scope(); // for statement scope
     let init = self.parse_decl()?;
     let condition = self.parse_expression()?;
     self.match_or_err(Token::Basic(';'))?;
@@ -97,7 +119,7 @@ impl<'src> Parser<'src> {
       condition,
       loop_body: while_body,
     });
-    self.env.pop(); // for statement scope
+    self.env.pop_scope(); // for statement scope
     Ok(self.ast.add_statement(Stmt::Block(vec![init, while_loop])))
   }
 
@@ -136,7 +158,9 @@ impl<'src> Parser<'src> {
     self.advance()?;
     let (identifier, id_info) = self.match_id_or_err()?;
     let var_type = self.parse_opt_type_specifier()?;
-    self.env.set_type(identifier, var_type.clone());
+    if self.env.in_global_scope() {
+      self.env.set_global_type(identifier, var_type.clone());
+    }
     let ret = if self.lookahead == Token::Basic('=') {
       self.advance()?; // consume '='
       Stmt::VarDecl {
@@ -168,7 +192,6 @@ impl<'src> Parser<'src> {
       let mem_type = self.parse_type_specifier_or_err()?;
       parameter_ids.push(mem_id);
       parameter_types.push(mem_type.clone());
-      self.env.set_type(mem_id, mem_type);
       if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
         break;
       }
@@ -196,7 +219,8 @@ impl<'src> Parser<'src> {
     self.advance()?; // consume fun
     let (name_id, name_info) = self.match_id_or_err()?;
     let call_start = self.lex.prev_token_info();
-    self.env.push();
+    self.env.push_scope();
+    self.env.push_function();
     self.match_or_err(Token::Basic('('))?;
     let parameters = if self.lookahead != Token::Basic(')') {
       self.parse_function_params(call_start)
@@ -205,22 +229,24 @@ impl<'src> Parser<'src> {
     };
     self.match_or_err(Token::Basic(')'))?;
     let return_type = self.parse_function_return_type()?;
-    let block = self.parse_block()?;
-    if let Stmt::Block(body) = block.get(&self.ast) {
-      self.env.pop();
-      let (parameters, mut fn_type) = parameters?;
-      fn_type.push(return_type);
-      self.env.set_type(name_id, Type::Function(fn_type.clone()));
-      Ok(self.ast.add_statement(Stmt::Function {
-        id: name_id,
-        name_info,
-        fn_type,
-        parameters,
-        body,
-      }))
-    } else {
-      panic!()
+    let body = self.parse_unscoped_block()?;
+    self.env.pop_scope();
+    let captures = self.env.pop_function();
+    let (parameters, mut fn_type) = parameters?;
+    fn_type.push(return_type);
+    if self.env.in_global_scope() {
+      self
+        .env
+        .set_global_type(name_id, Type::Function(fn_type.clone()));
     }
+    Ok(self.ast.add_statement(Stmt::Function {
+      id: name_id,
+      name_info,
+      fn_type,
+      parameters,
+      captures,
+      body,
+    }))
   }
 
   fn parse_struct_decl(&mut self) -> StmtRes {
@@ -240,7 +266,11 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic('}'))?;
     let mut constructor_type = member_types.clone();
     constructor_type.push(Type::Struct(name_id));
-    self.env.set_type(name_id, Type::Function(constructor_type));
+    if self.env.in_global_scope() {
+      self
+        .env
+        .set_global_type(name_id, Type::Function(constructor_type));
+    }
     Ok(self.ast.add_statement(Stmt::Struct {
       name: name_id,
       name_info,
@@ -251,6 +281,12 @@ impl<'src> Parser<'src> {
 
   fn parse_extern_function(&mut self) -> StmtRes {
     assert_eq!(self.lookahead, Token::Extern);
+    if !self.env.in_global_scope() {
+      return Err(error_from_lexer_state(
+        &self.lex,
+        "extern functions can only be declared in the global scope".to_string(),
+      ));
+    }
     self.advance()?;
     self.match_or_err(Token::Fn)?;
     let (name_id, name_info) = self.match_id_or_err()?;
@@ -258,7 +294,7 @@ impl<'src> Parser<'src> {
     function_type.push(self.parse_function_return_type()?);
     self
       .env
-      .set_type(name_id, Type::Function(function_type.clone()));
+      .set_global_type(name_id, Type::Function(function_type.clone()));
     self.match_or_err(Token::Basic(';'))?;
     Ok(self.ast.add_statement(Stmt::ExternFunction {
       id: name_id,

@@ -87,7 +87,11 @@ impl OperatorPair {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
-pub struct Identifier(pub u32);
+pub enum Identifier {
+  Global(u16),
+  Capture(u8),
+  Local { scope_depth: u8, id: u8 },
+}
 
 #[derive(Debug, Clone)]
 pub enum Expr {
@@ -119,9 +123,9 @@ pub enum Expr {
     value: ExprHandle,
   },
   Closure {
-    id: Identifier,
     info: SourceInfoHandle,
     parameters: Vec<Identifier>,
+    captures: Vec<Identifier>,
     fn_type: Vec<Type>,
     body: Vec<StmtHandle>,
   },

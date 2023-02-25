@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::compiler::bytecode::{Chunk, OpCode, TaggedValue, Value, ValueType};
 
 pub struct VM {
@@ -5,7 +7,7 @@ pub struct VM {
   program: Chunk,
   bytes_read: usize,
   stack: Vec<TaggedValue>,
-  globals: HashMap<u32, TaggedValue>,
+  globals: HashMap<u16, TaggedValue>,
 }
 
 macro_rules! binary_operation {
@@ -76,6 +78,15 @@ impl VM {
           let id = unsafe { self.pop().value.id };
           let val = self.top();
           self.globals.insert(id, val);
+        }
+        OpCode::SetLocal => {
+          let id = self.read_byte();
+          let val = self.top();
+          self.stack[id as usize] = val;
+        }
+        OpCode::GetLocal => {
+          let id = self.read_byte();
+          self.push(self.stack[id as usize]);
         }
         OpCode::AddNum => {
           binary_operation!(self, number,number, ValueType::Number, +);

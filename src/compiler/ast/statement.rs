@@ -32,6 +32,7 @@ pub enum Stmt {
   Function {
     id: Identifier,
     name_info: SourceInfoHandle,
+    captures: Vec<Identifier>,
     parameters: Vec<Identifier>,
     fn_type: Vec<Type>,
     body: Vec<StmtHandle>,

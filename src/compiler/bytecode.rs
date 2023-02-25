@@ -1,5 +1,6 @@
 use super::ast::{Literal, Operator, AST};
 use core::fmt::Debug;
+use std::alloc::Layout;
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
@@ -10,6 +11,8 @@ pub enum OpCode {
 
   GetGlobal,
   SetGlobal,
+  GetLocal,
+  SetLocal,
 
   // primitive operations
   // numbers
@@ -84,21 +87,36 @@ pub enum ValueType {
   Bool,
   String,
   GlobalId,
+  Function,
   Object,
+
+  None,
+}
+
+pub struct Function {
+  pub code: Chunk,
 }
 
 #[derive(Clone, Copy)]
 pub union Value {
   pub number: f64,
-  pub id: u32,
+  pub id: u16,
   pub boolean: bool,
   pub string: *mut String,
+  pub function: *mut Function,
+  pub none: (),
 }
 
 #[derive(Clone, Copy)]
 pub struct TaggedValue {
   pub kind: ValueType,
   pub value: Value,
+}
+
+unsafe fn alloc_object<T>(value: T) -> *mut T {
+  let ptr = std::alloc::alloc(Layout::new::<T>()) as *mut T;
+  std::ptr::write(ptr, value);
+  ptr
 }
 
 impl TaggedValue {
@@ -111,7 +129,7 @@ impl TaggedValue {
       Literal::String(s) => Self {
         kind: ValueType::String,
         value: Value {
-          string: Box::into_raw(Box::new(s.get(ast).to_string())),
+          string: unsafe { alloc_object::<String>(s.get(ast).to_string()) },
         },
       },
       Literal::False => Self {
@@ -126,18 +144,30 @@ impl TaggedValue {
     }
   }
 
-  pub fn global_id(id: u32) -> Self {
+  pub fn global_id(id: u16) -> Self {
     Self {
       kind: ValueType::GlobalId,
       value: Value { id },
     }
   }
 
+  pub fn none() -> Self {
+    Self {
+      kind: ValueType::None,
+      value: Value { none: () },
+    }
+  }
+
   pub unsafe fn free(&mut self) {
     match self.kind {
-      ValueType::String => unsafe {
-        let _ = Box::from_raw(self.value.string);
-      },
+      ValueType::String => {
+        self.value.string.drop_in_place();
+        unsafe { std::alloc::dealloc(self.value.string as *mut u8, Layout::new::<String>()) }
+      }
+      ValueType::Function => {
+        self.value.function.drop_in_place();
+        unsafe { std::alloc::dealloc(self.value.function as *mut u8, Layout::new::<Function>()) }
+      }
       _ => {}
     }
   }
@@ -165,6 +195,7 @@ impl ToString for TaggedValue {
       ValueType::Bool => unsafe { self.value.boolean.to_string() },
       ValueType::String => unsafe { format!("\"{}\"", *self.value.string) },
       ValueType::GlobalId => unsafe { self.value.id.to_string() },
+      ValueType::None => "<none>".to_string(),
       _ => todo!(),
     }
   }
@@ -183,6 +214,11 @@ impl Chunk {
     self.code.push(constant_offset);
   }
 
+  pub unsafe fn push_constant_none(&mut self) {
+    self.code.push(OpCode::Constant as u8);
+    self.code.push(0);
+  }
+
   pub unsafe fn push_op(&mut self, op: OpCode) {
     self.code.push(op as u8);
   }
@@ -197,6 +233,12 @@ impl Chunk {
     self.code.push(0);
     self.code.push(0);
     index
+  }
+
+  // NAME: type2 as in two parts
+  pub fn push_type2_op(&mut self, op: OpCode, data: u8) {
+    self.code.push(op as u8);
+    self.code.push(data);
   }
 
   pub fn push_back_jump(&mut self, to: usize) {
@@ -227,7 +269,7 @@ impl Chunk {
   pub fn empty() -> Self {
     Self {
       code: Vec::new(),
-      constants: Vec::new(),
+      constants: vec![TaggedValue::none()],
     }
   }
 }
@@ -264,6 +306,10 @@ impl Debug for Chunk {
           index += 2;
           let jump_point = u16::from_ne_bytes([self.code[index - 1], self.code[index]]);
           result += &format!("{code:?}: {}\n", index + 1 - jump_point as usize);
+        }
+        OpCode::GetLocal | OpCode::SetLocal => {
+          index += 1;
+          result += &format!("{code:?}: {}\n", self.code[index])
         }
         code => result += &format!("{:?}\n", code),
       }
