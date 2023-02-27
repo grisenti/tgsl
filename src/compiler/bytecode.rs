@@ -85,7 +85,7 @@ impl OpCode {
   }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ValueType {
   Number,
   Bool,

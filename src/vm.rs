@@ -5,22 +5,6 @@ use crate::compiler::bytecode::{Chunk, Function, OpCode, TaggedValue, Value, Val
 const MAX_CALLS: usize = 64;
 const MAX_STACK: usize = MAX_CALLS * u8::MAX as usize;
 
-struct CallFrame {
-  pc: *const u8,
-  function: *const Function,
-  bp: usize,
-}
-
-pub struct VM {
-  pc: *const u8,
-  function: *const Function,
-  bp: usize,
-  bytes_read: usize,
-  stack: Vec<TaggedValue>,
-  call_stack: Vec<CallFrame>,
-  globals: HashMap<u16, TaggedValue>,
-}
-
 macro_rules! binary_operation {
   ($s:ident, $operator:ident, $result:ident, $kind:expr, $op:tt) => {
     let rhs = unsafe {$s.pop().value.$operator};
@@ -36,31 +20,49 @@ macro_rules! unary_operation {
 	};
 }
 
-impl VM {
+#[derive(Clone, Copy)]
+struct CallFrame {
+  bp: *mut TaggedValue,
+  sp: *mut TaggedValue,
+  pc: *const u8,
+  function: *const Function,
+}
+
+const EMPTY_CALL_FRAME: CallFrame = CallFrame {
+  bp: std::ptr::null_mut(),
+  sp: std::ptr::null_mut(),
+  pc: std::ptr::null(),
+  function: std::ptr::null(),
+};
+
+impl CallFrame {
+  fn read_byte(&mut self) -> u8 {
+    debug_assert!(!self.pc.is_null());
+    let val = unsafe { *self.pc };
+    unsafe { self.pc = self.pc.add(1) };
+    val
+  }
+
   fn read_instruction(&mut self) -> OpCode {
     let instruction = self.read_byte();
-    assert!(instruction < OpCode::Last as u8);
+    debug_assert!(instruction < OpCode::Last as u8);
     unsafe { std::mem::transmute::<u8, OpCode>(instruction) }
   }
 
   fn pop(&mut self) -> TaggedValue {
-    self.stack.pop().unwrap()
+    unsafe { self.sp = self.sp.sub(1) }
+    unsafe { *self.sp }
   }
 
   fn push(&mut self, val: TaggedValue) {
-    self.stack.push(val)
+    unsafe {
+      std::ptr::write(self.sp, val);
+      self.sp = self.sp.add(1);
+    }
   }
 
   fn top(&self) -> TaggedValue {
-    *self.stack.last().unwrap()
-  }
-
-  fn read_byte(&mut self) -> u8 {
-    assert!(!self.pc.is_null());
-    let val = unsafe { *self.pc };
-    unsafe { self.pc = self.pc.add(1) };
-    self.bytes_read += 1;
-    val
+    unsafe { *self.sp.sub(1) }
   }
 
   fn read_constant(&mut self) -> TaggedValue {
@@ -73,81 +75,105 @@ impl VM {
     unsafe { (*self.function).code.get_function(index as usize) }
   }
 
-  pub fn run(&mut self) {
+  fn get_stack_value(&self, offset: u8) -> TaggedValue {
+    unsafe { *self.bp.add(offset as usize) }
+  }
+
+  fn set_stack_value(&mut self, offset: u8, val: TaggedValue) {
+    unsafe { *self.bp.add(offset as usize) = val }
+  }
+}
+
+pub struct VM {
+  stack: [TaggedValue; MAX_STACK],
+  call_stack: [CallFrame; MAX_CALLS],
+  function_call: usize,
+  globals: HashMap<u16, TaggedValue>,
+}
+
+impl VM {
+  fn run(&mut self, frame: CallFrame) {
+    let mut frame = frame;
     loop {
-      let op = self.read_instruction();
-      //println!("{:?}: {:?}\n", &op, &self.stack);
+      let op = frame.read_instruction();
+      /*println!("{op:?}: {:?}", unsafe {
+        std::slice::from_raw_parts(frame.bp, 10)
+          .iter()
+          .take_while(|val| val.kind != ValueType::None)
+          .collect::<Vec<_>>()
+      });*/
       match op {
         OpCode::Constant => {
-          let c = self.read_constant();
-          self.push(c);
+          let c = frame.read_constant();
+          frame.push(c);
         }
         OpCode::Function => {
-          let f = self.read_function();
-          self.push(f);
+          let f = frame.read_function();
+          frame.push(f);
         }
         OpCode::GetGlobal => {
-          let id = unsafe { self.pop().value.id };
+          let id = unsafe { frame.pop().value.id };
           if let Some(value) = self.globals.get(&id) {
-            self.push(*value);
+            frame.push(*value);
           } else {
             eprint!("trying to access undefined global variable");
             return;
           }
         }
         OpCode::SetGlobal => {
-          let id = unsafe { self.pop().value.id };
-          let val = self.top();
+          debug_assert!(frame.top().kind == ValueType::GlobalId);
+          let id = unsafe { frame.pop().value.id };
+          let val = frame.top();
           self.globals.insert(id, val);
         }
         OpCode::SetLocal => {
-          let id = self.read_byte();
-          let val = self.top();
-          self.stack[self.bp + id as usize] = val;
+          let id = frame.read_byte();
+          let val = frame.top();
+          frame.set_stack_value(id, val);
         }
         OpCode::GetLocal => {
-          let id = self.read_byte();
-          self.push(self.stack[self.bp + id as usize]);
+          let id = frame.read_byte();
+          frame.push(frame.get_stack_value(id));
         }
         OpCode::AddNum => {
-          binary_operation!(self, number,number, ValueType::Number, +);
+          binary_operation!(frame, number,number, ValueType::Number, +);
         }
         OpCode::SubNum => {
-          binary_operation!(self, number,number, ValueType::Number, -);
+          binary_operation!(frame, number,number, ValueType::Number, -);
         }
         OpCode::MulNum => {
-          binary_operation!(self, number,number, ValueType::Number, *);
+          binary_operation!(frame, number,number, ValueType::Number, *);
         }
         OpCode::DivNum => {
-          binary_operation!(self, number,number, ValueType::Number, /);
+          binary_operation!(frame, number,number, ValueType::Number, /);
         }
         OpCode::LeNum => {
-          binary_operation!(self, number, boolean, ValueType::Bool, <);
+          binary_operation!(frame, number, boolean, ValueType::Bool, <);
         }
         OpCode::GeNum => {
-          binary_operation!(self, number, boolean, ValueType::Bool, >);
+          binary_operation!(frame, number, boolean, ValueType::Bool, >);
         }
         OpCode::LeqNum => {
-          binary_operation!(self, number, boolean, ValueType::Bool, <=);
+          binary_operation!(frame, number, boolean, ValueType::Bool, <=);
         }
         OpCode::GeqNum => {
-          binary_operation!(self, number, boolean, ValueType::Bool, >=);
+          binary_operation!(frame, number, boolean, ValueType::Bool, >=);
         }
         OpCode::SameNum => {
-          binary_operation!(self, number, boolean, ValueType::Bool, ==);
+          binary_operation!(frame, number, boolean, ValueType::Bool, ==);
         }
         OpCode::DiffNum => {
-          binary_operation!(self, number, boolean, ValueType::Bool, !=);
+          binary_operation!(frame, number, boolean, ValueType::Bool, !=);
         }
         OpCode::NegNum => {
-          unary_operation!(self, number, ValueType::Number, -);
+          unary_operation!(frame, number, ValueType::Number, -);
         }
         OpCode::AddStr => {
-          let mut rhs = self.pop();
-          let mut lhs = self.pop();
+          let mut rhs = frame.pop();
+          let mut lhs = frame.pop();
           let rhs_str = unsafe { rhs.value.string };
           let lhs_str = unsafe { lhs.value.string };
-          self.push(TaggedValue {
+          frame.push(TaggedValue {
             kind: ValueType::String,
             value: Value {
               string: Box::into_raw(Box::new(unsafe { (*lhs_str).clone() + &*rhs_str })),
@@ -157,69 +183,69 @@ impl VM {
           unsafe { lhs.free() };
         }
         OpCode::NotBool => {
-          unary_operation!(self, boolean, ValueType::Bool, !);
+          unary_operation!(frame, boolean, ValueType::Bool, !);
         }
         OpCode::Call => {
-          let arguments = self.read_byte();
-          let func = unsafe {
-            self.stack[self.stack.len() - 1 - arguments as usize]
-              .value
-              .function
+          let arguments = frame.read_byte() as usize;
+          let function_value = unsafe { *frame.sp.sub(arguments + 1) };
+          debug_assert!(function_value.kind == ValueType::Function);
+          let function = unsafe { function_value.value.function };
+          let bp = unsafe { frame.sp.sub(arguments) };
+          let pc = unsafe { (*function).code.code.as_ptr() };
+          let sp = frame.sp;
+          frame.sp = unsafe { frame.sp.sub(1 + arguments) };
+          self.call_stack[self.function_call] = frame;
+          self.function_call += 1;
+          if self.function_call >= MAX_CALLS {
+            eprintln!("STACK OVERFLOW!");
+            return;
+          }
+          frame = CallFrame {
+            bp,
+            sp,
+            pc,
+            function,
           };
-          self.call_stack.push(CallFrame {
-            pc: self.pc,
-            function: self.function,
-            bp: self.bp,
-          });
-          self.function = func;
-          self.pc = unsafe { (*func).code.code.as_ptr() };
-          self.bp = self.stack.len() - arguments as usize;
         }
         OpCode::Print => {
-          let mut top = self.pop();
+          let mut top = frame.pop();
           println!("{}", top.to_string());
           unsafe { top.free() };
         }
         OpCode::Pop => {
-          self.pop();
+          frame.pop();
           //unsafe { top.free() };
         }
         OpCode::JumpIfFalsePop => {
-          let condition = unsafe { self.pop().value.boolean };
-          let target = u16::from_ne_bytes([self.read_byte(), self.read_byte()]) as usize;
+          let condition = unsafe { frame.pop().value.boolean };
+          let target = u16::from_ne_bytes([frame.read_byte(), frame.read_byte()]) as usize;
           if !condition {
-            unsafe { self.pc = self.pc.add(target) }
+            unsafe { frame.pc = frame.pc.add(target) }
           }
         }
         OpCode::JumpIfFalseNoPop => {
-          let condition = unsafe { self.top().value.boolean };
-          let target = u16::from_ne_bytes([self.read_byte(), self.read_byte()]) as usize;
+          let condition = unsafe { frame.top().value.boolean };
+          let target = u16::from_ne_bytes([frame.read_byte(), frame.read_byte()]) as usize;
           if !condition {
-            unsafe { self.pc = self.pc.add(target) }
+            unsafe { frame.pc = frame.pc.add(target) }
           }
         }
         OpCode::Jump => {
-          let target = u16::from_ne_bytes([self.read_byte(), self.read_byte()]) as usize;
-          unsafe { self.pc = self.pc.add(target) }
-          self.bytes_read += target;
+          let target = u16::from_ne_bytes([frame.read_byte(), frame.read_byte()]) as usize;
+          unsafe { frame.pc = frame.pc.add(target) }
         }
         OpCode::BackJump => {
-          let target = u16::from_ne_bytes([self.read_byte(), self.read_byte()]) as usize;
-          unsafe { self.pc = self.pc.sub(target) }
-          self.bytes_read -= target;
+          let target = u16::from_ne_bytes([frame.read_byte(), frame.read_byte()]) as usize;
+          unsafe { frame.pc = frame.pc.sub(target) }
         }
         OpCode::Return => {
-          if let Some(frame) = self.call_stack.pop() {
-            let ret = self.pop();
-            for _ in self.bp..=self.stack.len() {
-              self.pop();
-            }
-            self.pc = frame.pc;
-            self.bp = frame.bp;
-            self.function = frame.function;
-            self.push(ret);
-          } else {
+          if self.function_call == 0 {
             return;
+          } else {
+            let ret = frame.pop();
+            self.function_call -= 1;
+            frame = self.call_stack[self.function_call];
+            frame.push(ret);
           }
         }
         other => todo!("{other:?} not implemented"),
@@ -228,21 +254,23 @@ impl VM {
   }
 
   pub fn interpret(&mut self, chunk: Chunk) {
-    self.pc = chunk.code.as_ptr();
-    let func = Function { code: chunk };
-    self.function = std::ptr::addr_of!(func);
-    self.run()
+    let mut func = Function { code: chunk };
+    let function = std::ptr::addr_of!(func);
+    let global_frame = CallFrame {
+      bp: self.stack.as_mut_ptr(),
+      sp: self.stack.as_mut_ptr(),
+      pc: func.code.code.as_mut_ptr(),
+      function,
+    };
+    self.run(global_frame);
   }
 
   pub fn new() -> Self {
     Self {
-      pc: std::ptr::null(),
-      bp: 0,
-      function: std::ptr::null(),
       globals: HashMap::new(),
-      bytes_read: 0,
-      stack: Vec::new(),
-      call_stack: Vec::new(),
+      stack: [TaggedValue::none(); MAX_STACK],
+      call_stack: [EMPTY_CALL_FRAME; MAX_CALLS],
+      function_call: 0,
     }
   }
 }
