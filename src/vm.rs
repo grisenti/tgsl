@@ -76,7 +76,7 @@ impl VM {
   pub fn run(&mut self) {
     loop {
       let op = self.read_instruction();
-      println!("{:?}: {:?}\n", &op, &self.stack);
+      //println!("{:?}: {:?}\n", &op, &self.stack);
       match op {
         OpCode::Constant => {
           let c = self.read_constant();
@@ -210,9 +210,14 @@ impl VM {
         }
         OpCode::Return => {
           if let Some(frame) = self.call_stack.pop() {
+            let ret = self.pop();
+            for _ in self.bp..=self.stack.len() {
+              self.pop();
+            }
             self.pc = frame.pc;
             self.bp = frame.bp;
             self.function = frame.function;
+            self.push(ret);
           } else {
             return;
           }
