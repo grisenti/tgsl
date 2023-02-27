@@ -90,7 +90,7 @@ impl OperatorPair {
 pub enum Identifier {
   Global(u16),
   Capture(u8),
-  Local { scope_depth: u8, id: u8 },
+  Local(u8),
 }
 
 #[derive(Debug, Clone)]

@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::IndexMut, result};
 
 use super::{
   ast::*,
-  bytecode::{Chunk, OpCode, TaggedValue},
+  bytecode::{Chunk, Function, OpCode, TaggedValue},
   error_from_source_info,
 };
 use crate::errors::{SourceError, SourceInfo};
@@ -71,17 +71,21 @@ struct LocalVariable {
   scope_depth: u8,
 }
 
-pub struct SemanticAnalizer {
-  function_stack: Vec<SourceInfoHandle>,
-  global_types: Vec<Type>,
-  locals: Vec<LocalVariable>,
+#[derive(Debug)]
+struct FunctionEnvironment {
   captures: Vec<Type>,
+  locals: Vec<LocalVariable>,
   scope_depth: u8,
+  code: Chunk,
+}
+
+pub struct SemanticAnalizer {
+  function_stack: Vec<FunctionEnvironment>,
+  global_types: Vec<Type>,
   loop_depth: u32,
   structs: StructMap,
   functions: FunctionMap,
   errors: Vec<SourceError>,
-  generated_code: Chunk,
 }
 
 impl SemanticAnalizer {
@@ -96,25 +100,47 @@ impl SemanticAnalizer {
     }
   }
 
+  fn top_function(&mut self) -> &mut FunctionEnvironment {
+    self.function_stack.last_mut().unwrap()
+  }
+
+  fn function_code(&mut self) -> &mut Chunk {
+    &mut self.top_function().code
+  }
+
+  fn locals(&mut self) -> &mut Vec<LocalVariable> {
+    &mut self.top_function().locals
+  }
+
+  fn captures(&mut self) -> &mut Vec<Type> {
+    &mut self.top_function().captures
+  }
+
+  fn scope_depth(&mut self) -> &mut u8 {
+    &mut self.top_function().scope_depth
+  }
+
   fn push_scope(&mut self) {
-    self.scope_depth += 1;
+    *self.scope_depth() += 1;
   }
 
   fn pop_scope(&mut self) {
-    assert!(self.scope_depth >= 1);
+    let scope_depth = *self.scope_depth();
+    assert!(scope_depth >= 1);
     let names_in_local_scope = self
-      .locals
+      .locals()
       .iter()
       .rev()
-      .take_while(|LocalVariable { scope_depth, .. }| self.scope_depth == *scope_depth)
+      .take_while(|LocalVariable { scope_depth: d, .. }| *d == scope_depth)
       .count();
     for _ in 0..names_in_local_scope {
-      unsafe { self.generated_code.push_op(OpCode::Pop) }
+      unsafe { self.function_code().push_op(OpCode::Pop) }
     }
+    let n_locals = self.locals().len();
     self
-      .locals
-      .resize_with(self.locals.len() - names_in_local_scope, || panic!());
-    self.scope_depth -= 1;
+      .locals()
+      .resize_with(n_locals - names_in_local_scope, || panic!());
+    *self.scope_depth() -= 1;
   }
 
   fn get_struct_member(
@@ -140,8 +166,8 @@ impl SemanticAnalizer {
   fn get_type_mut_ref(&mut self, id: Identifier) -> &mut Type {
     match id {
       Identifier::Global(gid) => &mut self.global_types[gid as usize],
-      Identifier::Local { scope_depth, id } => &mut self.locals[id as usize].var_type,
-      Identifier::Capture(id) => &mut self.captures[id as usize],
+      Identifier::Local(id) => &mut self.locals()[id as usize].var_type,
+      Identifier::Capture(id) => &mut self.captures()[id as usize],
     }
   }
 
@@ -230,7 +256,17 @@ impl SemanticAnalizer {
     fn_types.last().unwrap().clone()
   }
 
-  fn check_function(&mut self, ast: &AST, fn_types: Vec<Type>, body: &[StmtHandle]) {
+  fn check_function(
+    &mut self,
+    ast: &AST,
+    info: SourceInfoHandle,
+    parameters: &[Identifier],
+    fn_types: Vec<Type>,
+    body: &[StmtHandle],
+  ) {
+    for (id, param_type) in parameters.iter().zip(&fn_types) {
+      self.create_id(*id, param_type.clone())
+    }
     let return_type = fn_types.last().unwrap();
     let mut unconditional_return = false;
     for stmt in body.iter() {
@@ -241,7 +277,7 @@ impl SemanticAnalizer {
           ReturnType::Error => unconditional_return = true,
           _ => {
             self.emit_error(error_from_source_info(
-              &self.function_stack.last().unwrap().get(ast),
+              &info.get(ast),
               "inconsistent return types".to_string(),
             ));
             unconditional_return = true;
@@ -250,11 +286,46 @@ impl SemanticAnalizer {
         }
       }
     }
-    if !unconditional_return && *return_type != Type::Nothing {
-      self.emit_error(error_from_source_info(
-        &self.function_stack.last().unwrap().get(ast),
-        "function only has conditional return types".to_string(),
-      ));
+    if !unconditional_return {
+      if *return_type != Type::Nothing {
+        self.emit_error(error_from_source_info(
+          &info.get(ast),
+          "function only has conditional return types".to_string(),
+        ));
+      } else {
+        unsafe {
+          self.function_code().push_constant(TaggedValue::none());
+          self.function_code().push_op(OpCode::Return);
+        };
+      }
+    }
+  }
+
+  fn create_id(&mut self, id: Identifier, var_type: Type) {
+    match id {
+      Identifier::Global(_) => {} // already set
+      Identifier::Local(_) => {
+        let scope_depth = *self.scope_depth();
+        self.locals().push(LocalVariable {
+          var_type,
+          scope_depth: scope_depth,
+        })
+      }
+      Identifier::Capture(_) => todo!(),
+    }
+  }
+
+  fn set_last(&mut self, id: Identifier) {
+    match id {
+      Identifier::Global(gid) => unsafe {
+        self
+          .function_code()
+          .push_constant(TaggedValue::global_id(gid));
+        self.function_code().push_op(OpCode::SetGlobal);
+        self.function_code().push_op(OpCode::Pop);
+      },
+      Identifier::Local(_) => {} // no operation needed, the value is already on the stack
+      Identifier::Capture(_) => todo!(),
     }
   }
 
@@ -265,32 +336,15 @@ impl SemanticAnalizer {
     id_info: SourceInfoHandle,
     expression: Option<ExprHandle>,
   ) {
-    match identifier {
-      Identifier::Global(gid) => {} // already set
-      Identifier::Local { id, .. } => self.locals.push(LocalVariable {
-        var_type: Type::Unknown,
-        scope_depth: self.scope_depth,
-      }),
-      Identifier::Capture(_) => todo!(),
-    }
+    self.create_id(identifier, Type::Unknown);
     self.check_self_assignment(ast, identifier, expression);
     if let Some(expr) = expression {
       let rhs = self.analyze_expr(ast, expr);
       self.set_type_or_err(identifier, rhs, id_info.get(ast));
     } else {
-      unsafe { self.generated_code.push_constant_none() }
+      unsafe { self.function_code().push_constant_none() }
     }
-    match identifier {
-      Identifier::Global(gid) => unsafe {
-        self
-          .generated_code
-          .push_constant(TaggedValue::global_id(gid));
-        self.generated_code.push_op(OpCode::SetGlobal);
-        self.generated_code.push_op(OpCode::Pop);
-      },
-      Identifier::Local { .. } => {} // no operation needed, the value is already on the stack
-      Identifier::Capture(_) => todo!(),
-    }
+    self.set_last(identifier);
   }
 
   fn check_return_types(
@@ -330,16 +384,16 @@ impl SemanticAnalizer {
         condition,
         loop_body,
       } => {
-        let label = self.generated_code.get_next_instruction_label();
+        let label = self.function_code().get_next_instruction_label();
         let condition_type = self.analyze_expr(ast, condition);
-        let loop_condition = self.generated_code.push_jump(OpCode::JumpIfFalsePop);
+        let loop_condition = self.function_code().push_jump(OpCode::JumpIfFalsePop);
         self.check_valid_condition_type(info.get(ast), condition_type);
         self.loop_depth += 1;
         let ret = self.analyze_stmt(ast, loop_body);
         self.loop_depth -= 1;
-        self.generated_code.push_back_jump(label);
+        self.function_code().push_back_jump(label);
         self
-          .generated_code
+          .function_code()
           .backpatch_current_instruction(loop_condition);
         to_conditional(ret)
       }
@@ -366,21 +420,23 @@ impl SemanticAnalizer {
       } => {
         let condition_type = self.analyze_expr(ast, condition);
         self.check_valid_condition_type(if_info.get(ast), condition_type);
-        let if_jump_point = self.generated_code.push_jump(OpCode::JumpIfFalsePop);
+        let if_jump_point = self.function_code().push_jump(OpCode::JumpIfFalsePop);
         let ret_true = to_conditional(self.analyze_stmt(ast, true_branch));
         let ret_false = if let Some(stmt) = else_branch {
-          let skip_else = self.generated_code.push_jump(OpCode::Jump);
+          let skip_else = self.function_code().push_jump(OpCode::Jump);
           // TODO: cleanup duplicates
           self
-            .generated_code
+            .function_code()
             .backpatch_current_instruction(if_jump_point);
 
           let res = self.analyze_stmt(ast, stmt);
-          self.generated_code.backpatch_current_instruction(skip_else);
+          self
+            .function_code()
+            .backpatch_current_instruction(skip_else);
           res
         } else {
           self
-            .generated_code
+            .function_code()
             .backpatch_current_instruction(if_jump_point);
           None
         };
@@ -398,15 +454,27 @@ impl SemanticAnalizer {
       Stmt::Function {
         id,
         name_info,
-        parameters: _,
+        parameters,
         captures,
         fn_type,
         body,
       } => {
-        self.function_stack.push(name_info);
-        self.check_function(ast, fn_type.clone(), &body);
-        self.function_stack.pop();
-        self.functions.insert(id, fn_type);
+        self.create_id(id, Type::Function(fn_type.clone()));
+        self.functions.insert(id, fn_type.clone());
+        self.function_stack.push(FunctionEnvironment {
+          captures: Vec::new(),
+          locals: Vec::new(),
+          scope_depth: 0,
+          code: Chunk::empty(),
+        });
+        self.check_function(ast, name_info, &parameters, fn_type.clone(), &body);
+        let func = self.function_stack.pop().unwrap();
+        unsafe {
+          self
+            .function_code()
+            .push_function(Function { code: func.code });
+        }
+        self.set_last(id);
         None
       }
       Stmt::Break(info) => {
@@ -420,7 +488,14 @@ impl SemanticAnalizer {
       }
       Stmt::Return { expr, src_info } => {
         if self.function_stack.len() > 0 {
-          Some(ReturnType::Unconditional(self.analyze_expr(ast, expr)))
+          let expr_type = if let Some(expr) = expr {
+            self.analyze_expr(ast, expr)
+          } else {
+            unsafe { self.function_code().push_constant(TaggedValue::none()) };
+            Type::Nothing
+          };
+          unsafe { self.function_code().push_op(OpCode::Return) }
+          Some(ReturnType::Unconditional(expr_type))
         } else {
           self.emit_error(error_from_source_info(
             &src_info.get(ast),
@@ -431,12 +506,12 @@ impl SemanticAnalizer {
       }
       Stmt::Print(expr) => {
         self.analyze_expr(ast, expr);
-        unsafe { self.generated_code.push_op(OpCode::Print) };
+        unsafe { self.function_code().push_op(OpCode::Print) };
         None
       }
       Stmt::Expr(expr) => {
         self.analyze_expr(ast, expr);
-        unsafe { self.generated_code.push_op(OpCode::Pop) };
+        unsafe { self.function_code().push_op(OpCode::Pop) };
         None
       }
       Stmt::ExternFunction { .. } => None,
@@ -482,19 +557,19 @@ impl SemanticAnalizer {
       (Type::Num, bin_op, Type::Num) if ARITHMETIC_OPERATORS.contains(&bin_op) => {
         unsafe {
           self
-            .generated_code
+            .function_code()
             .push_op(OpCode::from_numeric_operator(bin_op))
         }
         Type::Num
       }
       (Type::Str, Operator::Basic('+'), Type::Str) => {
-        unsafe { self.generated_code.push_op(OpCode::AddStr) };
+        unsafe { self.function_code().push_op(OpCode::AddStr) };
         Type::Str
       }
       (Type::Num, comp_op, Type::Num) if COMP_OPERATORS.contains(&comp_op) => {
         unsafe {
           self
-            .generated_code
+            .function_code()
             .push_op(OpCode::from_numeric_operator(comp_op))
         };
         Type::Bool
@@ -502,7 +577,7 @@ impl SemanticAnalizer {
       (Type::Str, comp_op, Type::Str) if COMP_OPERATORS.contains(&comp_op) => {
         unsafe {
           self
-            .generated_code
+            .function_code()
             .push_op(OpCode::from_string_comp_operator(comp_op))
         }
         Type::Bool
@@ -529,20 +604,22 @@ impl SemanticAnalizer {
     let OperatorPair { op, src_info } = op;
     let rhs = match op {
       Operator::And => {
-        let jump = self.generated_code.push_jump(OpCode::JumpIfFalseNoPop);
-        unsafe { self.generated_code.push_op(OpCode::Pop) };
+        let jump = self.function_code().push_jump(OpCode::JumpIfFalseNoPop);
+        unsafe { self.function_code().push_op(OpCode::Pop) };
         let ret = self.analyze_expr(ast, rhs);
-        self.generated_code.backpatch_current_instruction(jump);
+        self.function_code().backpatch_current_instruction(jump);
         ret
       }
       Operator::Or => {
-        let check_rhs = self.generated_code.push_jump(OpCode::JumpIfFalseNoPop);
-        let skip_rhs_jump = self.generated_code.push_jump(OpCode::Jump);
-        self.generated_code.backpatch_current_instruction(check_rhs);
-        unsafe { self.generated_code.push_op(OpCode::Pop) };
+        let check_rhs = self.function_code().push_jump(OpCode::JumpIfFalseNoPop);
+        let skip_rhs_jump = self.function_code().push_jump(OpCode::Jump);
+        self
+          .function_code()
+          .backpatch_current_instruction(check_rhs);
+        unsafe { self.function_code().push_op(OpCode::Pop) };
         let ret = self.analyze_expr(ast, rhs);
         self
-          .generated_code
+          .function_code()
           .backpatch_current_instruction(skip_rhs_jump);
         ret
       }
@@ -564,11 +641,11 @@ impl SemanticAnalizer {
     let OperatorPair { op, src_info } = op;
     match (op, rhs) {
       (Operator::Basic('-'), Type::Num) => {
-        unsafe { self.generated_code.push_op(OpCode::NegNum) }
+        unsafe { self.function_code().push_op(OpCode::NegNum) }
         Type::Num
       }
       (Operator::Basic('!'), Type::Bool) => {
-        unsafe { self.generated_code.push_op(OpCode::NotBool) };
+        unsafe { self.function_code().push_op(OpCode::NotBool) };
         Type::Bool
       }
       (op, rhs) => {
@@ -590,9 +667,9 @@ impl SemanticAnalizer {
         fn_type,
         body,
       } => {
-        self.function_stack.push(info);
-        self.check_function(ast, fn_type.clone(), &body);
-        self.function_stack.pop();
+        //self.function_stack.push(info);
+        //self.check_function(ast, fn_type.clone(), &body);
+        //self.function_stack.pop();
         Type::Function(fn_type)
       }
       Expr::Assignment { id, id_info, value } => {
@@ -601,12 +678,12 @@ impl SemanticAnalizer {
         match id {
           Identifier::Global(gid) => unsafe {
             self
-              .generated_code
+              .function_code()
               .push_constant(TaggedValue::global_id(gid));
-            self.generated_code.push_op(OpCode::SetGlobal);
+            self.function_code().push_op(OpCode::SetGlobal);
           },
-          Identifier::Local { id, .. } => unsafe {
-            self.generated_code.push_type2_op(OpCode::SetLocal, id);
+          Identifier::Local(id) => unsafe {
+            self.function_code().push_type2_op(OpCode::SetLocal, id);
           },
           _ => todo!(),
         }
@@ -616,12 +693,12 @@ impl SemanticAnalizer {
         match id {
           Identifier::Global(gid) => unsafe {
             self
-              .generated_code
+              .function_code()
               .push_constant(TaggedValue::global_id(gid));
-            self.generated_code.push_op(OpCode::GetGlobal);
+            self.function_code().push_op(OpCode::GetGlobal);
           },
-          Identifier::Local { id, .. } => unsafe {
-            self.generated_code.push_type2_op(OpCode::GetLocal, id);
+          Identifier::Local(id) => unsafe {
+            self.function_code().push_type2_op(OpCode::GetLocal, id);
           },
           _ => todo!(),
         }
@@ -630,7 +707,7 @@ impl SemanticAnalizer {
       Expr::Literal { literal, .. } => {
         unsafe {
           self
-            .generated_code
+            .function_code()
             .push_constant(TaggedValue::from_literal(&literal, ast));
         }
         Type::from_literal(literal)
@@ -641,6 +718,7 @@ impl SemanticAnalizer {
         arguments,
       } => {
         let func = self.analyze_expr(ast, func);
+        let number_of_arguments = arguments.len();
         let arguments = arguments.iter().map(|arg| self.analyze_expr(ast, *arg));
         let ret = match func {
           Type::PartialCall {
@@ -662,6 +740,11 @@ impl SemanticAnalizer {
             Type::Error
           }
         };
+        unsafe {
+          self
+            .function_code()
+            .push_type2_op(OpCode::Call, number_of_arguments as u8);
+        }
         ret
       }
       Expr::Binary {
@@ -734,23 +817,26 @@ impl SemanticAnalizer {
 
   pub fn analyze(ast: &AST, types: Vec<Type>) -> Result<Chunk, SourceError> {
     let mut analizer = Self {
-      function_stack: Vec::new(),
+      function_stack: vec![FunctionEnvironment {
+        captures: Vec::new(),
+        locals: Vec::new(),
+        scope_depth: 0,
+        code: Chunk::empty(),
+      }],
       global_types: types,
-      locals: Vec::with_capacity(256),
-      captures: vec![Type::Unknown; 256],
-      scope_depth: 0,
       loop_depth: 0,
       structs: HashMap::new(),
       functions: HashMap::new(),
       errors: Vec::new(),
-      generated_code: Chunk::empty(),
     };
     for stmt in ast.get_program() {
       analizer.analyze_stmt(ast, *stmt);
     }
     if analizer.errors.is_empty() {
-      unsafe { analizer.generated_code.push_op(OpCode::Return) };
-      Ok(analizer.generated_code)
+      unsafe { analizer.function_code().push_op(OpCode::Return) };
+      let mut result = Chunk::empty();
+      std::mem::swap(&mut result, &mut analizer.function_code());
+      Ok(result)
     } else {
       Err(SourceError::from_err_vec(analizer.errors))
     }

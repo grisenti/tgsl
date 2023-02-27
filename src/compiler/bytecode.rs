@@ -8,6 +8,7 @@ pub enum OpCode {
   Return,
 
   Constant,
+  Function,
 
   GetGlobal,
   SetGlobal,
@@ -39,6 +40,9 @@ pub enum OpCode {
 
   // bool
   NotBool,
+
+  // functions
+  Call,
 
   Jump,
   BackJump,
@@ -93,6 +97,7 @@ pub enum ValueType {
   None,
 }
 
+#[derive(Clone)]
 pub struct Function {
   pub code: Chunk,
 }
@@ -103,7 +108,7 @@ pub union Value {
   pub id: u16,
   pub boolean: bool,
   pub string: *mut String,
-  pub function: *mut Function,
+  pub function: *const Function,
   pub none: (),
 }
 
@@ -129,7 +134,7 @@ impl TaggedValue {
       Literal::String(s) => Self {
         kind: ValueType::String,
         value: Value {
-          string: unsafe { alloc_object::<String>(s.get(ast).to_string()) },
+          string: unsafe { alloc_object(s.get(ast).to_string()) },
         },
       },
       Literal::False => Self {
@@ -151,6 +156,13 @@ impl TaggedValue {
     }
   }
 
+  pub fn function(func: *const Function) -> Self {
+    Self {
+      kind: ValueType::Function,
+      value: Value { function: func },
+    }
+  }
+
   pub fn none() -> Self {
     Self {
       kind: ValueType::None,
@@ -164,10 +176,6 @@ impl TaggedValue {
         self.value.string.drop_in_place();
         unsafe { std::alloc::dealloc(self.value.string as *mut u8, Layout::new::<String>()) }
       }
-      ValueType::Function => {
-        self.value.function.drop_in_place();
-        unsafe { std::alloc::dealloc(self.value.function as *mut u8, Layout::new::<Function>()) }
-      }
       _ => {}
     }
   }
@@ -176,7 +184,7 @@ impl TaggedValue {
     let value = match self.kind {
       ValueType::String => unsafe {
         Value {
-          string: Box::into_raw(Box::new((*self.value.string).clone())),
+          string: alloc_object((*self.value.string).clone()),
         }
       },
       _ => self.value,
@@ -194,15 +202,24 @@ impl ToString for TaggedValue {
       ValueType::Number => unsafe { self.value.number.to_string() },
       ValueType::Bool => unsafe { self.value.boolean.to_string() },
       ValueType::String => unsafe { format!("\"{}\"", *self.value.string) },
-      ValueType::GlobalId => unsafe { self.value.id.to_string() },
+      ValueType::GlobalId => unsafe { format!("<global {}>", self.value.id) },
+      ValueType::Function => "<function>".to_string(),
       ValueType::None => "<none>".to_string(),
       _ => todo!(),
     }
   }
 }
 
+impl Debug for TaggedValue {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.to_string())
+  }
+}
+
+#[derive(Clone)]
 pub struct Chunk {
   pub code: Vec<u8>,
+  functions: Vec<Function>,
   constants: Vec<TaggedValue>,
 }
 
@@ -212,6 +229,13 @@ impl Chunk {
     self.constants.push(val);
     self.code.push(OpCode::Constant as u8);
     self.code.push(constant_offset);
+  }
+
+  pub unsafe fn push_function(&mut self, func: Function) {
+    let offset = self.functions.len() as u8;
+    self.functions.push(func);
+    self.code.push(OpCode::Function as u8);
+    self.code.push(offset);
   }
 
   pub unsafe fn push_constant_none(&mut self) {
@@ -236,7 +260,7 @@ impl Chunk {
   }
 
   // NAME: type2 as in two parts
-  pub fn push_type2_op(&mut self, op: OpCode, data: u8) {
+  pub unsafe fn push_type2_op(&mut self, op: OpCode, data: u8) {
     self.code.push(op as u8);
     self.code.push(data);
   }
@@ -266,10 +290,15 @@ impl Chunk {
     self.constants[index].copy_object()
   }
 
+  pub fn get_function(&self, index: usize) -> TaggedValue {
+    TaggedValue::function(std::ptr::addr_of!(self.functions[index]))
+  }
+
   pub fn empty() -> Self {
     Self {
       code: Vec::new(),
       constants: vec![TaggedValue::none()],
+      functions: Vec::new(),
     }
   }
 }
@@ -284,7 +313,10 @@ impl Drop for Chunk {
 
 impl Debug for Chunk {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let mut result = String::new();
+    let mut result = "".to_string();
+    for (i, func) in self.functions.iter().enumerate() {
+      result += &format!("++ fn {i} ++\n{:?}-- fn {i} --\n", func.code);
+    }
     let mut index = 0;
     while index < self.code.len() {
       let code = unsafe { std::mem::transmute::<u8, OpCode>(self.code[index]) };
@@ -296,6 +328,14 @@ impl Debug for Chunk {
             "Constant: {}\n",
             self.constants[self.code[index] as usize].to_string()
           );
+        }
+        OpCode::Function => {
+          index += 1;
+          result += &format!("Function: {}\n", self.code[index]);
+        }
+        OpCode::Call => {
+          index += 1;
+          result += &format!("Call: {}\n", self.code[index]);
         }
         OpCode::JumpIfFalsePop | OpCode::Jump | OpCode::JumpIfFalseNoPop => {
           index += 2;

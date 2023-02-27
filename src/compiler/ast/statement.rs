@@ -44,7 +44,7 @@ pub enum Stmt {
   },
   Break(SourceInfoHandle),
   Return {
-    expr: ExprHandle,
+    expr: Option<ExprHandle>,
     src_info: SourceInfoHandle,
   },
   Struct {

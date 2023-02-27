@@ -95,11 +95,15 @@ impl AST {
         format!("\n{spaces}Break")
       }
       Stmt::Return { expr, .. } => {
-        format!(
-          "\n{spaces}Return:\
-          \n{spaces}-expression: {}",
-          self.print_expr(expr, depth + 1)
-        )
+        if let Some(expr) = expr {
+          format!(
+            "\n{spaces}Return:\
+             \n{spaces}-expression: {}",
+            self.print_expr(expr, depth + 1)
+          )
+        } else {
+          format!("\n{spaces}Return")
+        }
       }
       Stmt::Struct {
         name,

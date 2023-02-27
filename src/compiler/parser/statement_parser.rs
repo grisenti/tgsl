@@ -135,7 +135,11 @@ impl<'src> Parser<'src> {
     assert!(matches!(self.lookahead, Token::Return));
     let src_info = self.last_token_info();
     self.advance()?;
-    let expr = self.parse_expression()?;
+    let expr = if self.lookahead != Token::Basic(';') {
+      Some(self.parse_expression()?)
+    } else {
+      None
+    };
     self.match_or_err(Token::Basic(';'))?;
     Ok(self.ast.add_statement(Stmt::Return { expr, src_info }))
   }

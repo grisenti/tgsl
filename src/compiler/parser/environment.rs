@@ -14,6 +14,7 @@ struct LocalId {
 #[derive(Default)]
 pub struct Environment {
   locals: Vec<(String, LocalId)>,
+  last_local_id: u8,
   globals: HashMap<String, Identifier>,
   global_types: Vec<Type>,
   functions_declaration_stack: Vec<Function>,
@@ -27,11 +28,32 @@ pub struct FinalizedEnvironment {
 }
 
 impl Environment {
-  fn declare_global_name(&mut self, name: String) -> Identifier {
+  fn add_global_name(&mut self, name: String) -> Identifier {
     let id = Identifier::Global(self.last_global_id);
     self.globals.insert(name, id);
     self.last_global_id += 1;
     id
+  }
+
+  fn declare_global_name(
+    &mut self,
+    name: &str,
+    name_src_info: SourceInfo,
+  ) -> Result<Identifier, SourceError> {
+    let id = self
+      .globals
+      .get(name)
+      .copied()
+      .unwrap_or_else(|| self.add_global_name(name.to_string()));
+    if self.declared.contains(&id) {
+      Err(error_from_source_info(
+        &name_src_info,
+        format!("redeclaration of global name {name}"),
+      ))
+    } else {
+      self.declared.insert(id);
+      Ok(id)
+    }
   }
 
   pub fn in_global_scope(&self) -> bool {
@@ -50,44 +72,37 @@ impl Environment {
     }
   }
 
-  fn find_local(&self, name: &str) -> Option<Identifier> {
+  fn find_local(&self, name: &str) -> Option<LocalId> {
     self
       .locals
       .iter()
       .rev()
       .find(|(local_name, _)| local_name == name)
-      .and_then(|(_, LocalId { scope_depth, id })| {
-        Some(Identifier::Local {
-          scope_depth: *scope_depth,
-          id: *id,
-        })
-      })
+      .and_then(|pair| Some(pair.1))
   }
 
-  fn capture(&mut self, id: Identifier) -> Identifier {
-    if let Identifier::Local {
+  fn capture(
+    &mut self,
+    LocalId {
       scope_depth: target_depth,
-      ..
-    } = id
+      id,
+    }: LocalId,
+  ) -> Identifier {
+    let start_depth = self.scope_depth;
+    debug_assert!(start_depth >= target_depth);
+    let mut capture_id = Identifier::Local(id);
+    for func in self
+      .functions_declaration_stack
+      .iter_mut()
+      .rev()
+      .take((start_depth - target_depth) as usize)
+      .rev()
     {
-      let start_depth = self.scope_depth;
-      debug_assert!(start_depth >= target_depth);
-      let mut capture_id = id;
-      for func in self
-        .functions_declaration_stack
-        .iter_mut()
-        .rev()
-        .take((start_depth - target_depth) as usize)
-        .rev()
-      {
-        let tmp = capture_id;
-        capture_id = Identifier::Capture(func.captures.len() as u8);
-        func.captures.push(tmp);
-      }
-      capture_id
-    } else {
-      panic!()
+      let tmp = capture_id;
+      capture_id = Identifier::Capture(func.captures.len() as u8);
+      func.captures.push(tmp);
     }
+    capture_id
   }
 
   pub fn get_name_or_add_global(&mut self, name: &str) -> Identifier {
@@ -96,7 +111,7 @@ impl Environment {
     } else if let Some(global_id) = self.globals.get(name) {
       *global_id
     } else {
-      self.declare_global_name(name.to_string())
+      self.add_global_name(name.to_string())
     }
   }
 
@@ -105,31 +120,28 @@ impl Environment {
     name: &str,
     name_src_info: SourceInfo,
   ) -> Result<Identifier, SourceError> {
-    if let Some(id) = self
-      .find_local(name)
-      .or_else(|| self.globals.get(name).copied())
+    if self
+      .locals
+      .iter()
+      .rev()
+      .take_while(|(_, LocalId { scope_depth, .. })| self.scope_depth == *scope_depth)
+      .find(|(local_name, _)| local_name == name)
+      .is_some()
     {
-      if self.declared.contains(&id) {
-        Err(error_from_source_info(
-          &name_src_info,
-          format!("cannot redeclare name '{name}' in the same scope"),
-        ))
-      } else {
-        self.declared.insert(id);
-        Ok(id)
-      }
+      Err(error_from_source_info(
+        &name_src_info,
+        format!("cannot redeclare name '{name}' in the same scope"),
+      ))
     } else if self.in_global_scope() {
-      Ok(self.declare_global_name(name.to_string()))
+      self.declare_global_name(name, name_src_info)
     } else {
       let id = LocalId {
         scope_depth: self.scope_depth,
-        id: self.locals.len() as u8,
+        id: self.last_local_id,
       };
+      self.last_local_id += 1;
       self.locals.push((name.to_string(), id));
-      Ok(Identifier::Local {
-        scope_depth: id.scope_depth,
-        id: id.id,
-      })
+      Ok(Identifier::Local(id.id))
     }
   }
 
@@ -152,12 +164,18 @@ impl Environment {
   }
 
   pub fn push_function(&mut self) {
+    self.last_local_id = 0;
     self.functions_declaration_stack.push(Function {
       captures: Vec::new(),
     })
   }
 
   pub fn pop_function(&mut self) -> Vec<Identifier> {
+    assert!(self.functions_declaration_stack.len() > 0);
+    // all of the functions variables should be out of the stack
+    if let Some((_, LocalId { id, .. })) = self.locals.last() {
+      self.last_local_id = *id;
+    }
     self.functions_declaration_stack.pop().unwrap().captures
   }
 
