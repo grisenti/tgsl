@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use crate::compiler::bytecode::{Chunk, Function, OpCode, TaggedValue, Value, ValueType};
 
 const MAX_CALLS: usize = 64;
-const MAX_STACK: usize = MAX_CALLS * u8::MAX as usize;
+const MAX_LOCALS: usize = u8::MAX as usize;
+const MAX_STACK: usize = MAX_CALLS * MAX_LOCALS;
 
 macro_rules! binary_operation {
   ($s:ident, $operator:ident, $result:ident, $kind:expr, $op:tt) => {
@@ -43,10 +44,14 @@ impl CallFrame {
     val
   }
 
-  fn read_instruction(&mut self) -> OpCode {
-    let instruction = self.read_byte();
-    debug_assert!(instruction < OpCode::Last as u8);
-    unsafe { std::mem::transmute::<u8, OpCode>(instruction) }
+  fn read_instruction(&mut self) -> Result<OpCode, &'static str> {
+    if self.sp as usize - self.bp as usize > MAX_LOCALS {
+      Err("STACK OVERFLOW")
+    } else {
+      let instruction = self.read_byte();
+      debug_assert!(instruction < OpCode::Last as u8);
+      Ok(unsafe { std::mem::transmute::<u8, OpCode>(instruction) })
+    }
   }
 
   fn pop(&mut self) -> TaggedValue {
@@ -95,13 +100,13 @@ impl VM {
   fn run(&mut self, frame: CallFrame) {
     let mut frame = frame;
     loop {
-      let op = frame.read_instruction();
-      /*println!("{op:?}: {:?}", unsafe {
-        std::slice::from_raw_parts(frame.bp, 10)
-          .iter()
-          .take_while(|val| val.kind != ValueType::None)
-          .collect::<Vec<_>>()
-      });*/
+      let op = match frame.read_instruction() {
+        Ok(op) => op,
+        Err(err) => {
+          eprintln!("{}", err);
+          return;
+        }
+      };
       match op {
         OpCode::Constant => {
           let c = frame.read_constant();
