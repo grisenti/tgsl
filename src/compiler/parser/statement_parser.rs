@@ -223,7 +223,6 @@ impl<'src> Parser<'src> {
     self.advance()?; // consume fun
     let (name_id, name_info) = self.match_id_or_err()?;
     let call_start = self.lex.prev_token_info();
-    self.env.push_scope();
     self.env.push_function();
     self.match_or_err(Token::Basic('('))?;
     let parameters = if self.lookahead != Token::Basic(')') {
@@ -234,7 +233,6 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic(')'))?;
     let return_type = self.parse_function_return_type()?;
     let body = self.parse_unscoped_block()?;
-    self.env.pop_scope();
     let captures = self.env.pop_function();
     let (parameters, mut fn_type) = parameters?;
     fn_type.push(return_type);

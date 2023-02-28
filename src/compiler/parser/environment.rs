@@ -5,7 +5,7 @@ struct Function {
   captures: Vec<Identifier>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct LocalId {
   scope_depth: u8,
   id: u8,
@@ -135,6 +135,12 @@ impl Environment {
     } else if self.in_global_scope() {
       self.declare_global_name(name, name_src_info)
     } else {
+      if self.last_local_id == u8::MAX {
+        return Err(error_from_source_info(
+          &name_src_info,
+          format!("too many local names "),
+        ));
+      }
       let id = LocalId {
         scope_depth: self.scope_depth,
         id: self.last_local_id,
@@ -165,6 +171,7 @@ impl Environment {
 
   pub fn push_function(&mut self) {
     self.last_local_id = 0;
+    self.push_scope();
     self.functions_declaration_stack.push(Function {
       captures: Vec::new(),
     })
@@ -172,10 +179,14 @@ impl Environment {
 
   pub fn pop_function(&mut self) -> Vec<Identifier> {
     assert!(self.functions_declaration_stack.len() > 0);
+    self.pop_scope();
+    dbg!(&self.locals);
     // all of the functions variables should be out of the stack
-    if let Some((_, LocalId { id, .. })) = self.locals.last() {
-      self.last_local_id = *id;
-    }
+    self.last_local_id = if let Some((_, LocalId { id, .. })) = self.locals.last() {
+      *id
+    } else {
+      0
+    };
     self.functions_declaration_stack.pop().unwrap().captures
   }
 
