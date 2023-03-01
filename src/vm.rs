@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::compiler::bytecode::{Chunk, Function, OpCode, TaggedValue, Value, ValueType};
+use crate::compiler::bytecode::{Chunk, Closure, Function, OpCode, TaggedValue, Value, ValueType};
 
 const MAX_CALLS: usize = 64;
 const MAX_LOCALS: usize = u8::MAX as usize;
@@ -27,6 +27,7 @@ struct CallFrame {
   sp: *mut TaggedValue,
   pc: *const u8,
   function: *const Function,
+  captures: *mut TaggedValue,
 }
 
 const EMPTY_CALL_FRAME: CallFrame = CallFrame {
@@ -34,6 +35,7 @@ const EMPTY_CALL_FRAME: CallFrame = CallFrame {
   sp: std::ptr::null_mut(),
   pc: std::ptr::null(),
   function: std::ptr::null(),
+  captures: std::ptr::null_mut(),
 };
 
 impl CallFrame {
@@ -116,6 +118,15 @@ impl VM {
           let f = frame.read_function();
           frame.push(f);
         }
+        OpCode::MakeClosure => {
+          let func = frame.pop();
+          debug_assert!(func.kind == ValueType::Function);
+          let captures = frame.read_byte();
+          frame.push(TaggedValue::capture(
+            unsafe { func.value.function },
+            captures as usize,
+          ))
+        }
         OpCode::GetGlobal => {
           let id = unsafe { frame.pop().value.id };
           if let Some(value) = self.globals.get(&id) {
@@ -139,6 +150,20 @@ impl VM {
         OpCode::GetLocal => {
           let id = frame.read_byte();
           frame.push(frame.get_stack_value(id));
+        }
+        OpCode::Capture => {
+          let val = frame.pop();
+          unsafe { (*frame.top().value.closure).captures.push(val) }
+        }
+        OpCode::GetCapture => {
+          let id = frame.read_byte();
+          let val = unsafe { *frame.captures.offset(id as isize) };
+          frame.push(val);
+        }
+        OpCode::SetCapture => {
+          let id = frame.read_byte();
+          let val = frame.top();
+          unsafe { *frame.captures.offset(id as isize) = val };
         }
         OpCode::AddNum => {
           binary_operation!(frame, number,number, ValueType::Number, +);
@@ -193,8 +218,17 @@ impl VM {
         OpCode::Call => {
           let arguments = frame.read_byte() as usize;
           let function_value = unsafe { *frame.sp.sub(arguments + 1) };
-          debug_assert!(function_value.kind == ValueType::Function);
-          let function = unsafe { function_value.value.function };
+          let (function, captures) = if function_value.kind == ValueType::Function {
+            (
+              unsafe { function_value.value.function },
+              std::ptr::null_mut(),
+            )
+          } else {
+            (
+              unsafe { (*function_value.value.closure).function },
+              unsafe { (*function_value.value.closure).captures.as_mut_ptr() },
+            )
+          };
           let bp = unsafe { frame.sp.sub(arguments) };
           let pc = unsafe { (*function).code.code.as_ptr() };
           let sp = frame.sp;
@@ -210,6 +244,7 @@ impl VM {
             sp,
             pc,
             function,
+            captures,
           };
         }
         OpCode::Print => {
@@ -266,6 +301,7 @@ impl VM {
       sp: self.stack.as_mut_ptr(),
       pc: func.code.code.as_mut_ptr(),
       function,
+      captures: std::ptr::null_mut(),
     };
     self.run(global_frame);
   }

@@ -311,7 +311,7 @@ impl SemanticAnalizer {
           scope_depth: scope_depth,
         })
       }
-      Identifier::Capture(_) => todo!(),
+      Identifier::Capture(_) => {}
     }
   }
 
@@ -325,7 +325,7 @@ impl SemanticAnalizer {
         self.function_code().push_op(OpCode::Pop);
       },
       Identifier::Local(_) => {} // no operation needed, the value is already on the stack
-      Identifier::Capture(_) => todo!(),
+      Identifier::Capture(_) => {}
     }
   }
 
@@ -366,6 +366,24 @@ impl SemanticAnalizer {
     } else {
       None
     }
+  }
+
+  fn emit_get_id(&mut self, id: Identifier) -> Type {
+    match id {
+      Identifier::Global(gid) => unsafe {
+        self
+          .function_code()
+          .push_constant(TaggedValue::global_id(gid));
+        self.function_code().push_op(OpCode::GetGlobal);
+      },
+      Identifier::Local(id) => unsafe {
+        self.function_code().push_type2_op(OpCode::GetLocal, id);
+      },
+      Identifier::Capture(id) => unsafe {
+        self.function_code().push_type2_op(OpCode::GetCapture, id);
+      },
+    }
+    self.get_type(id)
   }
 
   fn analyze_stmt(&mut self, ast: &AST, stmt: StmtHandle) -> Option<ReturnType> {
@@ -461,8 +479,9 @@ impl SemanticAnalizer {
       } => {
         self.create_id(id, Type::Function(fn_type.clone()));
         self.functions.insert(id, fn_type.clone());
+        let capture_types = captures.iter().map(|id| self.get_type(*id)).collect();
         self.function_stack.push(FunctionEnvironment {
-          captures: Vec::new(),
+          captures: capture_types,
           locals: Vec::new(),
           scope_depth: 0,
           code: Chunk::empty(),
@@ -473,6 +492,17 @@ impl SemanticAnalizer {
           self
             .function_code()
             .push_function(Function { code: func.code });
+        }
+        if captures.is_empty() {
+          unsafe {
+            self
+              .function_code()
+              .push_type2_op(OpCode::MakeClosure, captures.len() as u8)
+          }
+          for c in captures {
+            self.emit_get_id(c);
+            unsafe { self.function_code().push_op(OpCode::Capture) }
+          }
         }
         self.set_last(id);
         None
@@ -685,25 +715,13 @@ impl SemanticAnalizer {
           Identifier::Local(id) => unsafe {
             self.function_code().push_type2_op(OpCode::SetLocal, id);
           },
-          _ => todo!(),
+          Identifier::Capture(id) => unsafe {
+            self.function_code().push_type2_op(OpCode::SetCapture, id);
+          },
         }
         value_type
       }
-      Expr::Variable { id, .. } => {
-        match id {
-          Identifier::Global(gid) => unsafe {
-            self
-              .function_code()
-              .push_constant(TaggedValue::global_id(gid));
-            self.function_code().push_op(OpCode::GetGlobal);
-          },
-          Identifier::Local(id) => unsafe {
-            self.function_code().push_type2_op(OpCode::GetLocal, id);
-          },
-          _ => todo!(),
-        }
-        self.get_type(id)
-      }
+      Expr::Variable { id, .. } => self.emit_get_id(id),
       Expr::Literal { literal, .. } => {
         unsafe {
           self

@@ -15,6 +15,11 @@ pub enum OpCode {
   GetLocal,
   SetLocal,
 
+  MakeClosure,
+  Capture,
+  GetCapture,
+  SetCapture,
+
   // primitive operations
   // numbers
   NegNum,
@@ -92,6 +97,7 @@ pub enum ValueType {
   String,
   GlobalId,
   Function,
+  Closure,
   Object,
 
   None,
@@ -102,6 +108,12 @@ pub struct Function {
   pub code: Chunk,
 }
 
+#[derive(Clone)]
+pub struct Closure {
+  pub function: *const Function,
+  pub captures: Vec<TaggedValue>,
+}
+
 #[derive(Clone, Copy)]
 pub union Value {
   pub number: f64,
@@ -109,6 +121,7 @@ pub union Value {
   pub boolean: bool,
   pub string: *mut String,
   pub function: *const Function,
+  pub closure: *mut Closure,
   pub none: (),
 }
 
@@ -163,6 +176,20 @@ impl TaggedValue {
     }
   }
 
+  pub fn capture(function: *const Function, captures: usize) -> Self {
+    Self {
+      kind: ValueType::Closure,
+      value: Value {
+        closure: unsafe {
+          alloc_object(Closure {
+            function,
+            captures: Vec::with_capacity(captures),
+          })
+        },
+      },
+    }
+  }
+
   pub fn none() -> Self {
     Self {
       kind: ValueType::None,
@@ -176,6 +203,10 @@ impl TaggedValue {
         self.value.string.drop_in_place();
         unsafe { std::alloc::dealloc(self.value.string as *mut u8, Layout::new::<String>()) }
       }
+      ValueType::Closure => {
+        self.value.closure.drop_in_place();
+        unsafe { std::alloc::dealloc(self.value.closure as *mut u8, Layout::new::<Closure>()) }
+      }
       _ => {}
     }
   }
@@ -185,6 +216,11 @@ impl TaggedValue {
       ValueType::String => unsafe {
         Value {
           string: alloc_object((*self.value.string).clone()),
+        }
+      },
+      ValueType::Closure => unsafe {
+        Value {
+          closure: alloc_object((*self.value.closure).clone()),
         }
       },
       _ => self.value,
@@ -347,9 +383,13 @@ impl Debug for Chunk {
           let jump_point = u16::from_ne_bytes([self.code[index - 1], self.code[index]]);
           result += &format!("{code:?}: {}\n", index + 1 - jump_point as usize);
         }
-        OpCode::GetLocal | OpCode::SetLocal => {
+        OpCode::GetLocal | OpCode::SetLocal | OpCode::GetCapture | OpCode::SetCapture => {
           index += 1;
           result += &format!("{code:?}: {}\n", self.code[index])
+        }
+        OpCode::MakeClosure => {
+          index += 1;
+          result += &format!("MakeClosure, captures: {}\n", self.code[index])
         }
         code => result += &format!("{:?}\n", code),
       }
