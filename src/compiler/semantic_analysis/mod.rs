@@ -493,7 +493,7 @@ impl SemanticAnalizer {
             .function_code()
             .push_function(Function { code: func.code });
         }
-        if captures.is_empty() {
+        if !captures.is_empty() {
           unsafe {
             self
               .function_code()
@@ -692,14 +692,36 @@ impl SemanticAnalizer {
     match expr.clone().get(ast) {
       Expr::Closure {
         info,
-        parameters: _,
+        parameters,
         captures,
         fn_type,
         body,
       } => {
-        //self.function_stack.push(info);
-        //self.check_function(ast, fn_type.clone(), &body);
-        //self.function_stack.pop();
+        let capture_types = captures.iter().map(|id| self.get_type(*id)).collect();
+        self.function_stack.push(FunctionEnvironment {
+          captures: capture_types,
+          locals: Vec::new(),
+          scope_depth: 0,
+          code: Chunk::empty(),
+        });
+        self.check_function(ast, info, &parameters, fn_type.clone(), &body);
+        let func = self.function_stack.pop().unwrap();
+        unsafe {
+          self
+            .function_code()
+            .push_function(Function { code: func.code });
+        }
+        if !captures.is_empty() {
+          unsafe {
+            self
+              .function_code()
+              .push_type2_op(OpCode::MakeClosure, captures.len() as u8)
+          }
+          for c in captures {
+            self.emit_get_id(c);
+            unsafe { self.function_code().push_op(OpCode::Capture) }
+          }
+        }
         Type::Function(fn_type)
       }
       Expr::Assignment { id, id_info, value } => {

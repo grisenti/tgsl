@@ -156,6 +156,7 @@ impl VM {
           unsafe { (*frame.top().value.closure).captures.push(val) }
         }
         OpCode::GetCapture => {
+          debug_assert!(!frame.captures.is_null());
           let id = frame.read_byte();
           let val = unsafe { *frame.captures.offset(id as isize) };
           frame.push(val);

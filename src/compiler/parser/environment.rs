@@ -78,7 +78,7 @@ impl Environment {
       .iter()
       .rev()
       .find(|(local_name, _)| local_name == name)
-      .and_then(|pair| Some(pair.1))
+      .map(|pair| pair.1)
   }
 
   fn capture(
