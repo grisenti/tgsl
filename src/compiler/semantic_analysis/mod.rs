@@ -148,13 +148,13 @@ impl SemanticAnalizer {
     struct_id: Identifier,
     name: StrHandle,
     ast: &AST,
-  ) -> Option<Type> {
+  ) -> Option<(usize, Type)> {
     let s = self.structs[&struct_id].clone();
     let name = name.get(ast);
     if let Some((_, member_type)) = s
       .member_names
       .iter()
-      .zip(s.member_types)
+      .zip(s.member_types.into_iter().enumerate())
       .find(|(member_name, _)| member_name.get(ast) == name)
     {
       Some(member_type)
@@ -421,13 +421,38 @@ impl SemanticAnalizer {
         member_names,
         member_types,
       } => {
+        let members = member_names.len();
         self.structs.insert(
           name,
           Struct {
             member_names,
-            member_types,
+            member_types: member_types.clone(),
           },
         );
+        let mut t = member_types;
+        t.push(Type::Struct(name));
+        self.create_id(name, Type::Function(t));
+        self.function_stack.push(FunctionEnvironment {
+          captures: Vec::new(),
+          locals: Vec::new(),
+          scope_depth: 0,
+          code: Chunk::empty(),
+        });
+        unsafe {
+          self
+            .function_code()
+            .push_type2_op(OpCode::Construct, members as u8);
+        }
+        unsafe {
+          self.function_code().push_op(OpCode::Return);
+        }
+        let func = self.function_stack.pop().unwrap();
+        unsafe {
+          self
+            .function_code()
+            .push_function(Function { code: func.code });
+        }
+        self.set_last(name);
         None
       }
       Stmt::IfBranch {
@@ -806,7 +831,12 @@ impl SemanticAnalizer {
       } => {
         let left = self.analyze_expr(ast, lhs);
         if let Type::Struct(id) = left {
-          if let Some(member_type) = self.get_struct_member(id, name, ast) {
+          if let Some((index, member_type)) = self.get_struct_member(id, name, ast) {
+            unsafe {
+              self
+                .function_code()
+                .push_type2_op(OpCode::GetMember, index as u8)
+            }
             member_type
           } else {
             self.dot_call(ast, identifier, left, name_info, name)
@@ -824,8 +854,13 @@ impl SemanticAnalizer {
         let lhs = self.analyze_expr(ast, object);
         let rhs = self.analyze_expr(ast, value);
         if let Type::Struct(id) = lhs {
-          if let Some(member_type) = self.get_struct_member(id, name, ast) {
+          if let Some((index, member_type)) = self.get_struct_member(id, name, ast) {
             if self.equal_types(&rhs, &member_type) {
+              unsafe {
+                self
+                  .function_code()
+                  .push_type2_op(OpCode::SetMember, index as u8)
+              }
               member_type
             } else {
               self.emit_error(error_from_source_info(

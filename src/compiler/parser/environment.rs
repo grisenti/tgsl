@@ -180,7 +180,6 @@ impl Environment {
   pub fn pop_function(&mut self) -> Vec<Identifier> {
     assert!(self.functions_declaration_stack.len() > 0);
     self.pop_scope();
-    dbg!(&self.locals);
     // all of the functions variables should be out of the stack
     self.last_local_id = if let Some((_, LocalId { id, .. })) = self.locals.last() {
       *id

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::compiler::bytecode::{Chunk, Closure, Function, OpCode, TaggedValue, Value, ValueType};
+use crate::compiler::bytecode::{
+  Aggregate, Chunk, Closure, Function, OpCode, TaggedValue, Value, ValueType,
+};
 
 const MAX_CALLS: usize = 64;
 const MAX_LOCALS: usize = u8::MAX as usize;
@@ -122,7 +124,7 @@ impl VM {
           let func = frame.pop();
           debug_assert!(func.kind == ValueType::Function);
           let captures = frame.read_byte();
-          frame.push(TaggedValue::capture(
+          frame.push(TaggedValue::closure(
             unsafe { func.value.function },
             captures as usize,
           ))
@@ -247,6 +249,28 @@ impl VM {
             function,
             captures,
           };
+        }
+        OpCode::Construct => {
+          let n_members = frame.read_byte() as usize;
+          let mut members = Vec::with_capacity(n_members);
+          for _ in (0..n_members) {
+            members.push(frame.pop());
+          }
+          // FIXME: remove this reverse
+          members.reverse();
+          frame.push(TaggedValue::aggregate(members));
+        }
+        OpCode::GetMember => {
+          let aggregate = unsafe { frame.pop().value.aggregate };
+          let id = frame.read_byte();
+          let val = unsafe { (*aggregate).members[id as usize] };
+          frame.push(val);
+        }
+        OpCode::SetMember => {
+          let id = frame.read_byte();
+          let aggregate = unsafe { frame.pop().value.aggregate };
+          let val = frame.top();
+          unsafe { (*aggregate).members[id as usize] = val };
         }
         OpCode::Print => {
           let mut top = frame.pop();

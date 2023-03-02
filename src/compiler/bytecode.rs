@@ -49,6 +49,11 @@ pub enum OpCode {
   // functions
   Call,
 
+  // structs
+  Construct,
+  GetMember,
+  SetMember,
+
   Jump,
   BackJump,
   JumpIfFalsePop,
@@ -98,6 +103,7 @@ pub enum ValueType {
   GlobalId,
   Function,
   Closure,
+  Aggregate,
   Object,
 
   None,
@@ -114,6 +120,10 @@ pub struct Closure {
   pub captures: Vec<TaggedValue>,
 }
 
+pub struct Aggregate {
+  pub members: Vec<TaggedValue>,
+}
+
 #[derive(Clone, Copy)]
 pub union Value {
   pub number: f64,
@@ -122,6 +132,7 @@ pub union Value {
   pub string: *mut String,
   pub function: *const Function,
   pub closure: *mut Closure,
+  pub aggregate: *mut Aggregate,
   pub none: (),
 }
 
@@ -176,7 +187,7 @@ impl TaggedValue {
     }
   }
 
-  pub fn capture(function: *const Function, captures: usize) -> Self {
+  pub fn closure(function: *const Function, captures: usize) -> Self {
     Self {
       kind: ValueType::Closure,
       value: Value {
@@ -186,6 +197,15 @@ impl TaggedValue {
             captures: Vec::with_capacity(captures),
           })
         },
+      },
+    }
+  }
+
+  pub fn aggregate(members: Vec<TaggedValue>) -> Self {
+    Self {
+      kind: ValueType::Aggregate,
+      value: Value {
+        aggregate: unsafe { alloc_object(Aggregate { members }) },
       },
     }
   }
@@ -241,6 +261,7 @@ impl ToString for TaggedValue {
       ValueType::GlobalId => unsafe { format!("<global {}>", self.value.id) },
       ValueType::Function => "<function>".to_string(),
       ValueType::None => "<none>".to_string(),
+      ValueType::Aggregate => "<struct>".to_string(),
       _ => todo!(),
     }
   }
@@ -383,7 +404,13 @@ impl Debug for Chunk {
           let jump_point = u16::from_ne_bytes([self.code[index - 1], self.code[index]]);
           result += &format!("{code:?}: {}\n", index + 1 - jump_point as usize);
         }
-        OpCode::GetLocal | OpCode::SetLocal | OpCode::GetCapture | OpCode::SetCapture => {
+        OpCode::GetLocal
+        | OpCode::SetLocal
+        | OpCode::GetCapture
+        | OpCode::SetCapture
+        | OpCode::GetMember
+        | OpCode::SetMember
+        | OpCode::Construct => {
           index += 1;
           result += &format!("{code:?}: {}\n", self.code[index])
         }
