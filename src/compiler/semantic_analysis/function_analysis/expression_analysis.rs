@@ -71,7 +71,7 @@ impl FunctionAnalizer<'_> {
     fn_type: Vec<Type>,
     body: Vec<StmtHandle>,
   ) -> Type {
-    self.check_function(&parameters, &fn_type, &captures, info, body);
+    self.check_function(&fn_type, &captures, info, body);
     unsafe {
       self.code.maybe_create_closure(&captures);
     }

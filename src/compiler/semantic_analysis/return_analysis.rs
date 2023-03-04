@@ -32,7 +32,3 @@ impl ReturnType {
     }
   }
 }
-
-struct FunctionReturn {
-  conditional: bool,
-}

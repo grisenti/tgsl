@@ -1,9 +1,6 @@
-use std::collections::HashMap;
-
 use crate::errors::*;
 
 use self::{
-  ast::{Identifier, AST},
   bytecode::Chunk,
   lexer::Lexer,
   parser::{ParseResult, Parser},
@@ -27,7 +24,7 @@ impl Compiler {
   pub fn compile(program: &str) -> Result<CompilerResult, SourceError> {
     let parser = Parser::new(Lexer::new(program));
     let ParseResult { ast, final_env } = parser.parse()?;
-    println!("{:?}", ast);
+    println!("{ast:?}");
     let generated_code = SemanticAnalizer::analyze(ast, final_env.global_types)?;
     Ok(CompilerResult { generated_code })
   }

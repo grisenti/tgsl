@@ -356,10 +356,10 @@ impl Debug for Chunk {
           index += 1;
           result += &format!("MakeClosure, captures: {}\n", self.code[index])
         }
-        code => result += &format!("{:?}\n", code),
+        code => result += &format!("{code:?}\n"),
       }
       index += 1;
     }
-    write!(f, "{}", result)
+    write!(f, "{result}")
   }
 }

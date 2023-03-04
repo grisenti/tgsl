@@ -157,7 +157,7 @@ impl AST {
           self.print_expr(right, depth + 1)
         )
       }
-      Expr::Literal { literal, info } => {
+      Expr::Literal { literal, .. } => {
         format!("\n{spaces}Literal: {literal:?}")
       }
       Expr::Variable { id, .. } => {
@@ -242,6 +242,6 @@ impl Debug for AST {
     for stmt in &self.program {
       result += &self.print_stmt(*stmt, 0);
     }
-    write!(f, "{}", result)
+    write!(f, "{result}")
   }
 }

@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use crate::compiler::bytecode::{
-  Aggregate, Chunk, Closure, Function, OpCode, TaggedValue, Value, ValueType,
-};
+use crate::compiler::bytecode::{Chunk, Function, OpCode, TaggedValue, Value, ValueType};
 
 const MAX_CALLS: usize = 64;
 const MAX_LOCALS: usize = u8::MAX as usize;
@@ -107,7 +105,7 @@ impl VM {
       let op = match frame.read_instruction() {
         Ok(op) => op,
         Err(err) => {
-          eprintln!("{}", err);
+          eprintln!("{err}");
           return;
         }
       };
@@ -253,7 +251,7 @@ impl VM {
         OpCode::Construct => {
           let n_members = frame.read_byte() as usize;
           let mut members = Vec::with_capacity(n_members);
-          for _ in (0..n_members) {
+          for _ in 0..n_members {
             members.push(frame.pop());
           }
           // FIXME: remove this reverse

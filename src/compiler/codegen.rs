@@ -1,7 +1,7 @@
 use crate::compiler::bytecode::OpCode;
 
 use super::{
-  ast::{Identifier, Literal},
+  ast::Identifier,
   bytecode::{Chunk, Function, TaggedValue},
 };
 

@@ -1,6 +1,6 @@
 use crate::{
   compiler::{
-    ast::{Identifier, SourceInfoHandle, Stmt, StmtHandle, Type, AST},
+    ast::{Identifier, SourceInfoHandle, Stmt, StmtHandle, Type},
     bytecode::{Chunk, Function, OpCode, TaggedValue},
     codegen::BytecodeBuilder,
     error_from_source_info,
@@ -144,7 +144,6 @@ impl<'analysis> FunctionAnalizer<'analysis> {
 
   fn check_function(
     &mut self,
-    parameters: &[Identifier],
     fn_type: &[Type],
     captures: &[Identifier],
     declaration_info: SourceInfoHandle,

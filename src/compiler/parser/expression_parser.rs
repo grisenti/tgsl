@@ -125,7 +125,7 @@ impl<'src> Parser<'src> {
       self.parse_unary()
     } else {
       let mut expr = self.parse_binary_operation(prec + 1)?;
-      while let Some((op, src_info)) = self.matches_alternatives(&BIN_OP_PRECEDENCE[prec])? {
+      while let Some((op, src_info)) = self.matches_alternatives(BIN_OP_PRECEDENCE[prec])? {
         let right = self.parse_binary_operation(prec + 1)?;
         expr = self.ast.add_expression(Expr::Binary {
           left: expr,
@@ -142,7 +142,7 @@ impl<'src> Parser<'src> {
       self.parse_binary_operation(0)
     } else {
       let mut expr = self.parse_logical_operation(prec + 1)?;
-      while let Some((op, src_info)) = self.matches_alternatives(&LOGICAL_OP_PRECEDENCE[prec])? {
+      while let Some((op, src_info)) = self.matches_alternatives(LOGICAL_OP_PRECEDENCE[prec])? {
         let right = self.parse_logical_operation(prec + 1)?;
         expr = self.ast.add_expression(Expr::Logical {
           left: expr,

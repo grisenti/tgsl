@@ -166,7 +166,6 @@ impl FunctionAnalizer<'_> {
   fn function_stmt(
     &mut self,
     id: Identifier,
-    parameters: Vec<Identifier>,
     fn_type: Vec<Type>,
     captures: Vec<Identifier>,
     declaration_info: SourceInfoHandle,
@@ -175,7 +174,7 @@ impl FunctionAnalizer<'_> {
     if self.global_scope {
       self.global_env.functions.insert(id, fn_type.clone());
     }
-    self.check_function(&parameters, &fn_type, &captures, declaration_info, body);
+    self.check_function(&fn_type, &captures, declaration_info, body);
     unsafe {
       self.declare(id, Type::Function(fn_type));
       self.code.maybe_create_closure(&captures);
@@ -255,12 +254,12 @@ impl FunctionAnalizer<'_> {
       Stmt::Function {
         id,
         name_info,
-        parameters,
         captures,
         fn_type,
         body,
+        ..
       } => {
-        self.function_stmt(id, parameters, fn_type, captures, name_info, body);
+        self.function_stmt(id, fn_type, captures, name_info, body);
         None
       }
       Stmt::Break(info) => {
