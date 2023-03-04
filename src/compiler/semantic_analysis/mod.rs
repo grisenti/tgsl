@@ -28,12 +28,12 @@ struct GlobalEnv {
 pub struct SemanticAnalizer;
 
 impl SemanticAnalizer {
-  pub fn analyze(ast: AST, types: Vec<Type>) -> Result<Chunk, SourceError> {
+  pub fn analyze(ast: AST, global_types: Vec<Type>) -> Result<Chunk, SourceError> {
     let program = ast.get_program().to_owned();
     let mut global_env = GlobalEnv {
       functions: HashMap::new(),
       structs: HashMap::new(),
-      global_types: types,
+      global_types,
       errors: Vec::new(),
       ast,
     };
