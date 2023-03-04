@@ -125,8 +125,7 @@ impl Environment {
       .iter()
       .rev()
       .take_while(|(_, LocalId { scope_depth, .. })| self.scope_depth == *scope_depth)
-      .find(|(local_name, _)| local_name == name)
-      .is_some()
+      .any(|(local_name, _)| local_name == name)
     {
       Err(error_from_source_info(
         &name_src_info,
@@ -138,7 +137,7 @@ impl Environment {
       if self.last_local_id == u8::MAX {
         return Err(error_from_source_info(
           &name_src_info,
-          format!("too many local names "),
+          "too many local names ".to_string(),
         ));
       }
       let id = LocalId {
@@ -151,7 +150,7 @@ impl Environment {
     }
   }
 
-  pub fn pop_scope(&mut self) {
+  pub fn pop_scope(&mut self) -> u8 {
     debug_assert!(self.scope_depth > 0);
     let names_in_local_scope = self
       .locals
@@ -163,6 +162,7 @@ impl Environment {
       self.locals.pop();
     }
     self.scope_depth -= 1;
+    names_in_local_scope as u8
   }
 
   pub fn push_scope(&mut self) {
@@ -178,7 +178,7 @@ impl Environment {
   }
 
   pub fn pop_function(&mut self) -> Vec<Identifier> {
-    assert!(self.functions_declaration_stack.len() > 0);
+    assert!(!self.functions_declaration_stack.is_empty());
     self.pop_scope();
     // all of the functions variables should be out of the stack
     self.last_local_id = if let Some((_, LocalId { id, .. })) = self.locals.last() {

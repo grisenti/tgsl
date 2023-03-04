@@ -276,73 +276,11 @@ impl Debug for TaggedValue {
 #[derive(Clone)]
 pub struct Chunk {
   pub code: Vec<u8>,
-  functions: Vec<Function>,
-  constants: Vec<TaggedValue>,
+  pub functions: Vec<Function>,
+  pub constants: Vec<TaggedValue>,
 }
 
 impl Chunk {
-  pub unsafe fn push_constant(&mut self, val: TaggedValue) {
-    let constant_offset = self.constants.len() as u8;
-    self.constants.push(val);
-    self.code.push(OpCode::Constant as u8);
-    self.code.push(constant_offset);
-  }
-
-  pub unsafe fn push_function(&mut self, func: Function) {
-    let offset = self.functions.len() as u8;
-    self.functions.push(func);
-    self.code.push(OpCode::Function as u8);
-    self.code.push(offset);
-  }
-
-  pub unsafe fn push_constant_none(&mut self) {
-    self.code.push(OpCode::Constant as u8);
-    self.code.push(0);
-  }
-
-  pub unsafe fn push_op(&mut self, op: OpCode) {
-    self.code.push(op as u8);
-  }
-
-  pub fn push_jump(&mut self, jump_type: OpCode) -> usize {
-    debug_assert!(matches!(
-      jump_type,
-      OpCode::Jump | OpCode::JumpIfFalsePop | OpCode::JumpIfFalseNoPop
-    ));
-    unsafe { self.push_op(jump_type) };
-    let index = self.code.len();
-    self.code.push(0);
-    self.code.push(0);
-    index
-  }
-
-  // NAME: type2 as in two parts
-  pub unsafe fn push_type2_op(&mut self, op: OpCode, data: u8) {
-    self.code.push(op as u8);
-    self.code.push(data);
-  }
-
-  pub fn push_back_jump(&mut self, to: usize) {
-    assert!((self.code.len() - to + 2) <= u16::MAX as usize);
-    unsafe { self.push_op(OpCode::BackJump) };
-    // 2 added to skip jump point
-    let split = ((self.code.len() - to + 2) as u16).to_ne_bytes();
-    self.code.push(split[0]);
-    self.code.push(split[1]);
-  }
-
-  pub fn backpatch_current_instruction(&mut self, jump_point: usize) {
-    assert!((self.code.len() - jump_point - 2) <= u16::MAX as usize);
-    let split = ((self.code.len() - jump_point - 2) as u16).to_ne_bytes();
-    // 2 removed to skip jump point
-    self.code[jump_point] = split[0];
-    self.code[jump_point + 1] = split[1];
-  }
-
-  pub fn get_next_instruction_label(&self) -> usize {
-    self.code.len()
-  }
-
   pub fn get_constant(&self, index: usize) -> TaggedValue {
     self.constants[index].copy_object()
   }

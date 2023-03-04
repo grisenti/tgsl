@@ -17,7 +17,10 @@ pub enum Stmt {
   },
   Expr(ExprHandle),
   Print(ExprHandle),
-  Block(Vec<StmtHandle>),
+  Block {
+    statements: Vec<StmtHandle>,
+    locals: u8,
+  },
   IfBranch {
     if_info: SourceInfoHandle,
     condition: ExprHandle,

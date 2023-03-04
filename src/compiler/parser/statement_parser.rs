@@ -46,10 +46,10 @@ impl<'src> Parser<'src> {
         }
       }
     }
-    self.env.pop_scope();
+    let locals = self.env.pop_scope();
     self.match_or_err(Token::Basic('}'))?;
     if errors.is_empty() {
-      Ok(self.ast.add_statement(Stmt::Block(statements)))
+      Ok(self.ast.add_statement(Stmt::Block { statements, locals }))
     } else {
       Err(SourceError::from_err_vec(errors))
     }
@@ -111,16 +111,20 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic(')'))?;
     let body = self.parse_statement()?;
     let while_finally = self.ast.add_statement(Stmt::Expr(after));
-    let while_body = self
-      .ast
-      .add_statement(Stmt::Block(vec![body, while_finally]));
+    let while_body = self.ast.add_statement(Stmt::Block {
+      statements: vec![body, while_finally],
+      locals: 0,
+    });
     let while_loop = self.ast.add_statement(Stmt::While {
       info,
       condition,
       loop_body: while_body,
     });
-    self.env.pop_scope(); // for statement scope
-    Ok(self.ast.add_statement(Stmt::Block(vec![init, while_loop])))
+    let locals = self.env.pop_scope(); // for statement scope
+    Ok(self.ast.add_statement(Stmt::Block {
+      statements: vec![init, while_loop],
+      locals: 0, // FIXME: maybe not 0
+    }))
   }
 
   fn parse_loop_break(&mut self) -> StmtRes {

@@ -26,9 +26,9 @@ impl AST {
       Stmt::Print(expr) => {
         format!("\n{spaces}Print:{}", self.print_expr(expr, depth + 1))
       }
-      Stmt::Block(stmts) => {
-        let mut result = format!("\n{spaces}Block:");
-        for s in stmts {
+      Stmt::Block { statements, locals } => {
+        let mut result = format!("\n{spaces}Block:\n-locals: {locals}");
+        for s in statements {
           result += &self.print_stmt(s, depth + 1);
         }
         result

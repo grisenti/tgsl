@@ -22,7 +22,7 @@ impl ExprHandle {
   pub fn get(&self, ast: &AST) -> Expr {
     assert!(self.index < ast.nodes.len() as u32);
     if let ASTNode::Expr(e) = &ast.nodes[self.index as usize] {
-      e.clone()
+      e.clone() // FIXME: remove clone
     } else {
       panic!("expression handle refers to a node thats not an expression");
     }
@@ -34,7 +34,7 @@ impl StmtHandle {
   pub fn get(&self, ast: &AST) -> Stmt {
     assert!(self.index < ast.nodes.len() as u32);
     if let ASTNode::Stmt(s) = &ast.nodes[self.index as usize] {
-      s.clone()
+      s.clone() // FIXME: remove clone
     } else {
       panic!("statement handle refers to a node thats not a statement");
     }
