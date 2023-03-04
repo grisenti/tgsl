@@ -54,7 +54,9 @@ impl FunctionAnalizer<'_> {
     id_info: SourceInfoHandle,
     init_expr: Option<ExprHandle>,
   ) {
-    self.set_type(id, var_type);
+    if let Identifier::Local(_) = id {
+      self.locals.push(var_type);
+    }
     if let Some(expr) = init_expr {
       self.check_self_assignment(id, expr);
       let rhs = self.analyze_expr(expr);
