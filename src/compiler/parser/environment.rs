@@ -158,10 +158,11 @@ impl Environment {
       .rev()
       .take_while(|(_, LocalId { scope_depth, .. })| self.scope_depth == *scope_depth)
       .count();
-    for _ in 0..names_in_local_scope {
-      self.locals.pop();
-    }
+    self
+      .locals
+      .truncate(self.locals.len() - names_in_local_scope);
     self.scope_depth -= 1;
+    self.last_local_id -= names_in_local_scope as u8;
     names_in_local_scope as u8
   }
 
