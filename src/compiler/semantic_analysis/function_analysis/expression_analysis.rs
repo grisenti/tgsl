@@ -4,6 +4,7 @@ use crate::compiler::{
     StrHandle, Type,
   },
   bytecode::{OpCode, TaggedValue},
+  codegen::Address,
 };
 
 use super::FunctionAnalizer;
@@ -43,10 +44,15 @@ impl FunctionAnalizer<'_> {
     &mut self,
     id: Identifier,
     lhs: Type,
+    lhs_start_address: Address,
     name_info: SourceInfoHandle,
     name: StrHandle,
   ) -> Type {
     if let Type::Function(types) = self.get_type(id) {
+      let function_start = self.code.get_next_instruction_address();
+      unsafe { self.code.get_id(id) }
+      let chunk_end = self.code.get_next_instruction_address();
+      unsafe { self.code.swap(lhs_start_address, function_start, chunk_end) }
       Type::PartialCall {
         func_types: types,
         partial_arguments: vec![lhs],
@@ -143,13 +149,14 @@ impl FunctionAnalizer<'_> {
     arguments: &[ExprHandle],
   ) -> Type {
     let fn_type = self.analyze_expr(function);
-    let number_of_arguments = arguments.len();
+    let mut number_of_arguments = arguments.len();
     let arguments = arguments.iter().map(|arg| self.analyze_expr(*arg));
     let ret = match fn_type {
       Type::PartialCall {
         func_types,
         mut partial_arguments,
       } => {
+        number_of_arguments += partial_arguments.len();
         partial_arguments.extend(arguments);
         self.check_call_arguments(&func_types, &partial_arguments, call_info)
       }
@@ -276,16 +283,17 @@ impl FunctionAnalizer<'_> {
     rhs_id: Identifier,
     name_info: SourceInfoHandle,
   ) -> Type {
+    let expr_start_address = self.code.get_next_instruction_address();
     let left = self.analyze_expr(left_expr);
     if let Type::Struct(id) = left {
       if let Some((index, member_type)) = self.get_struct_member(id, rhs_name) {
         unsafe { self.code.push_op2(OpCode::GetMember, index as u8) }
         member_type
       } else {
-        self.dot_call(rhs_id, left, name_info, rhs_name)
+        self.dot_call(rhs_id, left, expr_start_address, name_info, rhs_name)
       }
     } else {
-      self.dot_call(rhs_id, left, name_info, rhs_name)
+      self.dot_call(rhs_id, left, expr_start_address, name_info, rhs_name)
     }
   }
 

@@ -7,6 +7,7 @@ use super::{
 
 pub struct Label(usize);
 pub struct JumpPoint(usize);
+pub struct Address(usize);
 
 pub struct BytecodeBuilder {
   code: Vec<u8>,
@@ -75,6 +76,19 @@ impl BytecodeBuilder {
 
   pub fn get_next_instruction_label(&self) -> Label {
     Label(self.code.len())
+  }
+
+  pub fn get_next_instruction_address(&self) -> Address {
+    Address(self.code.len())
+  }
+
+  pub unsafe fn swap(
+    &mut self,
+    Address(start): Address,
+    Address(mid): Address,
+    Address(end): Address,
+  ) {
+    self.code[start..end].rotate_left(mid - start);
   }
 
   pub unsafe fn get_id(&mut self, id: Identifier) {
