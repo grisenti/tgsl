@@ -1,4 +1,4 @@
-use crate::compiler::ast::Type;
+use crate::compiler::types::Type;
 
 pub enum ReturnType {
   Conditional(Type),

@@ -1,5 +1,5 @@
 use crate::compiler::{
-  ast::{Expr, ExprHandle, Identifier, SourceInfoHandle, StrHandle},
+  ast::{Expr, ExprHandle, SourceInfoHandle, StrHandle},
   bytecode::Function,
   semantic_analysis::{return_analysis::to_conditional, Struct},
 };

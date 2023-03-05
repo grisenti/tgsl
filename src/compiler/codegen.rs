@@ -1,8 +1,8 @@
 use crate::compiler::bytecode::OpCode;
 
 use super::{
-  ast::Identifier,
   bytecode::{Chunk, Function, TaggedValue},
+  identifier::Identifier,
 };
 
 pub struct Label(usize);

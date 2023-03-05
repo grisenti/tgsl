@@ -1,8 +1,8 @@
 use std::fmt::Display;
 
-use crate::compiler::lexer::Token;
+use crate::compiler::{identifier::Identifier, lexer::Token, types::Type};
 
-use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle, Type, AST};
+use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle, AST};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Operator {
@@ -84,13 +84,6 @@ impl OperatorPair {
   pub fn new(op: Operator, src_info: SourceInfoHandle) -> Self {
     Self { op, src_info }
   }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
-pub enum Identifier {
-  Global(u16),
-  Capture(u8),
-  Local(u8),
 }
 
 #[derive(Debug, Clone)]

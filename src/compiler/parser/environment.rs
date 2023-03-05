@@ -1,3 +1,5 @@
+use crate::compiler::identifier::Identifier;
+
 use super::*;
 use std::collections::{HashMap, HashSet};
 

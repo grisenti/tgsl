@@ -1,4 +1,4 @@
-use super::{Identifier, Literal};
+use super::{ast::Literal, identifier::Identifier};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -15,6 +15,8 @@ pub enum Type {
   Nothing,
   Error,
 }
+
+pub struct TypeId(pub u32);
 
 impl Type {
   pub fn from_literal(lit: Literal) -> Self {

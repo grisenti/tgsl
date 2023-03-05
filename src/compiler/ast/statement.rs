@@ -1,4 +1,6 @@
-use super::{types::Type, ExprHandle, Identifier, SourceInfoHandle, StmtHandle, StrHandle};
+use crate::compiler::{identifier::Identifier, types::Type};
+
+use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle};
 
 #[derive(Debug, Clone)]
 pub struct Method {

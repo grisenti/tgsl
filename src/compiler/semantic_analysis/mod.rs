@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use self::function_analysis::{FunctionAnalizer, FunctionAnalysisResult};
 
-use super::{ast::*, bytecode::Chunk};
+use super::{ast::*, bytecode::Chunk, identifier::Identifier, types::Type};
 use crate::errors::SourceError;
 
 mod function_analysis;

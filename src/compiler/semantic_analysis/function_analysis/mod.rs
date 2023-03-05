@@ -1,9 +1,11 @@
 use crate::{
   compiler::{
-    ast::{Identifier, SourceInfoHandle, Stmt, StmtHandle, Type},
+    ast::{SourceInfoHandle, Stmt, StmtHandle},
     bytecode::{Chunk, Function, OpCode, TaggedValue},
     codegen::BytecodeBuilder,
     error_from_source_info,
+    identifier::Identifier,
+    types::Type,
   },
   errors::{SourceError, SourceInfo},
 };

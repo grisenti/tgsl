@@ -10,9 +10,11 @@ use self::{
 pub mod ast;
 pub mod bytecode;
 mod codegen;
+mod identifier;
 pub mod lexer;
 pub mod parser;
 pub mod semantic_analysis;
+mod types;
 
 pub struct Compiler {}
 

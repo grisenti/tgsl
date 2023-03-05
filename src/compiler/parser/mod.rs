@@ -1,12 +1,15 @@
 mod environment;
 mod expression_parser;
 mod statement_parser;
+mod type_map;
 
 use self::environment::Environment;
 use self::environment::FinalizedEnvironment;
 
 use super::ast::*;
+use super::identifier::Identifier;
 use super::lexer::*;
+use super::types::Type;
 use super::*;
 
 pub struct ParseResult {

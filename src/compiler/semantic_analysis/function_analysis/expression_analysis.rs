@@ -1,10 +1,11 @@
 use crate::compiler::{
   ast::{
-    Expr, ExprHandle, Identifier, Literal, Operator, OperatorPair, SourceInfoHandle, StmtHandle,
-    StrHandle, Type,
+    Expr, ExprHandle, Literal, Operator, OperatorPair, SourceInfoHandle, StmtHandle, StrHandle,
   },
   bytecode::{OpCode, TaggedValue},
   codegen::Address,
+  identifier::Identifier,
+  types::Type,
 };
 
 use super::FunctionAnalizer;

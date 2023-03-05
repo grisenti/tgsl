@@ -225,7 +225,8 @@ impl<'src> Parser<'src> {
 #[cfg(test)]
 mod test {
   use crate::compiler::{
-    ast::{Expr, Identifier, Literal, Operator},
+    ast::{Expr, Literal, Operator},
+    identifier::Identifier,
     lexer::Lexer,
     parser::Parser,
   };
