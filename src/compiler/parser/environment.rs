@@ -173,7 +173,7 @@ impl Environment {
     self.pop_scope();
     // all of the functions variables should be out of the stack
     self.last_local_id = if let Some((_, LocalId { id, .. })) = self.locals.last() {
-      *id
+      *id + 1
     } else {
       0
     };
