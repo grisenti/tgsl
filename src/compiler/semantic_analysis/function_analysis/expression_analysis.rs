@@ -25,6 +25,26 @@ const COMP_OPERATORS: [Operator; 6] = [
   Operator::Different,
 ];
 
+enum CallType {
+  DotCall {
+    first_argument: TypeId,
+    fn_params: Vec<TypeId>,
+    fn_ret: TypeId,
+  },
+  Call(TypeId),
+  Other(TypeId),
+}
+
+enum DotKind {
+  MaybeCall {
+    rhs_id: Identifier,
+    rhs_name: StrHandle,
+    rhs_name_info: SourceInfoHandle,
+    lhs_type: TypeId,
+  },
+  MemberAccess(TypeId),
+}
+
 impl FunctionAnalizer<'_> {
   fn get_struct_member(
     &mut self,
@@ -52,29 +72,57 @@ impl FunctionAnalizer<'_> {
     lhs_start_address: Address,
     name_info: SourceInfoHandle,
     name: StrHandle,
-  ) -> TypeId {
-    panic!();
-    /*
-      if let Type::Function {} = self.global_env.type_map.get_type(self.get_type(id)) {
-        let function_start = self.code.get_next_instruction_address();
-        unsafe { self.code.get_id(id) }
-        let chunk_end = self.code.get_next_instruction_address();
-        unsafe { self.code.swap(lhs_start_address, function_start, chunk_end) }
-        TypeId::PartialCall {
-          func_types: types,
-          partial_arguments: vec![lhs],
-        }
-      } else {
-        self.emit_error(
-          name_info,
-          format!(
-            "identifier {} is neither a STRuct member nor a function",
-            name.get(&self.global_env.ast)
-          ),
-        );
-        TypeId::ERROR
+  ) -> CallType {
+    let typeid = self.get_typeid(id);
+    if let Type::Function { parameters, ret } = self.global_env.type_map.get_type(typeid) {
+      let function_start = self.code.get_next_instruction_address();
+      unsafe { self.code.get_id(id) }
+      let chunk_end = self.code.get_next_instruction_address();
+      unsafe { self.code.swap(lhs_start_address, function_start, chunk_end) }
+      CallType::DotCall {
+        first_argument: lhs,
+        fn_params: parameters.clone(),
+        fn_ret: *ret,
       }
-    */
+    } else {
+      self.emit_error(
+        name_info,
+        format!(
+          "identifier {} is neither a struct member nor a function",
+          name.get(&self.global_env.ast)
+        ),
+      );
+      CallType::Other(TypeId::ERROR)
+    }
+  }
+
+  fn try_dot_call(&mut self, expr: ExprHandle) -> CallType {
+    let call_start = self.code.get_next_instruction_address();
+    match expr.get(&self.global_env.ast) {
+      Expr::Variable { id, id_info } => {
+        let typeid = self.get_typeid(id);
+        if let Type::Function { .. } = self.get_type(typeid) {
+          CallType::Call(typeid)
+        } else {
+          CallType::Other(typeid)
+        }
+      }
+      Expr::Dot {
+        lhs,
+        name,
+        identifier,
+        name_info,
+      } => match self.dot_kind(lhs, name, identifier, name_info) {
+        DotKind::MaybeCall {
+          rhs_id,
+          rhs_name,
+          rhs_name_info,
+          lhs_type,
+        } => self.dot_call(rhs_id, lhs_type, call_start, rhs_name_info, rhs_name),
+        DotKind::MemberAccess(member_type) => CallType::Other(member_type),
+      },
+      _ => CallType::Other(self.analyze_expr(expr)),
+    }
   }
 
   pub fn closure(
@@ -106,7 +154,7 @@ impl FunctionAnalizer<'_> {
   pub fn variable(&mut self, id: Identifier) -> TypeId {
     // FIXME: id type checked twice
     unsafe { self.code.get_id(id) };
-    self.get_type(id)
+    self.get_typeid(id)
   }
 
   pub fn literal(&mut self, literal: Literal) -> TypeId {
@@ -159,19 +207,31 @@ impl FunctionAnalizer<'_> {
     call_info: SourceInfoHandle,
     arguments: &[ExprHandle],
   ) -> TypeId {
-    let fn_type = self.analyze_expr(function);
+    let call_type = self.try_dot_call(function);
     let number_of_arguments = arguments.len();
-    let t = self.global_env.type_map.get_type(fn_type).clone();
     let arguments = arguments.iter().map(|arg| self.analyze_expr(*arg));
-    let ret = match t {
-      Type::Function { parameters, ret } => {
+    let ret = match call_type {
+      CallType::Call(type_id) => {
         let args = arguments.collect::<Vec<TypeId>>();
-        self.check_call_arguments(&parameters, ret, &args, call_info)
+        if let Type::Function { parameters, ret } = self.get_type(type_id).clone() {
+          self.check_call_arguments(&parameters, ret, &args, call_info)
+        } else {
+          panic!();
+        }
       }
-      _ => {
+      CallType::DotCall {
+        first_argument,
+        fn_params,
+        fn_ret,
+      } => {
+        let mut args = vec![first_argument];
+        args.extend(arguments);
+        self.check_call_arguments(&fn_params, fn_ret, &args, call_info)
+      }
+      CallType::Other(other) => {
         self.emit_error(
           call_info,
-          format!("cannot call type {}", self.type_string(fn_type)),
+          format!("cannot call type {}", self.type_string(other)),
         );
         TypeId::ERROR
       }
@@ -294,28 +354,58 @@ impl FunctionAnalizer<'_> {
     }
   }
 
-  pub fn dot(
+  fn dot_kind(
+    &mut self,
+    left_expr: ExprHandle,
+    rhs_name: StrHandle,
+    rhs_id: Identifier,
+    name_info: SourceInfoHandle,
+  ) -> DotKind {
+    let left = self.analyze_expr(left_expr);
+    if let Type::Struct(id) = self.global_env.type_map.get_type(left) {
+      if let Some((index, member_type)) = self.get_struct_member(*id, rhs_name) {
+        unsafe { self.code.push_op2(OpCode::GetMember, index as u8) }
+        DotKind::MemberAccess(member_type)
+      } else {
+        DotKind::MaybeCall {
+          rhs_id,
+          rhs_name,
+          rhs_name_info: name_info,
+          lhs_type: left,
+        }
+      }
+    } else {
+      DotKind::MaybeCall {
+        rhs_id,
+        rhs_name,
+        rhs_name_info: name_info,
+        lhs_type: left,
+      }
+    }
+  }
+
+  fn dot(
     &mut self,
     left_expr: ExprHandle,
     rhs_name: StrHandle,
     rhs_id: Identifier,
     name_info: SourceInfoHandle,
   ) -> TypeId {
-    let expr_start_address = self.code.get_next_instruction_address();
-    let left = self.analyze_expr(left_expr);
-    if let Type::Struct(id) = self.global_env.type_map.get_type(left) {
-      if let Some((index, member_type)) = self.get_struct_member(*id, rhs_name) {
-        unsafe { self.code.push_op2(OpCode::GetMember, index as u8) }
-        member_type
-      } else {
-        self.dot_call(rhs_id, left, expr_start_address, name_info, rhs_name)
-      }
+    if let DotKind::MemberAccess(typeid) = self.dot_kind(left_expr, rhs_name, rhs_id, name_info) {
+      typeid
     } else {
-      self.dot_call(rhs_id, left, expr_start_address, name_info, rhs_name)
+      self.emit_error(
+        name_info,
+        format!(
+          "identifier {} is neither a struct member nor a function",
+          rhs_name.get(&self.global_env.ast)
+        ),
+      );
+      TypeId::ERROR
     }
   }
 
-  pub fn set(
+  fn set(
     &mut self,
     object: ExprHandle,
     member_name: StrHandle,

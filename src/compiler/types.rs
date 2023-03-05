@@ -6,10 +6,6 @@ pub enum Type {
   Num,
   Bool,
   Struct(Identifier),
-  PartialCall {
-    func_types: Vec<Type>,
-    partial_arguments: Vec<Type>,
-  },
   Function {
     parameters: Vec<TypeId>,
     ret: TypeId,

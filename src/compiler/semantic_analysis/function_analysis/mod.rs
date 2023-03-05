@@ -81,7 +81,11 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     }
   }
 
-  fn get_type(&mut self, id: Identifier) -> TypeId {
+  fn get_type(&self, id: TypeId) -> &Type {
+    self.global_env.type_map.get_type(id)
+  }
+
+  fn get_typeid(&mut self, id: Identifier) -> TypeId {
     *self.get_type_mut_ref(id)
   }
 
@@ -164,7 +168,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     declaration_info: SourceInfoHandle,
     body: Vec<StmtHandle>,
   ) {
-    let capture_types = captures.iter().map(|id| self.get_type(*id)).collect();
+    let capture_types = captures.iter().map(|id| self.get_typeid(*id)).collect();
     let result = FunctionAnalizer::analyze(
       param_types.to_vec(),
       &body,
