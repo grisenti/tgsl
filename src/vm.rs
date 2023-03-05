@@ -1,6 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash, hint::unreachable_unchecked};
 
-use crate::compiler::bytecode::{Chunk, Function, OpCode, TaggedValue, Value, ValueType};
+use crate::compiler::{
+  bytecode::{Chunk, Function, OpCode, TaggedValue, Value, ValueType},
+  identifier::{ExternId, Identifier},
+};
 
 const MAX_CALLS: usize = 64;
 const MAX_LOCALS: usize = u8::MAX as usize;
@@ -91,7 +94,12 @@ impl CallFrame {
   }
 }
 
+type ExternFunction = Box<dyn Fn(Vec<TaggedValue>) -> TaggedValue>;
+
 pub struct VM {
+  global_names: HashMap<String, Identifier>,
+  extern_map: HashMap<Identifier, ExternId>,
+  extern_functions: Vec<ExternFunction>,
   stack: [TaggedValue; MAX_STACK],
   call_stack: [CallFrame; MAX_CALLS],
   function_call: usize,
@@ -219,16 +227,22 @@ impl VM {
         OpCode::Call => {
           let arguments = frame.read_byte() as usize;
           let function_value = unsafe { *frame.sp.sub(arguments + 1) };
-          let (function, captures) = if function_value.kind == ValueType::Function {
-            (
+          let (function, captures) = match function_value.kind {
+            ValueType::Function => (
               unsafe { function_value.value.function },
               std::ptr::null_mut(),
-            )
-          } else {
-            (
+            ),
+            ValueType::Closure => (
               unsafe { (*function_value.value.closure).function },
               unsafe { (*function_value.value.closure).captures.as_mut_ptr() },
-            )
+            ),
+            ValueType::ExternFunctionId => {
+              let args = (0..arguments).map(|_| frame.pop()).collect();
+              let id = unsafe { function_value.value.id as usize };
+              frame.push(self.extern_functions[id](args));
+              continue;
+            }
+            _ => unsafe { unreachable_unchecked() },
           };
           let bp = unsafe { frame.sp.sub(arguments) };
           let pc = unsafe { (*function).code.code.as_ptr() };
@@ -329,8 +343,18 @@ impl VM {
     self.run(global_frame);
   }
 
-  pub fn new() -> Self {
+  pub fn bind_function(&mut self, name: &str, func: ExternFunction) {
+    self.extern_functions.push(func);
+  }
+
+  pub fn new(
+    name_map: HashMap<String, Identifier>,
+    extern_map: HashMap<Identifier, ExternId>,
+  ) -> Self {
     Self {
+      global_names: name_map,
+      extern_map,
+      extern_functions: Vec::new(),
       globals: HashMap::new(),
       stack: [TaggedValue::none(); MAX_STACK],
       call_stack: [EMPTY_CALL_FRAME; MAX_CALLS],

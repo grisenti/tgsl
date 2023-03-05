@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use crate::errors::*;
 
 use self::{
   bytecode::Chunk,
+  identifier::{ExternId, Identifier},
   lexer::Lexer,
   parser::{ParseResult, Parser},
   semantic_analysis::SemanticAnalizer,
@@ -10,7 +13,7 @@ use self::{
 pub mod ast;
 pub mod bytecode;
 mod codegen;
-mod identifier;
+pub mod identifier;
 pub mod lexer;
 pub mod parser;
 pub mod semantic_analysis;
@@ -21,6 +24,8 @@ pub struct Compiler {}
 
 pub struct CompilerResult {
   pub generated_code: Chunk,
+  pub name_map: HashMap<String, Identifier>,
+  pub extern_map: HashMap<Identifier, ExternId>,
 }
 
 impl Compiler {
@@ -30,10 +35,16 @@ impl Compiler {
       ast,
       global_types,
       type_map,
+      extern_map,
+      name_map,
     } = parser.parse()?;
     println!("{ast:?}");
     let generated_code = SemanticAnalizer::analyze(ast, global_types, type_map)?;
-    Ok(CompilerResult { generated_code })
+    Ok(CompilerResult {
+      generated_code,
+      name_map,
+      extern_map,
+    })
   }
 }
 

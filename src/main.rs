@@ -10,11 +10,26 @@ use compiler::Compiler;
 use errors::SourceError;
 use vm::*;
 
+use crate::compiler::bytecode::{TaggedValue, Value, ValueType};
+
+fn sum(values: Vec<TaggedValue>) -> TaggedValue {
+  println!("{values:?}");
+  let first = values[0];
+  let second = values[1];
+  TaggedValue {
+    kind: ValueType::Number,
+    value: Value {
+      number: unsafe { first.value.number + second.value.number },
+    },
+  }
+}
+
 fn test(program: &str) -> Result<(), SourceError> {
-  let ast = Compiler::compile(program)?;
-  let mut vm = VM::new();
-  println!("{:?}", ast.generated_code);
-  vm.interpret(ast.generated_code);
+  let program = Compiler::compile(program)?;
+  let mut vm = VM::new(program.name_map, program.extern_map);
+  vm.bind_function("", Box::new(sum));
+  println!("{:?}", program.generated_code);
+  vm.interpret(program.generated_code);
   Ok(())
 }
 
@@ -27,12 +42,11 @@ fn main() {
 
 #[cfg(test)]
 mod test {
-  use std::{fs, rc::Rc};
+  use std::fs;
 
   use crate::{
-    compiler::Compiler,
-    errors::{self, SourceError, SourceInfo},
-    interpreter::*,
+    compiler::{bytecode::TaggedValue, Compiler},
+    vm::VM,
   };
 
   macro_rules! test_file {
@@ -44,26 +58,15 @@ mod test {
     };
   }
 
-  fn assert(_: &mut Interpreter, args: Vec<ExprValue>) -> InterpreterFnResult {
-    if let ExprValue::Boolean(true) = args[0] {
-      Ok(ExprValue::Null)
-    } else {
-      Err(SourceError::from_source_info(
-        &SourceInfo::temporary(),
-        "failed assertion".to_string(),
-        errors::SourceErrorType::Runtime,
-      ))
-    }
+  fn assert(args: Vec<TaggedValue>) -> TaggedValue {
+    assert!(unsafe { args[0].value.boolean });
+    TaggedValue::none()
   }
 
   fn compile_and_run(filename: &str) {
     let res = Compiler::compile(&fs::read_to_string(filename).unwrap()).unwrap();
-    let mut interpreter = Interpreter::new(res);
-    interpreter.add_global_variable(
-      "assert",
-      ExprValue::Func(Rc::new(InterpreterFn::foreign(assert, 1))),
-    );
-    interpreter.interpret().unwrap();
+    let mut interpreter = VM::new(res.name_map, res.extern_map);
+    interpreter.bind_function("assert", Box::new(assert));
   }
 
   test_file!(closure_capture);

@@ -1,6 +1,7 @@
 use crate::compiler::{
   ast::{Expr, ExprHandle, SourceInfoHandle, StrHandle},
-  bytecode::Function,
+  bytecode::{Function, ValueType},
+  identifier::ExternId,
   semantic_analysis::{return_analysis::to_conditional, Struct},
 };
 
@@ -226,6 +227,16 @@ impl FunctionAnalizer<'_> {
     unsafe { self.code.push_op(OpCode::Pop) }
   }
 
+  fn extern_function(&mut self, name_id: Identifier, fn_type: TypeId, extern_id: ExternId) {
+    unsafe {
+      self.code.push_constant(TaggedValue {
+        kind: ValueType::ExternFunctionId,
+        value: crate::compiler::bytecode::Value { id: extern_id.0 },
+      });
+    }
+    self.declare(name_id, fn_type);
+  }
+
   pub(super) fn analyze_stmt(&mut self, stmt: StmtHandle) -> OptRet {
     match stmt.clone().get(&self.global_env.ast) {
       Stmt::VarDecl {
@@ -291,7 +302,15 @@ impl FunctionAnalizer<'_> {
         self.expr_stmt(expr);
         None
       }
-      Stmt::ExternFunction { .. } => None,
+      Stmt::ExternFunction {
+        name_id,
+        fn_type,
+        extern_id,
+        ..
+      } => {
+        self.extern_function(name_id, fn_type, extern_id);
+        None
+      }
     }
   }
 }

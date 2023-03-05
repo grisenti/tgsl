@@ -86,11 +86,17 @@ impl AST {
           \n{spaces}-body: {body}"
         )
       }
-      Stmt::ExternFunction { id, fn_type, .. } => {
+      Stmt::ExternFunction {
+        name_id: id,
+        fn_type,
+        extern_id,
+        ..
+      } => {
         format!(
           "\n{spaces}ExternFunction:\
           \n{spaces}-id: {id:?}\
-          \n{spaces}-function type: {fn_type:?}"
+          \n{spaces}-function type: {fn_type:?}
+          \n{spaces}-extern id: {extern_id:?}"
         )
       }
       Stmt::Break(_) => {

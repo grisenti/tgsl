@@ -8,3 +8,6 @@ pub enum Identifier {
   Capture(CaptureId),
   Local(LocalId),
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
+pub struct ExternId(pub u16);

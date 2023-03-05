@@ -1,4 +1,7 @@
-use crate::compiler::{identifier::Identifier, types::TypeId};
+use crate::compiler::{
+  identifier::{ExternId, Identifier},
+  types::TypeId,
+};
 
 use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle};
 
@@ -44,7 +47,8 @@ pub enum Stmt {
     body: Vec<StmtHandle>,
   },
   ExternFunction {
-    id: Identifier,
+    name_id: Identifier,
+    extern_id: ExternId,
     name_info: SourceInfoHandle,
     fn_type: TypeId,
   },

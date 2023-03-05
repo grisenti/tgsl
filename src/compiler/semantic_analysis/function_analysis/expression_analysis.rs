@@ -48,10 +48,10 @@ enum DotKind {
 impl FunctionAnalizer<'_> {
   fn get_struct_member(
     &mut self,
-    STRuct_id: Identifier,
+    struct_id: Identifier,
     name: StrHandle,
   ) -> Option<(usize, TypeId)> {
-    let s = self.global_env.structs[&STRuct_id].clone();
+    let s = self.global_env.structs[&struct_id].clone();
     let name = name.get(&self.global_env.ast);
     if let Some((_, member_type)) = s
       .member_names

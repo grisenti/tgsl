@@ -296,15 +296,16 @@ impl<'src> Parser<'src> {
     self.advance()?;
     self.match_or_err(Token::Fn)?;
     let (name_id, name_info) = self.match_id_or_err()?;
+    let extern_id = self.env.create_extern_id(name_id);
     let parameters = self.parse_function_param_types()?;
     let ret = self.parse_function_return_type()?;
     let fn_type = self.type_map.get_or_add(Type::Function { parameters, ret });
     self.global_types.push(fn_type);
-    self.match_or_err(Token::Basic(';'))?;
     Ok(self.ast.add_statement(Stmt::ExternFunction {
-      id: name_id,
+      name_id,
       name_info,
       fn_type,
+      extern_id,
     }))
   }
 

@@ -1,4 +1,4 @@
-use crate::compiler::identifier::Identifier;
+use crate::compiler::identifier::{ExternId, Identifier};
 
 use super::*;
 use std::collections::{HashMap, HashSet};
@@ -19,11 +19,15 @@ pub struct Environment {
   locals: Vec<(String, LocalId)>,
   last_local_id: u8,
   globals: HashMap<String, Identifier>,
+  extern_map: HashMap<Identifier, ExternId>,
   functions_declaration_stack: Vec<Function>,
   declared: HashSet<Identifier>,
   last_global_id: u16,
+  last_extern_name: u16,
   scope_depth: u8,
 }
+
+pub type ReverseGlobalNamesMap = Vec<String>;
 
 impl Environment {
   fn add_global_name(&mut self, name: String) -> Identifier {
@@ -176,9 +180,19 @@ impl Environment {
     self.functions_declaration_stack.pop().unwrap().captures
   }
 
+  pub fn create_extern_id(&mut self, id: Identifier) -> ExternId {
+    let extern_id = ExternId(self.last_extern_name);
+    self.extern_map.insert(id, extern_id);
+    extern_id
+  }
+
   pub fn new() -> Self {
     Self {
       ..Default::default()
     }
+  }
+
+  pub fn finalize(self) -> (HashMap<String, Identifier>, HashMap<Identifier, ExternId>) {
+    (self.globals, self.extern_map)
   }
 }

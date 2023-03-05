@@ -2,11 +2,15 @@ mod environment;
 mod expression_parser;
 mod statement_parser;
 
+use std::collections::HashMap;
+
 use self::environment::Environment;
+use self::environment::ReverseGlobalNamesMap;
 use self::type_map::ReverseTypeMap;
 use self::type_map::TypeMap;
 
 use super::ast::*;
+use super::identifier::ExternId;
 use super::identifier::Identifier;
 use super::lexer::*;
 use super::types::Type;
@@ -17,6 +21,8 @@ pub struct ParseResult {
   pub ast: AST,
   pub global_types: Vec<TypeId>,
   pub type_map: ReverseTypeMap,
+  pub name_map: HashMap<String, Identifier>,
+  pub extern_map: HashMap<Identifier, ExternId>,
 }
 
 pub struct Parser<'src> {
@@ -213,10 +219,13 @@ impl<'src> Parser<'src> {
       }
     }
     if errors.is_empty() {
+      let (name_map, extern_map) = self.env.finalize();
       Ok(ParseResult {
         ast: self.ast,
         global_types: self.global_types,
         type_map: self.type_map.reverse_map(),
+        name_map,
+        extern_map,
       })
     } else {
       Err(SourceError::from_err_vec(errors))

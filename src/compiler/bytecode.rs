@@ -102,6 +102,7 @@ pub enum ValueType {
   String,
   GlobalId,
   Function,
+  ExternFunctionId,
   Closure,
   Aggregate,
   Object,
@@ -262,6 +263,7 @@ impl ToString for TaggedValue {
       ValueType::Function => "<function>".to_string(),
       ValueType::None => "<none>".to_string(),
       ValueType::Aggregate => "<struct>".to_string(),
+      ValueType::ExternFunctionId => unsafe { format!("<extern {}>", self.value.id) },
       _ => todo!(),
     }
   }
