@@ -207,7 +207,7 @@ impl<'src> Parser<'src> {
     let info = self
       .ast
       .add_source_info(SourceInfo::union(call_start, call_end));
-    Ok(self.ast.add_expression(Expr::Closure {
+    Ok(self.ast.add_expression(Expr::Lambda {
       captures,
       info,
       parameters: param_types,

@@ -173,7 +173,7 @@ impl AST {
           self.print_expr(value, depth + 1)
         )
       }
-      Expr::Closure {
+      Expr::Lambda {
         parameters,
         captures,
         fn_type,
@@ -186,7 +186,7 @@ impl AST {
           .map(|stmt| self.print_stmt(*stmt, depth + 1))
           .collect::<String>();
         format!(
-          "\n{spaces}Closure:\
+          "\n{spaces}Lambda:\
           \n{spaces}-captures: {captures:?}\
           \n{spaces}-function type: {fn_type:?}\
           \n{spaces}-return type: {return_type:?}\

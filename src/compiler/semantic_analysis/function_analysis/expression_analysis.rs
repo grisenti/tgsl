@@ -362,7 +362,7 @@ impl FunctionAnalizer<'_> {
 
   pub fn analyze_expr(&mut self, expr: ExprHandle) -> TypeId {
     match expr.get(&self.global_env.ast) {
-      Expr::Closure {
+      Expr::Lambda {
         info,
         parameters,
         captures,

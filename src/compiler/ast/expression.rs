@@ -115,7 +115,7 @@ pub enum Expr {
     id_info: SourceInfoHandle,
     value: ExprHandle,
   },
-  Closure {
+  Lambda {
     info: SourceInfoHandle,
     captures: Vec<Identifier>,
     parameters: Vec<TypeId>,
