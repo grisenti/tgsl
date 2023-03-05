@@ -3,14 +3,20 @@ use crate::compiler::identifier::{ExternId, Identifier};
 use super::*;
 use std::collections::{HashMap, HashSet};
 
-struct Function {
-  captures: Vec<Identifier>,
-}
-
 #[derive(Debug, Clone, Copy)]
 struct LocalId {
   scope_depth: u8,
   id: u8,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CaptureId {
+  id: Identifier,
+  local_id: u8,
+}
+
+struct Function {
+  captures: Vec<CaptureId>,
 }
 
 // worries about ids and scopes
@@ -26,8 +32,6 @@ pub struct Environment {
   last_extern_name: u16,
   scope_depth: u8,
 }
-
-pub type ReverseGlobalNamesMap = Vec<String>;
 
 impl Environment {
   fn add_global_name(&mut self, name: String) -> Identifier {
@@ -88,9 +92,17 @@ impl Environment {
       .take((start_depth - target_depth) as usize)
       .rev()
     {
-      let tmp = capture_id;
-      capture_id = Identifier::Capture(func.captures.len() as u8);
-      func.captures.push(tmp);
+      // TODO: very slow, think of something different
+      if let Some(capture_index) = func.captures.iter().position(|c| c.local_id == id) {
+        capture_id = Identifier::Capture(capture_index as u8);
+      } else {
+        let tmp = capture_id;
+        capture_id = Identifier::Capture(func.captures.len() as u8);
+        func.captures.push(CaptureId {
+          id: tmp,
+          local_id: id,
+        });
+      }
     }
     capture_id
   }
@@ -177,7 +189,14 @@ impl Environment {
     } else {
       0
     };
-    self.functions_declaration_stack.pop().unwrap().captures
+    self
+      .functions_declaration_stack
+      .pop()
+      .unwrap()
+      .captures
+      .iter()
+      .map(|c| c.id)
+      .collect()
   }
 
   pub fn create_extern_id(&mut self, id: Identifier) -> ExternId {

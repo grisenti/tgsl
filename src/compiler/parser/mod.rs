@@ -5,7 +5,6 @@ mod statement_parser;
 use std::collections::HashMap;
 
 use self::environment::Environment;
-use self::environment::ReverseGlobalNamesMap;
 use self::type_map::ReverseTypeMap;
 use self::type_map::TypeMap;
 
