@@ -64,9 +64,16 @@ mod test {
   }
 
   fn compile_and_run(filename: &str) {
-    let res = Compiler::compile(&fs::read_to_string(filename).unwrap()).unwrap();
-    let mut interpreter = VM::new(res.name_map, res.extern_map);
-    interpreter.bind_function("assert", Box::new(assert));
+    let source = fs::read_to_string(filename).unwrap();
+    let res = Compiler::compile(&source);
+    match res {
+      Err(err) => println!("{}", err.print_long(&source)),
+      Ok(res) => {
+        let mut vm = VM::new(res.name_map, res.extern_map);
+        vm.bind_function("assert", Box::new(assert));
+        vm.interpret(res.generated_code);
+      }
+    }
   }
 
   test_file!(closure_capture);
