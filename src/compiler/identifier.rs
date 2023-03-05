@@ -1,6 +1,10 @@
+pub type GlobalId = u16;
+pub type CaptureId = u8;
+pub type LocalId = u8;
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub enum Identifier {
-  Global(u16),
-  Capture(u8),
-  Local(u8),
+  Global(GlobalId),
+  Capture(CaptureId),
+  Local(LocalId),
 }

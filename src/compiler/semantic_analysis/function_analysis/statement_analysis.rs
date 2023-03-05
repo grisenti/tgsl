@@ -16,7 +16,7 @@ impl FunctionAnalizer<'_> {
           self.declaration_info.unwrap(),
           "inconsistent return types in function".to_string(),
         );
-        Some(ReturnType::Unconditional(Type::Error))
+        Some(ReturnType::Unconditional(TypeId::ERROR))
       }),
       (None, Some(ret)) | (Some(ret), None) => Some(ret),
       _ => None,
@@ -50,7 +50,7 @@ impl FunctionAnalizer<'_> {
   fn var_decl(
     &mut self,
     id: Identifier,
-    var_type: Type,
+    var_type: TypeId,
     id_info: SourceInfoHandle,
     init_expr: Option<ExprHandle>,
   ) {
@@ -60,17 +60,20 @@ impl FunctionAnalizer<'_> {
     if let Some(expr) = init_expr {
       self.check_self_assignment(id, expr);
       let rhs = self.analyze_expr(expr);
-      self.assign(id, id_info, &rhs);
+      self.assign(id, id_info, rhs);
     } else {
       unsafe { self.code.push_constant_none() }
     }
   }
 
-  fn check_valid_condition_type(&mut self, info: SourceInfoHandle, condition_type: Type) {
-    if condition_type != Type::Bool {
+  fn check_valid_condition_type(&mut self, info: SourceInfoHandle, condition_type: TypeId) {
+    if condition_type != TypeId::BOOL {
       self.emit_error(
         info,
-        format!("cannot use value of type {condition_type:?} in a condition"),
+        format!(
+          "cannot use value of type {} in a condition",
+          self.type_string(condition_type)
+        ),
       )
     }
   }
@@ -93,10 +96,13 @@ impl FunctionAnalizer<'_> {
     to_conditional(ret)
   }
 
-  fn generate_constructor(&mut self, id: Identifier, member_types: Vec<Type>) {
+  fn generate_constructor(
+    &mut self,
+    id: Identifier,
+    member_types: Vec<TypeId>,
+    constructor_type: TypeId,
+  ) {
     let members = member_types.len();
-    let mut constructor_type = member_types;
-    constructor_type.push(Type::Struct(id));
     // TODO: maybe move this to codegen
     // --
     let mut constructor_code = BytecodeBuilder::new();
@@ -107,7 +113,7 @@ impl FunctionAnalizer<'_> {
         code: constructor_code.finalize(),
       });
     }
-    self.declare(id, Type::Function(constructor_type));
+    self.declare(id, constructor_type);
     // --
   }
 
@@ -116,7 +122,8 @@ impl FunctionAnalizer<'_> {
     id: Identifier,
     name_info: SourceInfoHandle,
     member_names: Vec<StrHandle>,
-    member_types: Vec<Type>,
+    member_types: Vec<TypeId>,
+    constructor_type: TypeId,
   ) {
     if !self.global_scope || self.scope_depth > 0 {
       self.emit_error(
@@ -124,7 +131,7 @@ impl FunctionAnalizer<'_> {
         "cannot declare struct in local scope".to_string(),
       )
     }
-    self.generate_constructor(id, member_types.clone());
+    self.generate_constructor(id, member_types.clone(), constructor_type);
     self.global_env.structs.insert(
       id,
       Struct {
@@ -168,17 +175,15 @@ impl FunctionAnalizer<'_> {
   fn function_stmt(
     &mut self,
     id: Identifier,
-    fn_type: Vec<Type>,
+    parameters: Vec<TypeId>,
+    fn_type: TypeId,
     captures: Vec<Identifier>,
     declaration_info: SourceInfoHandle,
     body: Vec<StmtHandle>,
   ) {
-    if self.global_scope {
-      self.global_env.functions.insert(id, fn_type.clone());
-    }
-    self.check_function(&fn_type, &captures, declaration_info, body);
+    self.check_function(&parameters, &captures, declaration_info, body);
     unsafe {
-      self.declare(id, Type::Function(fn_type));
+      self.declare(id, fn_type);
       self.code.maybe_create_closure(&captures);
     }
   }
@@ -199,13 +204,13 @@ impl FunctionAnalizer<'_> {
         src_info,
         "cannot have return outside of function body".to_string(),
       );
-      return ReturnType::Unconditional(Type::Error);
+      return ReturnType::Unconditional(TypeId::ERROR);
     }
     let ret = if let Some(expr) = return_expr {
       ReturnType::Unconditional(self.analyze_expr(expr))
     } else {
       unsafe { self.code.push_constant_none() }
-      ReturnType::Unconditional(Type::Nothing)
+      ReturnType::Unconditional(TypeId::NOTHING)
     };
     unsafe { self.code.push_op(OpCode::Return) };
     ret
@@ -242,8 +247,16 @@ impl FunctionAnalizer<'_> {
         name_info,
         member_names,
         member_types,
+        struct_type,
+        constructor_type,
       } => {
-        self.struct_stmt(name, name_info, member_names, member_types);
+        self.struct_stmt(
+          name,
+          name_info,
+          member_names,
+          member_types,
+          constructor_type,
+        );
         None
       }
       Stmt::IfBranch {
@@ -259,9 +272,10 @@ impl FunctionAnalizer<'_> {
         captures,
         fn_type,
         body,
+        parameters,
         ..
       } => {
-        self.function_stmt(id, fn_type, captures, name_info, body);
+        self.function_stmt(id, parameters, fn_type, captures, name_info, body);
         None
       }
       Stmt::Break(info) => {

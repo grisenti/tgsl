@@ -70,6 +70,7 @@ impl AST {
         parameters,
         fn_type,
         body,
+        return_type,
         ..
       } => {
         let body = body
@@ -80,7 +81,8 @@ impl AST {
           "\n{spaces}Function:\n{spaces}-id: {id:?}\
           \n{spaces}-captures: {captures:?}\
           \n{spaces}-function type: {fn_type:?}\
-          \n{spaces}-parameter ids: {parameters:?}\
+          \n{spaces}-parameter types: {parameters:?}\
+          \n{spaces}-return type: {return_type:?}
           \n{spaces}-body: {body}"
         )
       }
@@ -176,6 +178,7 @@ impl AST {
         captures,
         fn_type,
         body,
+        return_type,
         ..
       } => {
         let body = body
@@ -186,7 +189,8 @@ impl AST {
           "\n{spaces}Closure:\
           \n{spaces}-captures: {captures:?}\
           \n{spaces}-function type: {fn_type:?}\
-          \n{spaces}-parameter ids: {parameters:?}\
+          \n{spaces}-return type: {return_type:?}\
+          \n{spaces}-parameter: {parameters:?}\
           \n{spaces}-body: {body}"
         )
       }

@@ -1,4 +1,4 @@
-use crate::compiler::{identifier::Identifier, types::Type};
+use crate::compiler::{identifier::Identifier, types::TypeId};
 
 use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle};
 
@@ -14,7 +14,7 @@ pub enum Stmt {
   VarDecl {
     identifier: Identifier,
     id_info: SourceInfoHandle,
-    var_type: Type,
+    var_type: TypeId,
     expression: Option<ExprHandle>,
   },
   Expr(ExprHandle),
@@ -38,14 +38,15 @@ pub enum Stmt {
     id: Identifier,
     name_info: SourceInfoHandle,
     captures: Vec<Identifier>,
-    parameters: Vec<Identifier>,
-    fn_type: Vec<Type>,
+    parameters: Vec<TypeId>,
+    return_type: TypeId,
+    fn_type: TypeId,
     body: Vec<StmtHandle>,
   },
   ExternFunction {
     id: Identifier,
     name_info: SourceInfoHandle,
-    fn_type: Vec<Type>,
+    fn_type: TypeId,
   },
   Break(SourceInfoHandle),
   Return {
@@ -55,7 +56,9 @@ pub enum Stmt {
   Struct {
     name: Identifier,
     name_info: SourceInfoHandle,
+    constructor_type: TypeId,
+    struct_type: TypeId,
     member_names: Vec<StrHandle>,
-    member_types: Vec<Type>,
+    member_types: Vec<TypeId>,
   },
 }

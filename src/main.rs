@@ -12,9 +12,9 @@ use vm::*;
 
 fn test(program: &str) -> Result<(), SourceError> {
   let ast = Compiler::compile(program)?;
-  let mut vm = VM::new();
+  //let mut vm = VM::new();
   println!("{:?}", ast.generated_code);
-  vm.interpret(ast.generated_code);
+  //vm.interpret(ast.generated_code);
   Ok(())
 }
 

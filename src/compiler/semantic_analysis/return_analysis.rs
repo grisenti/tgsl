@@ -1,8 +1,8 @@
-use crate::compiler::types::Type;
+use crate::compiler::types::TypeId;
 
 pub enum ReturnType {
-  Conditional(Type),
-  Unconditional(Type),
+  Conditional(TypeId),
+  Unconditional(TypeId),
 }
 
 pub fn to_conditional(opt_ret: Option<ReturnType>) -> Option<ReturnType> {

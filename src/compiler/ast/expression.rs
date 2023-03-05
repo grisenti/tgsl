@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::compiler::{identifier::Identifier, lexer::Token, types::Type};
+use crate::compiler::{identifier::Identifier, lexer::Token, types::TypeId};
 
 use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle, AST};
 
@@ -117,9 +117,10 @@ pub enum Expr {
   },
   Closure {
     info: SourceInfoHandle,
-    parameters: Vec<Identifier>,
     captures: Vec<Identifier>,
-    fn_type: Vec<Type>,
+    parameters: Vec<TypeId>,
+    return_type: TypeId,
+    fn_type: TypeId,
     body: Vec<StmtHandle>,
   },
   FnCall {

@@ -13,20 +13,16 @@ struct LocalId {
   id: u8,
 }
 
+// worries about ids and scopes
 #[derive(Default)]
 pub struct Environment {
   locals: Vec<(String, LocalId)>,
   last_local_id: u8,
   globals: HashMap<String, Identifier>,
-  global_types: Vec<Type>,
   functions_declaration_stack: Vec<Function>,
   declared: HashSet<Identifier>,
   last_global_id: u16,
   scope_depth: u8,
-}
-
-pub struct FinalizedEnvironment {
-  pub global_types: Vec<Type>,
 }
 
 impl Environment {
@@ -60,18 +56,6 @@ impl Environment {
 
   pub fn in_global_scope(&self) -> bool {
     self.scope_depth == 0
-  }
-
-  pub fn set_global_type(&mut self, id: Identifier, new_type: Type) {
-    if let Identifier::Global(global_id) = id {
-      let index = global_id as usize;
-      if self.global_types.len() <= index {
-        self.global_types.resize(index + 1, Type::Unknown);
-      }
-      self.global_types[global_id as usize] = new_type;
-    } else {
-      panic!("tried to set global type for local variable");
-    }
   }
 
   fn find_local(&self, name: &str) -> Option<LocalId> {
@@ -195,15 +179,6 @@ impl Environment {
   pub fn new() -> Self {
     Self {
       ..Default::default()
-    }
-  }
-
-  pub fn finalize(mut self) -> FinalizedEnvironment {
-    self
-      .global_types
-      .resize(self.last_global_id as usize + 1, Type::Unknown);
-    FinalizedEnvironment {
-      global_types: self.global_types,
     }
   }
 }

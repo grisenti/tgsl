@@ -5,7 +5,8 @@ use crate::{
     codegen::BytecodeBuilder,
     error_from_source_info,
     identifier::Identifier,
-    types::Type,
+    type_map::ReverseTypeMap,
+    types::{Type, TypeId},
   },
   errors::{SourceError, SourceInfo},
 };
@@ -16,8 +17,8 @@ mod expression_analysis;
 mod statement_analysis;
 
 pub struct FunctionAnalizer<'analysis> {
-  captures: Vec<Type>,
-  locals: Vec<Type>,
+  captures: Vec<TypeId>, // FIXME: make it a slice ref
+  locals: Vec<TypeId>,
   scope_depth: u8,
   global_scope: bool,
   loop_depth: u32,
@@ -30,23 +31,28 @@ pub struct FunctionAnalizer<'analysis> {
 
 pub struct FunctionAnalysisResult {
   pub code: Chunk,
-  pub return_type: Type,
+  pub return_type: TypeId,
 }
 
 fn set_type_or_push_error(
-  lhs: &mut Type,
-  rhs: &Type,
+  lhs: &mut TypeId,
+  rhs: TypeId,
   name_info: SourceInfo,
   errors: &mut Vec<SourceError>,
+  type_map: &ReverseTypeMap,
 ) {
-  match lhs {
-    Type::Unknown => {
-      *lhs = rhs.clone();
+  match *lhs {
+    TypeId::UNKNOWN => {
+      *lhs = rhs;
     }
-    Type::Error => {} // error already reported
-    lhs if *lhs != *rhs => errors.push(error_from_source_info(
+    TypeId::ERROR => {} // error already reported
+    lhs if lhs != rhs => errors.push(error_from_source_info(
       &name_info,
-      format!("cannot assign value of type {rhs:?} to identifier of type {lhs:?}"),
+      format!(
+        "cannot assign value of type {} to identifier of type {}",
+        type_map.type_to_string(rhs),
+        type_map.type_to_string(lhs)
+      ),
     )),
     _ => {} // equal types, no need to set
   };
@@ -67,7 +73,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     self.scope_depth += 1;
   }
 
-  fn get_type_mut_ref(&mut self, id: Identifier) -> &mut Type {
+  fn get_type_mut_ref(&mut self, id: Identifier) -> &mut TypeId {
     match id {
       Identifier::Global(gid) => &mut self.global_env.global_types[gid as usize],
       Identifier::Local(id) => &mut self.locals[id as usize],
@@ -75,15 +81,19 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     }
   }
 
-  fn get_type(&mut self, id: Identifier) -> Type {
-    self.get_type_mut_ref(id).clone()
+  fn get_type(&mut self, id: Identifier) -> TypeId {
+    *self.get_type_mut_ref(id)
   }
 
-  fn set_type(&mut self, id: Identifier, ty: Type) {
+  fn set_type(&mut self, id: Identifier, ty: TypeId) {
     *self.get_type_mut_ref(id) = ty;
   }
 
-  fn declare(&mut self, id: Identifier, var_type: Type) {
+  fn type_string(&self, id: TypeId) -> String {
+    self.global_env.type_map.type_to_string(id)
+  }
+
+  fn declare(&mut self, id: Identifier, var_type: TypeId) {
     match id {
       Identifier::Global(gid) => {
         unsafe {
@@ -98,7 +108,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     }
   }
 
-  fn assign(&mut self, id: Identifier, id_info: SourceInfoHandle, value_type: &Type) {
+  fn assign(&mut self, id: Identifier, id_info: SourceInfoHandle, value_type: TypeId) {
     match id {
       Identifier::Global(gid) => {
         unsafe {
@@ -110,6 +120,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           value_type,
           id_info.get(&self.global_env.ast),
           &mut self.global_env.errors,
+          &self.global_env.type_map,
         );
       }
       Identifier::Local(id) => {
@@ -121,6 +132,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           value_type,
           id_info.get(&self.global_env.ast),
           &mut self.global_env.errors,
+          &self.global_env.type_map,
         );
       }
       Identifier::Capture(id) => {
@@ -132,6 +144,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           value_type,
           id_info.get(&self.global_env.ast),
           &mut self.global_env.errors,
+          &self.global_env.type_map,
         );
       }
     }
@@ -146,14 +159,14 @@ impl<'analysis> FunctionAnalizer<'analysis> {
 
   fn check_function(
     &mut self,
-    fn_type: &[Type],
+    param_types: &[TypeId],
     captures: &[Identifier],
     declaration_info: SourceInfoHandle,
     body: Vec<StmtHandle>,
   ) {
     let capture_types = captures.iter().map(|id| self.get_type(*id)).collect();
     let result = FunctionAnalizer::analyze(
-      fn_type[..fn_type.len() - 1].to_vec(),
+      param_types.to_vec(),
       &body,
       false,
       capture_types,
@@ -166,10 +179,10 @@ impl<'analysis> FunctionAnalizer<'analysis> {
   }
 
   pub(super) fn analyze(
-    parameters: Vec<Type>,
+    parameters: Vec<TypeId>,
     body: &[StmtHandle],
     global_scope: bool,
-    captures: Vec<Type>,
+    captures: Vec<TypeId>,
     global_env: &'analysis mut GlobalEnv,
     declaration_info: Option<SourceInfoHandle>,
   ) -> FunctionAnalysisResult {
@@ -185,14 +198,14 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     };
     let ret = analizer.process_statements(body);
     match ret {
-      Some(ReturnType::Conditional(Type::Nothing)) | None => {
+      Some(ReturnType::Conditional(TypeId::NOTHING)) | None => {
         unsafe {
           analizer.code.push_constant_none();
           analizer.code.push_op(OpCode::Return);
         }
         FunctionAnalysisResult {
           code: analizer.code.finalize(),
-          return_type: Type::Nothing,
+          return_type: TypeId::NOTHING,
         }
       }
       Some(ReturnType::Conditional(_)) => {
@@ -202,7 +215,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
         );
         FunctionAnalysisResult {
           code: Chunk::empty(),
-          return_type: Type::Error,
+          return_type: TypeId::ERROR,
         }
       }
       Some(ReturnType::Unconditional(return_type)) => FunctionAnalysisResult {

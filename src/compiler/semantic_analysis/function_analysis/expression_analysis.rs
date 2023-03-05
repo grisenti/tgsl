@@ -5,7 +5,7 @@ use crate::compiler::{
   bytecode::{OpCode, TaggedValue},
   codegen::Address,
   identifier::Identifier,
-  types::Type,
+  types::{Type, TypeId},
 };
 
 use super::FunctionAnalizer;
@@ -26,8 +26,12 @@ const COMP_OPERATORS: [Operator; 6] = [
 ];
 
 impl FunctionAnalizer<'_> {
-  fn get_struct_member(&mut self, struct_id: Identifier, name: StrHandle) -> Option<(usize, Type)> {
-    let s = self.global_env.structs[&struct_id].clone();
+  fn get_struct_member(
+    &mut self,
+    STRuct_id: Identifier,
+    name: StrHandle,
+  ) -> Option<(usize, TypeId)> {
+    let s = self.global_env.structs[&STRuct_id].clone();
     let name = name.get(&self.global_env.ast);
     if let Some((_, member_type)) = s
       .member_names
@@ -44,45 +48,48 @@ impl FunctionAnalizer<'_> {
   fn dot_call(
     &mut self,
     id: Identifier,
-    lhs: Type,
+    lhs: TypeId,
     lhs_start_address: Address,
     name_info: SourceInfoHandle,
     name: StrHandle,
-  ) -> Type {
-    if let Type::Function(types) = self.get_type(id) {
-      let function_start = self.code.get_next_instruction_address();
-      unsafe { self.code.get_id(id) }
-      let chunk_end = self.code.get_next_instruction_address();
-      unsafe { self.code.swap(lhs_start_address, function_start, chunk_end) }
-      Type::PartialCall {
-        func_types: types,
-        partial_arguments: vec![lhs],
+  ) -> TypeId {
+    panic!();
+    /*
+      if let Type::Function {} = self.global_env.type_map.get_type(self.get_type(id)) {
+        let function_start = self.code.get_next_instruction_address();
+        unsafe { self.code.get_id(id) }
+        let chunk_end = self.code.get_next_instruction_address();
+        unsafe { self.code.swap(lhs_start_address, function_start, chunk_end) }
+        TypeId::PartialCall {
+          func_types: types,
+          partial_arguments: vec![lhs],
+        }
+      } else {
+        self.emit_error(
+          name_info,
+          format!(
+            "identifier {} is neither a STRuct member nor a function",
+            name.get(&self.global_env.ast)
+          ),
+        );
+        TypeId::ERROR
       }
-    } else {
-      self.emit_error(
-        name_info,
-        format!(
-          "identifier {} is neither a struct member nor a function",
-          name.get(&self.global_env.ast)
-        ),
-      );
-      Type::Error
-    }
+    */
   }
 
   pub fn closure(
     &mut self,
     info: SourceInfoHandle,
-    parameters: Vec<Identifier>,
+    parameters: Vec<TypeId>,
     captures: Vec<Identifier>,
-    fn_type: Vec<Type>,
+    fn_type: TypeId,
     body: Vec<StmtHandle>,
-  ) -> Type {
-    self.check_function(&fn_type, &captures, info, body);
+  ) -> TypeId {
+    self.check_function(&parameters, &captures, info, body);
     unsafe {
       self.code.maybe_create_closure(&captures);
     }
-    Type::Function(fn_type)
+    fn_type
   }
 
   pub fn assignment(
@@ -90,57 +97,60 @@ impl FunctionAnalizer<'_> {
     id: Identifier,
     id_info: SourceInfoHandle,
     value: ExprHandle,
-  ) -> Type {
+  ) -> TypeId {
     let value_type = self.analyze_expr(value);
-    self.assign(id, id_info, &value_type);
+    self.assign(id, id_info, value_type);
     value_type
   }
 
-  pub fn variable(&mut self, id: Identifier) -> Type {
+  pub fn variable(&mut self, id: Identifier) -> TypeId {
     // FIXME: id type checked twice
     unsafe { self.code.get_id(id) };
     self.get_type(id)
   }
 
-  pub fn literal(&mut self, literal: Literal) -> Type {
+  pub fn literal(&mut self, literal: Literal) -> TypeId {
     unsafe {
       self
         .code
         .push_constant(TaggedValue::from_literal(&literal, &self.global_env.ast));
     }
-    Type::from_literal(literal)
+    TypeId::from_literal(literal)
   }
 
   fn check_call_arguments(
     &mut self,
-    fn_types: &[Type],
-    args: &[Type],
+    parameters: &[TypeId],
+    return_type: TypeId,
+    args: &[TypeId],
     call_info: SourceInfoHandle,
-  ) -> Type {
-    if args.len() != fn_types.len() - 1 {
+  ) -> TypeId {
+    if args.len() != parameters.len() {
       self.emit_error(
         call_info,
         format!(
           "incorrect number of arguments for function call (required {}, provided {})",
-          fn_types.len() - 1,
+          parameters.len(),
           args.len()
         ),
       );
-      return Type::Error;
+      return TypeId::ERROR;
     }
-    for (arg_num, (param_type, arg_type)) in fn_types.iter().zip(args).enumerate() {
+    for (arg_num, (param_type, arg_type)) in parameters.iter().zip(args).enumerate() {
       if arg_type != param_type {
         self.emit_error(
           call_info,
           format!(
-            "mismatched types in function call. Argument {} (of type {arg_type:?}) should be of type {param_type:?}",
-            arg_num + 1 // starts at 0
+            "mismatched types in function call. Argument {} (of type {}) should be of type {}",
+            arg_num + 1, // starts at 0
+            self.type_string(*arg_type),
+            self.type_string(*param_type),
           ),
         );
-        return Type::Error;
+        return TypeId::ERROR;
       }
     }
-    fn_types.last().unwrap().clone()
+    return_type
   }
 
   fn function_call(
@@ -148,26 +158,22 @@ impl FunctionAnalizer<'_> {
     function: ExprHandle,
     call_info: SourceInfoHandle,
     arguments: &[ExprHandle],
-  ) -> Type {
+  ) -> TypeId {
     let fn_type = self.analyze_expr(function);
-    let mut number_of_arguments = arguments.len();
+    let number_of_arguments = arguments.len();
+    let t = self.global_env.type_map.get_type(fn_type).clone();
     let arguments = arguments.iter().map(|arg| self.analyze_expr(*arg));
-    let ret = match fn_type {
-      Type::PartialCall {
-        func_types,
-        mut partial_arguments,
-      } => {
-        number_of_arguments += partial_arguments.len();
-        partial_arguments.extend(arguments);
-        self.check_call_arguments(&func_types, &partial_arguments, call_info)
-      }
-      Type::Function(types) => {
-        let args = arguments.collect::<Vec<Type>>();
-        self.check_call_arguments(&types, &args, call_info)
+    let ret = match t {
+      Type::Function { parameters, ret } => {
+        let args = arguments.collect::<Vec<TypeId>>();
+        self.check_call_arguments(&parameters, ret, &args, call_info)
       }
       _ => {
-        self.emit_error(call_info, format!("cannot call type {fn_type:?}"));
-        Type::Error
+        self.emit_error(
+          call_info,
+          format!("cannot call type {}", self.type_string(fn_type)),
+        );
+        TypeId::ERROR
       }
     };
     unsafe {
@@ -181,38 +187,42 @@ impl FunctionAnalizer<'_> {
     left_expr: ExprHandle,
     operator: OperatorPair,
     right_expr: ExprHandle,
-  ) -> Type {
+  ) -> TypeId {
     let lhs = self.analyze_expr(left_expr);
     let rhs = self.analyze_expr(right_expr);
     let OperatorPair { op, src_info } = operator;
     match (lhs, op, rhs) {
-      (Type::Num, bin_op, Type::Num) if ARITHMETIC_OPERATORS.contains(&bin_op) => {
+      (TypeId::NUM, bin_op, TypeId::NUM) if ARITHMETIC_OPERATORS.contains(&bin_op) => {
         unsafe { self.code.push_op(OpCode::from_numeric_operator(bin_op)) }
-        Type::Num
+        TypeId::NUM
       }
-      (Type::Str, Operator::Basic('+'), Type::Str) => {
+      (TypeId::STR, Operator::Basic('+'), TypeId::STR) => {
         unsafe { self.code.push_op(OpCode::AddStr) };
-        Type::Str
+        TypeId::STR
       }
-      (Type::Num, comp_op, Type::Num) if COMP_OPERATORS.contains(&comp_op) => {
+      (TypeId::NUM, comp_op, TypeId::NUM) if COMP_OPERATORS.contains(&comp_op) => {
         unsafe { self.code.push_op(OpCode::from_numeric_operator(comp_op)) };
-        Type::Bool
+        TypeId::BOOL
       }
-      (Type::Str, comp_op, Type::Str) if COMP_OPERATORS.contains(&comp_op) => {
+      (TypeId::STR, comp_op, TypeId::STR) if COMP_OPERATORS.contains(&comp_op) => {
         unsafe {
           self
             .code
             .push_op(OpCode::from_string_comp_operator(comp_op))
         }
-        Type::Bool
+        TypeId::BOOL
       }
-      (Type::Bool, comp_op, Type::Bool) if comp_op == Operator::Same => Type::Bool,
+      (TypeId::BOOL, comp_op, TypeId::BOOL) if comp_op == Operator::Same => TypeId::BOOL,
       (lhs, op, rhs) => {
         self.emit_error(
           src_info,
-          format!("cannot apply operator {op:?} to operands {lhs:?} and {rhs:?}"),
+          format!(
+            "cannot apply operator {op:?} to operands {} and {}",
+            self.type_string(lhs),
+            self.type_string(rhs)
+          ),
         );
-        Type::Error
+        TypeId::ERROR
       }
     }
   }
@@ -222,7 +232,7 @@ impl FunctionAnalizer<'_> {
     left_expr: ExprHandle,
     operator: OperatorPair,
     right_expr: ExprHandle,
-  ) -> Type {
+  ) -> TypeId {
     let lhs = self.analyze_expr(left_expr);
     let OperatorPair { op, src_info } = operator;
     let rhs = match op {
@@ -244,35 +254,42 @@ impl FunctionAnalizer<'_> {
       }
       _ => panic!(),
     };
-    if let (Type::Bool, Type::Bool) = (&lhs, &rhs) {
-      Type::Bool
+    if let (TypeId::BOOL, TypeId::BOOL) = (lhs, rhs) {
+      TypeId::BOOL
     } else {
       self.emit_error(
         src_info,
-        format!("cannot apply logical operator {op:?} to operands {lhs:?} and {rhs:?}"),
+        format!(
+          "cannot apply logical operator {op:?} to operands {} and {}",
+          self.type_string(lhs),
+          self.type_string(rhs)
+        ),
       );
-      Type::Error
+      TypeId::ERROR
     }
   }
 
-  pub fn unary_operation(&mut self, op: OperatorPair, right_expr: ExprHandle) -> Type {
+  pub fn unary_operation(&mut self, op: OperatorPair, right_expr: ExprHandle) -> TypeId {
     let rhs = self.analyze_expr(right_expr);
     let OperatorPair { op, src_info } = op;
     match (op, rhs) {
-      (Operator::Basic('-'), Type::Num) => {
+      (Operator::Basic('-'), TypeId::NUM) => {
         unsafe { self.code.push_op(OpCode::NegNum) }
-        Type::Num
+        TypeId::NUM
       }
-      (Operator::Basic('!'), Type::Bool) => {
+      (Operator::Basic('!'), TypeId::BOOL) => {
         unsafe { self.code.push_op(OpCode::NotBool) };
-        Type::Bool
+        TypeId::BOOL
       }
       (op, rhs) => {
         self.emit_error(
           src_info,
-          format!("cannot apply operator {op:?} to operand {rhs:?}"),
+          format!(
+            "cannot apply operator {op:?} to operand {}",
+            self.type_string(rhs)
+          ),
         );
-        Type::Error
+        TypeId::ERROR
       }
     }
   }
@@ -283,11 +300,11 @@ impl FunctionAnalizer<'_> {
     rhs_name: StrHandle,
     rhs_id: Identifier,
     name_info: SourceInfoHandle,
-  ) -> Type {
+  ) -> TypeId {
     let expr_start_address = self.code.get_next_instruction_address();
     let left = self.analyze_expr(left_expr);
-    if let Type::Struct(id) = left {
-      if let Some((index, member_type)) = self.get_struct_member(id, rhs_name) {
+    if let Type::Struct(id) = self.global_env.type_map.get_type(left) {
+      if let Some((index, member_type)) = self.get_struct_member(*id, rhs_name) {
         unsafe { self.code.push_op2(OpCode::GetMember, index as u8) }
         member_type
       } else {
@@ -304,11 +321,11 @@ impl FunctionAnalizer<'_> {
     member_name: StrHandle,
     member_name_info: SourceInfoHandle,
     value: ExprHandle,
-  ) -> Type {
+  ) -> TypeId {
     let object = self.analyze_expr(object);
     let value = self.analyze_expr(value);
-    if let Type::Struct(id) = object {
-      if let Some((index, member_type)) = self.get_struct_member(id, member_name) {
+    if let Type::Struct(id) = self.global_env.type_map.get_type(object) {
+      if let Some((index, member_type)) = self.get_struct_member(*id, member_name) {
         if value == member_type {
           unsafe { self.code.push_op2(OpCode::SetMember, index as u8) }
           member_type
@@ -316,11 +333,13 @@ impl FunctionAnalizer<'_> {
           self.emit_error(
             member_name_info,
             format!(
-              "member '{}' is of type {member_type:?}, cannot assing value of type {value:?}",
-              member_name.get(&self.global_env.ast)
+              "member '{}' is of type {}, cannot assing value of type {}",
+              member_name.get(&self.global_env.ast),
+              self.type_string(member_type),
+              self.type_string(value)
             ),
           );
-          Type::Error
+          TypeId::ERROR
         }
       } else {
         self.emit_error(
@@ -330,18 +349,18 @@ impl FunctionAnalizer<'_> {
             member_name.get(&self.global_env.ast)
           ),
         );
-        Type::Error
+        TypeId::ERROR
       }
     } else {
       self.emit_error(
         member_name_info,
         format!("cannot set propriety for type {object:?}"),
       );
-      Type::Error
+      TypeId::ERROR
     }
   }
 
-  pub fn analyze_expr(&mut self, expr: ExprHandle) -> Type {
+  pub fn analyze_expr(&mut self, expr: ExprHandle) -> TypeId {
     match expr.get(&self.global_env.ast) {
       Expr::Closure {
         info,
@@ -349,6 +368,7 @@ impl FunctionAnalizer<'_> {
         captures,
         fn_type,
         body,
+        return_type,
       } => self.closure(info, parameters, captures, fn_type, body),
       Expr::Assignment { id, id_info, value } => self.assignment(id, id_info, value),
       Expr::Variable { id, .. } => self.variable(id),

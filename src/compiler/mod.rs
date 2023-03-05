@@ -14,6 +14,7 @@ mod identifier;
 pub mod lexer;
 pub mod parser;
 pub mod semantic_analysis;
+mod type_map;
 mod types;
 
 pub struct Compiler {}
@@ -25,9 +26,13 @@ pub struct CompilerResult {
 impl Compiler {
   pub fn compile(program: &str) -> Result<CompilerResult, SourceError> {
     let parser = Parser::new(Lexer::new(program));
-    let ParseResult { ast, final_env } = parser.parse()?;
+    let ParseResult {
+      ast,
+      global_types,
+      type_map,
+    } = parser.parse()?;
     println!("{ast:?}");
-    let generated_code = SemanticAnalizer::analyze(ast, final_env.global_types)?;
+    let generated_code = SemanticAnalizer::analyze(ast, global_types, type_map)?;
     Ok(CompilerResult { generated_code })
   }
 }

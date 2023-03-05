@@ -167,7 +167,7 @@ impl<'src> Parser<'src> {
     let (identifier, id_info) = self.match_id_or_err()?;
     let var_type = self.parse_opt_type_specifier()?;
     if self.env.in_global_scope() {
-      self.env.set_global_type(identifier, var_type.clone());
+      self.global_types.push(var_type);
     }
     let ret = if self.lookahead == Token::Basic('=') {
       self.advance()?; // consume '='
@@ -192,33 +192,31 @@ impl<'src> Parser<'src> {
   pub(super) fn parse_function_params(
     &mut self,
     call_start: SourceInfo,
-  ) -> Result<(Vec<Identifier>, Vec<Type>), SourceError> {
-    let mut parameter_ids = Vec::new();
+  ) -> Result<Vec<TypeId>, SourceError> {
     let mut parameter_types = Vec::new();
     loop {
-      let mem_id = self.match_id_or_err()?.0;
+      self.match_id_or_err()?;
       let mem_type = self.parse_type_specifier_or_err()?;
-      parameter_ids.push(mem_id);
       parameter_types.push(mem_type.clone());
       if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
         break;
       }
     }
-    if parameter_ids.len() > 255 {
+    if parameter_types.len() > 255 {
       Err(error_from_source_info(
         &call_start,
         "function cannot have more than 255 parameters".to_string(),
       ))
     } else {
-      Ok((parameter_ids, parameter_types))
+      Ok(parameter_types)
     }
   }
 
-  pub(super) fn parse_function_return_type(&mut self) -> Result<Type, SourceError> {
+  pub(super) fn parse_function_return_type(&mut self) -> Result<TypeId, SourceError> {
     if self.match_next(Token::ThinArrow)?.is_some() {
       self.match_type_name_or_err()
     } else {
-      Ok(Type::Nothing)
+      Ok(TypeId::NOTHING)
     }
   }
 
@@ -232,26 +230,28 @@ impl<'src> Parser<'src> {
     let parameters = if self.lookahead != Token::Basic(')') {
       self.parse_function_params(call_start)
     } else {
-      Ok((Vec::new(), Vec::new()))
+      Ok(Vec::new())
     };
     self.match_or_err(Token::Basic(')'))?;
     let return_type = self.parse_function_return_type()?;
     let body = self.parse_unscoped_block()?;
     let captures = self.env.pop_function();
-    let (parameters, mut fn_type) = parameters?;
-    fn_type.push(return_type);
+    let param_types = parameters?;
+    let fn_type = self.type_map.get_or_add(Type::Function {
+      parameters: param_types.clone(),
+      ret: return_type,
+    });
     if self.env.in_global_scope() {
-      self
-        .env
-        .set_global_type(name_id, Type::Function(fn_type.clone()));
+      self.global_types.push(fn_type);
     }
     Ok(self.ast.add_statement(Stmt::Function {
       id: name_id,
       name_info,
       fn_type,
-      parameters,
+      parameters: param_types,
       captures,
       body,
+      return_type,
     }))
   }
 
@@ -270,18 +270,18 @@ impl<'src> Parser<'src> {
       self.match_or_err(Token::Basic(','))?;
     }
     self.match_or_err(Token::Basic('}'))?;
-    let mut constructor_type = member_types.clone();
-    constructor_type.push(Type::Struct(name_id));
+    let (struct_type, constructor_type) =
+      self.type_map.add_struct_type(name_id, member_types.clone());
     if self.env.in_global_scope() {
-      self
-        .env
-        .set_global_type(name_id, Type::Function(constructor_type));
+      self.global_types.push(constructor_type);
     }
     Ok(self.ast.add_statement(Stmt::Struct {
       name: name_id,
       name_info,
       member_names,
       member_types,
+      constructor_type,
+      struct_type,
     }))
   }
 
@@ -296,16 +296,15 @@ impl<'src> Parser<'src> {
     self.advance()?;
     self.match_or_err(Token::Fn)?;
     let (name_id, name_info) = self.match_id_or_err()?;
-    let mut function_type = self.parse_function_param_types()?;
-    function_type.push(self.parse_function_return_type()?);
-    self
-      .env
-      .set_global_type(name_id, Type::Function(function_type.clone()));
+    let parameters = self.parse_function_param_types()?;
+    let ret = self.parse_function_return_type()?;
+    let fn_type = self.type_map.get_or_add(Type::Function { parameters, ret });
+    self.global_types.push(fn_type);
     self.match_or_err(Token::Basic(';'))?;
     Ok(self.ast.add_statement(Stmt::ExternFunction {
       id: name_id,
       name_info,
-      fn_type: function_type,
+      fn_type,
     }))
   }
 

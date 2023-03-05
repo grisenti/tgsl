@@ -1,24 +1,28 @@
 mod environment;
 mod expression_parser;
 mod statement_parser;
-mod type_map;
 
 use self::environment::Environment;
-use self::environment::FinalizedEnvironment;
+use self::type_map::ReverseTypeMap;
+use self::type_map::TypeMap;
 
 use super::ast::*;
 use super::identifier::Identifier;
 use super::lexer::*;
 use super::types::Type;
+use super::types::TypeId;
 use super::*;
 
 pub struct ParseResult {
   pub ast: AST,
-  pub final_env: FinalizedEnvironment,
+  pub global_types: Vec<TypeId>,
+  pub type_map: ReverseTypeMap,
 }
 
 pub struct Parser<'src> {
   env: Environment,
+  type_map: TypeMap,
+  global_types: Vec<TypeId>,
   lex: Lexer<'src>,
   lookahead: Token<'src>,
   ast: AST,
@@ -107,9 +111,8 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_function_param_types(&mut self) -> Result<Vec<Type>, SourceError> {
+  fn parse_function_param_types(&mut self) -> Result<Vec<TypeId>, SourceError> {
     self.match_or_err(Token::Basic('('))?;
-
     let mut result = Vec::new();
     if self.lookahead != Token::Basic(')') {
       loop {
@@ -123,23 +126,26 @@ impl<'src> Parser<'src> {
     Ok(result)
   }
 
-  fn match_type_name_or_err(&mut self) -> Result<Type, SourceError> {
+  fn match_type_name_or_err(&mut self) -> Result<TypeId, SourceError> {
     match self.lookahead {
       Token::Id(type_name) => {
         self.advance()?;
         match type_name {
-          "str" => Ok(Type::Str),
-          "num" => Ok(Type::Num),
-          "bool" => Ok(Type::Bool),
-          _ => Ok(Type::Struct(self.env.get_name_or_add_global(type_name))),
+          "str" => Ok(TypeId::STR),
+          "num" => Ok(TypeId::NUM),
+          "bool" => Ok(TypeId::BOOL),
+          other => {
+            let struct_id = self.env.get_name_or_add_global(other);
+            Ok(self.type_map.get_or_add(Type::Struct(struct_id)))
+          }
         }
       }
       Token::Fn => {
         self.advance()?;
-        let mut params = self.parse_function_param_types()?;
+        let mut parameters = self.parse_function_param_types()?;
         self.match_or_err(Token::ThinArrow)?;
-        params.push(self.match_type_name_or_err()?);
-        Ok(Type::Function(params))
+        let ret = self.match_type_name_or_err()?;
+        Ok(self.type_map.get_or_add(Type::Function { parameters, ret }))
       }
       _ => Err(error_from_lexer_state(
         &self.lex,
@@ -148,16 +154,16 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_type_specifier_or_err(&mut self) -> Result<Type, SourceError> {
+  fn parse_type_specifier_or_err(&mut self) -> Result<TypeId, SourceError> {
     self.match_or_err(Token::Basic(':'))?;
     self.match_type_name_or_err()
   }
 
-  fn parse_opt_type_specifier(&mut self) -> Result<Type, SourceError> {
+  fn parse_opt_type_specifier(&mut self) -> Result<TypeId, SourceError> {
     if self.match_next(Token::Basic(':'))?.is_some() {
       self.match_type_name_or_err()
     } else {
-      Ok(Type::Unknown)
+      Ok(TypeId::UNKNOWN)
     }
   }
 
@@ -184,6 +190,8 @@ impl<'src> Parser<'src> {
   pub fn new(lex: Lexer<'src>) -> Self {
     Self {
       lex,
+      type_map: TypeMap::new(),
+      global_types: Vec::new(),
       lookahead: Token::EndOfFile,
       ast: AST::new(),
       env: Environment::new(),
@@ -207,7 +215,8 @@ impl<'src> Parser<'src> {
     if errors.is_empty() {
       Ok(ParseResult {
         ast: self.ast,
-        final_env: self.env.finalize(),
+        global_types: self.global_types,
+        type_map: self.type_map.reverse_map(),
       })
     } else {
       Err(SourceError::from_err_vec(errors))

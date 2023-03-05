@@ -192,24 +192,28 @@ impl<'src> Parser<'src> {
     let parameters = if self.lookahead != Token::Basic(')') {
       self.parse_function_params(call_start)
     } else {
-      Ok((Vec::new(), Vec::new()))
+      Ok(Vec::new())
     };
     self.match_or_err(Token::Basic(')'))?;
     let return_type = self.parse_function_return_type()?;
     let call_end = self.lex.prev_token_info();
     let body = self.parse_unscoped_block()?;
     let captures = self.env.pop_function();
-    let (parameters, mut fn_type) = parameters?;
-    fn_type.push(return_type);
+    let param_types = parameters?;
+    let fn_type = self.type_map.get_or_add(Type::Function {
+      parameters: param_types.clone(),
+      ret: return_type,
+    });
     let info = self
       .ast
       .add_source_info(SourceInfo::union(call_start, call_end));
     Ok(self.ast.add_expression(Expr::Closure {
       captures,
       info,
-      parameters,
+      parameters: param_types,
       body,
       fn_type,
+      return_type,
     }))
   }
 
