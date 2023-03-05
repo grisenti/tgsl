@@ -99,8 +99,9 @@ impl FunctionAnalizer<'_> {
   fn try_dot_call(&mut self, expr: ExprHandle) -> CallType {
     let call_start = self.code.get_next_instruction_address();
     match expr.get(&self.global_env.ast) {
-      Expr::Variable { id, id_info } => {
+      Expr::Variable { id, .. } => {
         let typeid = self.get_typeid(id);
+        unsafe { self.code.get_id(id) }
         if let Type::Function { .. } = self.get_type(typeid) {
           CallType::Call(typeid)
         } else {
@@ -208,7 +209,7 @@ impl FunctionAnalizer<'_> {
     arguments: &[ExprHandle],
   ) -> TypeId {
     let call_type = self.try_dot_call(function);
-    let number_of_arguments = arguments.len();
+    let mut number_of_arguments = arguments.len();
     let arguments = arguments.iter().map(|arg| self.analyze_expr(*arg));
     let ret = match call_type {
       CallType::Call(type_id) => {
@@ -224,6 +225,7 @@ impl FunctionAnalizer<'_> {
         fn_params,
         fn_ret,
       } => {
+        number_of_arguments += 1;
         let mut args = vec![first_argument];
         args.extend(arguments);
         self.check_call_arguments(&fn_params, fn_ret, &args, call_info)
