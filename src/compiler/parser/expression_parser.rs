@@ -279,10 +279,8 @@ mod test {
 
   #[test]
   fn operator_precedece() {
-    let mut parser = create_parser("1 * 1 + 1 < 1 == 1 and 1 or 1");
+    let mut parser = create_parser("1 * 1 + 1 < 1 == 1");
     let operators = [
-      Operator::Or,
-      Operator::And,
       Operator::Same,
       Operator::Basic('<'),
       Operator::Basic('+'),

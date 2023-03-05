@@ -1,4 +1,4 @@
-extern fn assert(bool);
+extern fn assert(bool)
 
 fn factorial(n: num) -> num {
 	if (n < 1) return 1;
