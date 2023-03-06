@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, mem::ManuallyDrop};
 
 use crate::compiler::{
   bytecode::{Chunk, ConstantValue, Function, OpCode},
@@ -24,9 +24,9 @@ macro_rules! binary_operation {
 
 macro_rules! binary_string_comp {
   ($f:ident, $op:tt) => {
-    let rhs = unsafe {(*$f.pop().value.object).value.string};
-    let lhs = unsafe {(*$f.pop().value.object).value.string};
-    $f.push(TaggedValue{ kind: ValueType::Bool, value: Value { boolean: unsafe {*lhs $op *rhs}}});
+    let rhs = unsafe {&(*$f.pop().value.object).value.string};
+    let lhs = unsafe {&(*$f.pop().value.object).value.string};
+    $f.push(TaggedValue{ kind: ValueType::Bool, value: Value { boolean: *lhs $op *rhs}});
   };
 }
 
@@ -235,10 +235,12 @@ impl VM {
           unary_operation!(frame, number, ValueType::Number, -);
         }
         OpCode::AddStr => {
-          let rhs = unsafe { (*frame.pop().value.object).value.string };
-          let lhs = unsafe { (*frame.pop().value.object).value.string };
+          let rhs = unsafe { &(*frame.pop().value.object).value.string };
+          let lhs = unsafe { &(*frame.pop().value.object).value.string };
           frame.push(TaggedValue::object(
-            self.gc.alloc_string(unsafe { (*lhs).clone() + &*rhs }),
+            self
+              .gc
+              .alloc_string(ManuallyDrop::into_inner(lhs.clone()) + rhs),
           ));
         }
         OpCode::LeStr => {
@@ -321,16 +323,16 @@ impl VM {
           frame.push(TaggedValue::object(self.gc.alloc_aggregate(members)));
         }
         OpCode::GetMember => {
-          let aggregate = unsafe { (*frame.pop().value.object).value.aggregate };
+          let aggregate = unsafe { &mut (*frame.pop().value.object).value.aggregate };
           let id = frame.read_byte();
-          let val = unsafe { (*aggregate).members[id as usize] };
+          let val = aggregate.members[id as usize];
           frame.push(val);
         }
         OpCode::SetMember => {
           let id = frame.read_byte();
-          let aggregate = unsafe { (*frame.pop().value.object).value.aggregate };
+          let aggregate = unsafe { &mut (*frame.pop().value.object).value.aggregate };
           let val = frame.top();
-          unsafe { (*aggregate).members[id as usize] = val };
+          aggregate.members[id as usize] = val;
         }
         OpCode::Print => {
           let top = frame.pop();

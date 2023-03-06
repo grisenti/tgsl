@@ -1,4 +1,4 @@
-use std::alloc::Layout;
+use std::{alloc::Layout, mem::ManuallyDrop};
 
 use crate::compiler::bytecode::Function;
 
@@ -16,43 +16,42 @@ unsafe fn alloc_value<T>(value: T) -> *mut T {
 
 unsafe fn dealloc_value<T>(value: *mut T) {
   value.drop_in_place();
-  std::alloc::dealloc(value as *mut u8, Layout::new::<String>())
+  std::alloc::dealloc(value as *mut u8, Layout::new::<T>())
 }
 
 unsafe fn dealloc_object(obj: *mut Object) {
   match (*obj).kind {
     ObjectType::String => {
-      dealloc_value((*obj).value.string);
+      ManuallyDrop::drop(&mut (*obj).value.string);
+      dealloc_value(obj);
     }
     ObjectType::Closure => {
-      dealloc_value((*obj).value.closure);
+      ManuallyDrop::drop(&mut (*obj).value.closure);
+      dealloc_value(obj);
     }
     ObjectType::Aggregate => {
-      println!("dealloc aggregate");
-      dealloc_value((*obj).value.aggregate);
+      ManuallyDrop::drop(&mut (*obj).value.aggregate);
+      dealloc_value(obj);
     }
   }
-  dealloc_value(obj)
 }
 
 impl GC {
   fn mark_object(&mut self, obj: *mut Object) {
-    unsafe {
-      if (*obj).marked {
-        return;
+    let obj = unsafe { &mut (*obj) };
+    if obj.marked {
+      return;
+    }
+    obj.marked = true;
+    match obj.kind {
+      ObjectType::String => {}
+      ObjectType::Aggregate => {
+        let aggregate = unsafe { &mut obj.value.aggregate };
+        self.mark(aggregate.members.iter());
       }
-      match (*obj).kind {
-        ObjectType::String => (*obj).marked = true,
-        ObjectType::Aggregate => {
-          (*obj).marked = true;
-          let aggregate = unsafe { (*obj).value.aggregate };
-          self.mark(unsafe { (*aggregate).members.iter() });
-        }
-        ObjectType::Closure => {
-          (*obj).marked = true;
-          let closure = unsafe { (*obj).value.closure };
-          self.mark(unsafe { (*closure).captures.iter() });
-        }
+      ObjectType::Closure => {
+        let closure = unsafe { &mut obj.value.closure };
+        self.mark(closure.captures.iter());
       }
     }
   }
@@ -84,7 +83,7 @@ impl GC {
       alloc_value(Object {
         kind: ObjectType::String,
         value: ObjectValue {
-          string: alloc_value(val),
+          string: ManuallyDrop::new(val),
         },
         marked: false,
       })
@@ -98,12 +97,10 @@ impl GC {
       alloc_value(Object {
         kind: ObjectType::Closure,
         value: ObjectValue {
-          closure: unsafe {
-            alloc_value(Closure {
-              function,
-              captures: Vec::with_capacity(captures),
-            })
-          },
+          closure: ManuallyDrop::new(Closure {
+            function,
+            captures: Vec::with_capacity(captures),
+          }),
         },
         marked: false,
       })
@@ -118,7 +115,7 @@ impl GC {
       alloc_value(Object {
         kind: ObjectType::Aggregate,
         value: ObjectValue {
-          aggregate: unsafe { alloc_value(Aggregate { members }) },
+          aggregate: ManuallyDrop::new(Aggregate { members }),
         },
         marked: false,
       })

@@ -1,5 +1,5 @@
 use crate::compiler::bytecode::{ConstantValue, Function};
-use std::fmt::Debug;
+use std::{fmt::Debug, mem::ManuallyDrop};
 
 use super::gc::GC;
 
@@ -13,11 +13,10 @@ pub struct Aggregate {
   pub members: Vec<TaggedValue>,
 }
 
-#[derive(Clone, Copy)]
 pub union ObjectValue {
-  pub string: *mut String,
-  pub closure: *mut Closure,
-  pub aggregate: *mut Aggregate,
+  pub string: ManuallyDrop<String>,
+  pub closure: ManuallyDrop<Closure>,
+  pub aggregate: ManuallyDrop<Aggregate>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,7 +26,6 @@ pub enum ObjectType {
   Aggregate,
 }
 
-#[derive(Clone, Copy)]
 pub struct Object {
   pub kind: ObjectType,
   pub value: ObjectValue,
@@ -38,11 +36,11 @@ impl ToString for Object {
   fn to_string(&self) -> String {
     unsafe {
       match self {
-        &Object {
+        Object {
           kind: ObjectType::String,
           value: ObjectValue { string },
           ..
-        } => (*string).clone(),
+        } => string.to_string(),
         Object {
           kind: ObjectType::Closure,
           value: _,
