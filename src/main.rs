@@ -52,8 +52,12 @@ mod test {
   macro_rules! test_file {
     ($name:ident) => {
       #[test]
+      #[allow(non_snake_case)]
       fn $name() {
-        compile_and_run(&format!("tests/{}.wds", stringify!($name)));
+        compile_and_run(&format!(
+          "tests/{}.wds",
+          stringify!($name).replace("__", "/")
+        ));
       }
     };
   }
@@ -77,7 +81,10 @@ mod test {
     }
   }
 
-  test_file!(closure_capture);
+  test_file!(closures__capture_single_one_level);
+  test_file!(closures__capture_single_multi_level);
+  test_file!(closures__capture_copy);
+
   test_file!(function_declaration);
   test_file!(passing_closures);
   test_file!(primitive_operations);
