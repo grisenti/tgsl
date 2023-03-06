@@ -215,3 +215,43 @@ impl Environment {
     (self.globals, self.extern_map)
   }
 }
+
+#[cfg(test)]
+mod test {
+  use crate::{compiler::identifier::Identifier, errors::SourceInfo};
+
+  use super::Environment;
+
+  const FAKE_SOURCE_INFO: SourceInfo = SourceInfo {
+    line_no: 0,
+    end: 0,
+    start: 0,
+  };
+
+  #[test]
+  fn capture_once() {
+    let mut env = Environment::new();
+    env.push_function();
+    env.declare_name_or_err("x", FAKE_SOURCE_INFO).unwrap();
+    env.push_function();
+    assert_eq!(env.get_name_or_add_global("x"), Identifier::Capture(0));
+    assert_eq!(env.get_name_or_add_global("x"), Identifier::Capture(0));
+    assert_eq!(env.get_name_or_add_global("x"), Identifier::Capture(0));
+    let captures = env.pop_function();
+    assert_eq!(captures, vec![Identifier::Local(0)]);
+  }
+
+  #[test]
+  fn multilevel_capture() {
+    let mut env = Environment::new();
+    env.push_function();
+    env.declare_name_or_err("x", FAKE_SOURCE_INFO).unwrap();
+    env.push_function();
+    env.push_function();
+    assert_eq!(env.get_name_or_add_global("x"), Identifier::Capture(0));
+    let captures = env.pop_function();
+    assert_eq!(captures, vec![Identifier::Capture(0)]);
+    let captures = env.pop_function();
+    assert_eq!(captures, vec![Identifier::Local(0)]);
+  }
+}
