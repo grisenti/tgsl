@@ -1,6 +1,5 @@
 use super::ast::Operator;
 use core::fmt::Debug;
-use std::ptr::NonNull;
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
@@ -109,7 +108,6 @@ pub enum ConstantValue {
   ExternId(u16),
   Bool(bool),
   Str(String),
-  Function(*const Function),
   None,
 }
 
