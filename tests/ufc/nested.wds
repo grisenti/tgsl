@@ -1,0 +1,7 @@
+extern fn assert(bool)
+
+fn id(x: num) -> num {
+	return x;
+}
+
+assert(1.id().id().id().id() == 1);

@@ -80,15 +80,17 @@ mod test {
   test_file!(closures__capture_single_multi_level);
   test_file!(closures__capture_copy);
 
+  test_file!(ufc__primitive_types);
+  test_file!(ufc__struct);
+  test_file!(ufc__nested);
+
   test_file!(function_declaration);
   test_file!(passing_closures);
   test_file!(primitive_operations);
-  test_file!(ufc_for_primitive_types);
   test_file!(recursive_function);
   test_file!(struct_declaration);
   test_file!(struct_construction);
   test_file!(struct_member_access);
-  test_file!(ufc_for_struct);
   test_file!(mutually_recursive_functions);
   test_file!(nested_structs);
   test_file!(conditional_return_types);
