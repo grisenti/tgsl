@@ -5,13 +5,13 @@ mod statement_parser;
 use std::collections::HashMap;
 
 use self::environment::Environment;
-use self::type_map::ReverseTypeMap;
-use self::type_map::TypeMap;
+use self::types::type_map::ReverseTypeMap;
 
 use super::ast::*;
 use super::identifier::ExternId;
 use super::identifier::Identifier;
 use super::lexer::*;
+use super::types::type_map::TypeMap;
 use super::types::Type;
 use super::types::TypeId;
 use super::*;

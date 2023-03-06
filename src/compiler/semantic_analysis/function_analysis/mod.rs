@@ -5,7 +5,7 @@ use crate::{
     codegen::BytecodeBuilder,
     error_from_source_info,
     identifier::Identifier,
-    type_map::ReverseTypeMap,
+    types::type_map::ReverseTypeMap,
     types::{Type, TypeId},
   },
   errors::{SourceError, SourceInfo},

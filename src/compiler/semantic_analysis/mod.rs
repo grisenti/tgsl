@@ -6,8 +6,7 @@ use super::{
   ast::*,
   bytecode::Chunk,
   identifier::Identifier,
-  type_map::ReverseTypeMap,
-  types::{Type, TypeId},
+  types::{type_map::ReverseTypeMap, Type, TypeId},
 };
 use crate::errors::SourceError;
 

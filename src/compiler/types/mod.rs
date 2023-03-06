@@ -1,5 +1,7 @@
 use super::{ast::Literal, identifier::Identifier};
 
+pub mod type_map;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
   Str,

@@ -105,7 +105,6 @@ impl TaggedValue {
         kind: ValueType::ExternFunctionId,
         value: Value { id },
       },
-      &ConstantValue::Function(function) => TaggedValue::function(function),
       ConstantValue::Str(s) => TaggedValue::object(gc.alloc_string(s.clone())),
       ConstantValue::None => TaggedValue::none(),
     }

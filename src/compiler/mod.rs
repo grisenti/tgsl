@@ -17,7 +17,6 @@ pub mod identifier;
 pub mod lexer;
 pub mod parser;
 pub mod semantic_analysis;
-mod type_map;
 mod types;
 
 pub struct Compiler {}
