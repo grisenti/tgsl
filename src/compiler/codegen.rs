@@ -1,7 +1,7 @@
 use crate::compiler::bytecode::OpCode;
 
 use super::{
-  bytecode::{Chunk, Function, TaggedValue},
+  bytecode::{Chunk, ConstantValue, Function},
   identifier::Identifier,
 };
 
@@ -12,11 +12,11 @@ pub struct Address(usize);
 pub struct BytecodeBuilder {
   code: Vec<u8>,
   functions: Vec<Function>,
-  constants: Vec<TaggedValue>,
+  constants: Vec<ConstantValue>,
 }
 
 impl BytecodeBuilder {
-  pub unsafe fn push_constant(&mut self, val: TaggedValue) {
+  pub unsafe fn push_constant(&mut self, val: ConstantValue) {
     let constant_offset = self.constants.len() as u8;
     self.constants.push(val);
     self.code.push(OpCode::Constant as u8);
@@ -94,7 +94,7 @@ impl BytecodeBuilder {
   pub unsafe fn get_id(&mut self, id: Identifier) {
     match id {
       Identifier::Global(gid) => {
-        self.push_constant(TaggedValue::global_id(gid));
+        self.push_constant(ConstantValue::GlobalId(gid));
         self.push_op(OpCode::GetGlobal);
       }
       Identifier::Local(id) => {
@@ -127,7 +127,7 @@ impl BytecodeBuilder {
   pub fn new() -> Self {
     Self {
       code: Vec::new(),
-      constants: vec![TaggedValue::none()],
+      constants: vec![ConstantValue::None],
       functions: Vec::new(),
     }
   }

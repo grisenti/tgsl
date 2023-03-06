@@ -1,6 +1,6 @@
 use crate::compiler::{
   ast::{Expr, ExprHandle, SourceInfoHandle, StrHandle},
-  bytecode::{Function, ValueType},
+  bytecode::{ConstantValue, Function},
   identifier::ExternId,
   semantic_analysis::{return_analysis::to_conditional, Struct},
 };
@@ -229,10 +229,9 @@ impl FunctionAnalizer<'_> {
 
   fn extern_function(&mut self, name_id: Identifier, fn_type: TypeId, extern_id: ExternId) {
     unsafe {
-      self.code.push_constant(TaggedValue {
-        kind: ValueType::ExternFunctionId,
-        value: crate::compiler::bytecode::Value { id: extern_id.0 },
-      });
+      self
+        .code
+        .push_constant(ConstantValue::ExternId(extern_id.0));
     }
     self.declare(name_id, fn_type);
   }

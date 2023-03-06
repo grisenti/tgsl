@@ -2,7 +2,7 @@ use crate::compiler::{
   ast::{
     Expr, ExprHandle, Literal, Operator, OperatorPair, SourceInfoHandle, StmtHandle, StrHandle,
   },
-  bytecode::{OpCode, TaggedValue},
+  bytecode::{ConstantValue, OpCode},
   codegen::Address,
   identifier::Identifier,
   types::{Type, TypeId},
@@ -159,10 +159,15 @@ impl FunctionAnalizer<'_> {
   }
 
   pub fn literal(&mut self, literal: Literal) -> TypeId {
+    let val = match literal {
+      Literal::String(s) => ConstantValue::Str(s.get(&self.global_env.ast).to_owned()),
+      Literal::False => ConstantValue::Bool(false),
+      Literal::True => ConstantValue::Bool(true),
+      Literal::Number(num) => ConstantValue::Number(num),
+      Literal::Null => ConstantValue::None,
+    };
     unsafe {
-      self
-        .code
-        .push_constant(TaggedValue::from_literal(&literal, &self.global_env.ast));
+      self.code.push_constant(val);
     }
     TypeId::from_literal(literal)
   }

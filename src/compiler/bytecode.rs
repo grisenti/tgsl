@@ -1,6 +1,6 @@
-use super::ast::{Literal, Operator, AST};
+use super::ast::Operator;
 use core::fmt::Debug;
-use std::alloc::Layout;
+use std::ptr::NonNull;
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
@@ -97,215 +97,43 @@ impl OpCode {
   }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ValueType {
-  Number,
-  Bool,
-  String,
-  GlobalId,
-  Function,
-  ExternFunctionId,
-  Closure,
-  Aggregate,
-  Object,
-
-  None,
-}
-
 #[derive(Clone)]
 pub struct Function {
   pub code: Chunk,
 }
 
-#[derive(Clone)]
-pub struct Closure {
-  pub function: *const Function,
-  pub captures: Vec<TaggedValue>,
-}
-
-pub struct Aggregate {
-  pub members: Vec<TaggedValue>,
-}
-
-#[derive(Clone, Copy)]
-pub union Value {
-  pub number: f64,
-  pub id: u16,
-  pub boolean: bool,
-  pub string: *mut String,
-  pub function: *const Function,
-  pub closure: *mut Closure,
-  pub aggregate: *mut Aggregate,
-  pub none: (),
-}
-
-#[derive(Clone, Copy)]
-pub struct TaggedValue {
-  pub kind: ValueType,
-  pub value: Value,
-}
-
-unsafe fn alloc_object<T>(value: T) -> *mut T {
-  let ptr = std::alloc::alloc(Layout::new::<T>()) as *mut T;
-  std::ptr::write(ptr, value);
-  ptr
-}
-
-impl TaggedValue {
-  pub fn from_literal(lit: &Literal, ast: &AST) -> Self {
-    match lit {
-      Literal::Number(x) => Self {
-        kind: ValueType::Number,
-        value: Value { number: *x },
-      },
-      Literal::String(s) => Self {
-        kind: ValueType::String,
-        value: Value {
-          string: unsafe { alloc_object(s.get(ast).to_string()) },
-        },
-      },
-      Literal::False => Self {
-        kind: ValueType::Bool,
-        value: Value { boolean: false },
-      },
-      Literal::True => Self {
-        kind: ValueType::Bool,
-        value: Value { boolean: true },
-      },
-      _ => unimplemented!(),
-    }
-  }
-
-  pub fn global_id(id: u16) -> Self {
-    Self {
-      kind: ValueType::GlobalId,
-      value: Value { id },
-    }
-  }
-
-  pub fn function(func: *const Function) -> Self {
-    Self {
-      kind: ValueType::Function,
-      value: Value { function: func },
-    }
-  }
-
-  pub fn closure(function: *const Function, captures: usize) -> Self {
-    Self {
-      kind: ValueType::Closure,
-      value: Value {
-        closure: unsafe {
-          alloc_object(Closure {
-            function,
-            captures: Vec::with_capacity(captures),
-          })
-        },
-      },
-    }
-  }
-
-  pub fn aggregate(members: Vec<TaggedValue>) -> Self {
-    Self {
-      kind: ValueType::Aggregate,
-      value: Value {
-        aggregate: unsafe { alloc_object(Aggregate { members }) },
-      },
-    }
-  }
-
-  pub fn none() -> Self {
-    Self {
-      kind: ValueType::None,
-      value: Value { none: () },
-    }
-  }
-
-  pub unsafe fn free(&mut self) {
-    match self.kind {
-      ValueType::String => {
-        self.value.string.drop_in_place();
-        unsafe { std::alloc::dealloc(self.value.string as *mut u8, Layout::new::<String>()) }
-      }
-      ValueType::Closure => {
-        self.value.closure.drop_in_place();
-        unsafe { std::alloc::dealloc(self.value.closure as *mut u8, Layout::new::<Closure>()) }
-      }
-      _ => {}
-    }
-  }
-
-  pub fn copy_object(&self) -> Self {
-    let value = match self.kind {
-      ValueType::String => unsafe {
-        Value {
-          string: alloc_object((*self.value.string).clone()),
-        }
-      },
-      ValueType::Closure => unsafe {
-        Value {
-          closure: alloc_object((*self.value.closure).clone()),
-        }
-      },
-      _ => self.value,
-    };
-    Self {
-      kind: self.kind,
-      value,
-    }
-  }
-}
-
-impl ToString for TaggedValue {
-  fn to_string(&self) -> String {
-    match self.kind {
-      ValueType::Number => unsafe { self.value.number.to_string() },
-      ValueType::Bool => unsafe { self.value.boolean.to_string() },
-      ValueType::String => unsafe { format!("\"{}\"", *self.value.string) },
-      ValueType::GlobalId => unsafe { format!("<global {}>", self.value.id) },
-      ValueType::Function => "<function>".to_string(),
-      ValueType::None => "<none>".to_string(),
-      ValueType::Aggregate => "<struct>".to_string(),
-      ValueType::ExternFunctionId => unsafe { format!("<extern {}>", self.value.id) },
-      _ => todo!(),
-    }
-  }
-}
-
-impl Debug for TaggedValue {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.to_string())
-  }
+#[derive(Clone, Debug)]
+pub enum ConstantValue {
+  Number(f64),
+  GlobalId(u16),
+  ExternId(u16),
+  Bool(bool),
+  Str(String),
+  Function(*const Function),
+  None,
 }
 
 #[derive(Clone)]
 pub struct Chunk {
   pub code: Vec<u8>,
   pub functions: Vec<Function>,
-  pub constants: Vec<TaggedValue>,
+  pub constants: Vec<ConstantValue>,
 }
 
 impl Chunk {
-  pub fn get_constant(&self, index: usize) -> TaggedValue {
-    self.constants[index].copy_object()
+  pub fn get_constant(&self, index: usize) -> &ConstantValue {
+    &self.constants[index]
   }
 
-  pub fn get_function(&self, index: usize) -> TaggedValue {
-    TaggedValue::function(std::ptr::addr_of!(self.functions[index]))
+  pub fn get_function(&self, index: usize) -> *const Function {
+    std::ptr::addr_of!(self.functions[index])
   }
 
   pub fn empty() -> Self {
     Self {
       code: Vec::new(),
-      constants: vec![TaggedValue::none()],
+      constants: vec![ConstantValue::None],
       functions: Vec::new(),
-    }
-  }
-}
-
-impl Drop for Chunk {
-  fn drop(&mut self) {
-    for c in &mut self.constants {
-      unsafe { c.free() };
     }
   }
 }
@@ -324,8 +152,8 @@ impl Debug for Chunk {
         OpCode::Constant => {
           index += 1;
           result += &format!(
-            "Constant: {}\n",
-            self.constants[self.code[index] as usize].to_string()
+            "Constant: {:?}\n",
+            self.constants[self.code[index] as usize]
           );
         }
         OpCode::Function => {

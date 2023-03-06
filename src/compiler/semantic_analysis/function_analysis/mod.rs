@@ -1,7 +1,7 @@
 use crate::{
   compiler::{
     ast::{SourceInfoHandle, Stmt, StmtHandle},
-    bytecode::{Chunk, Function, OpCode, TaggedValue},
+    bytecode::{Chunk, ConstantValue, Function, OpCode},
     codegen::BytecodeBuilder,
     error_from_source_info,
     identifier::Identifier,
@@ -101,7 +101,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     match id {
       Identifier::Global(gid) => {
         unsafe {
-          self.code.push_constant(TaggedValue::global_id(gid));
+          self.code.push_constant(ConstantValue::GlobalId(gid));
           self.code.push_op(OpCode::SetGlobal);
           self.code.push_op(OpCode::Pop);
         }
@@ -116,7 +116,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     match id {
       Identifier::Global(gid) => {
         unsafe {
-          self.code.push_constant(TaggedValue::global_id(gid));
+          self.code.push_constant(ConstantValue::GlobalId(gid));
           self.code.push_op(OpCode::SetGlobal);
         }
         set_type_or_push_error(

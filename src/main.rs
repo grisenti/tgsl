@@ -4,13 +4,11 @@ mod vm;
 
 use std::fs;
 
-//use ast::codegen::desugar;
-
 use compiler::Compiler;
 use errors::SourceError;
-use vm::*;
+use vm::{value::TaggedValue, *};
 
-use crate::compiler::bytecode::{TaggedValue, Value, ValueType};
+use crate::vm::value::{Value, ValueType};
 
 fn sum(values: Vec<TaggedValue>) -> TaggedValue {
   println!("{values:?}");
@@ -44,10 +42,7 @@ fn main() {
 mod test {
   use std::fs;
 
-  use crate::{
-    compiler::{bytecode::TaggedValue, Compiler},
-    vm::VM,
-  };
+  use crate::{compiler::Compiler, vm::value::TaggedValue, vm::VM};
 
   macro_rules! test_file {
     ($name:ident) => {

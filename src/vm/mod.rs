@@ -1,9 +1,14 @@
-use std::{collections::HashMap, hint::unreachable_unchecked};
+use std::collections::HashMap;
 
 use crate::compiler::{
-  bytecode::{Chunk, Function, OpCode, TaggedValue, Value, ValueType},
+  bytecode::{Chunk, ConstantValue, Function, OpCode},
   identifier::{ExternId, Identifier},
 };
+
+mod gc;
+pub mod value;
+use gc::GC;
+use value::*;
 
 const MAX_CALLS: usize = 64;
 const MAX_LOCALS: usize = u8::MAX as usize;
@@ -13,15 +18,15 @@ macro_rules! binary_operation {
   ($s:ident, $operand:ident, $result:ident, $kind:expr, $op:tt) => {
     let rhs = unsafe {$s.pop().value.$operand};
     let lhs = unsafe {$s.pop().value.$operand};
-	$s.push(TaggedValue{ kind: $kind, value: Value{ $result: lhs $op rhs }});
+	  $s.push(TaggedValue{ kind: $kind, value: Value{ $result: lhs $op rhs }});
   };
 }
 
-macro_rules! binary_operation_deref {
-  ($s:ident, $operand:ident, $result:ident, $kind:expr, $op:tt) => {
-    let rhs = unsafe {$s.pop().value.$operand};
-    let lhs = unsafe {$s.pop().value.$operand};
-	$s.push(TaggedValue{ kind: $kind, value: Value{ $result: unsafe {*lhs $op *rhs} }});
+macro_rules! binary_string_comp {
+  ($f:ident, $op:tt) => {
+    let rhs = unsafe {(*$f.pop().value.object).value.string};
+    let lhs = unsafe {(*$f.pop().value.object).value.string};
+    $f.push(TaggedValue{ kind: ValueType::Bool, value: Value { boolean: unsafe {*lhs $op *rhs}}});
   };
 }
 
@@ -83,14 +88,14 @@ impl CallFrame {
     unsafe { *self.sp.sub(1) }
   }
 
-  fn read_constant(&mut self) -> TaggedValue {
+  fn read_constant(&mut self) -> &ConstantValue {
     let index = self.read_byte();
     unsafe { (*self.function).code.get_constant(index as usize) }
   }
 
   fn read_function(&mut self) -> TaggedValue {
     let index = self.read_byte();
-    unsafe { (*self.function).code.get_function(index as usize) }
+    unsafe { TaggedValue::function((*self.function).code.get_function(index as usize)) }
   }
 
   fn get_stack_value(&self, offset: u8) -> TaggedValue {
@@ -110,14 +115,22 @@ pub struct VM {
   extern_functions: Vec<ExternFunction>,
   stack: [TaggedValue; MAX_STACK],
   call_stack: [CallFrame; MAX_CALLS],
+  gc: GC,
   function_call: usize,
   globals: HashMap<u16, TaggedValue>,
 }
 
 impl VM {
+  fn run_gc(&mut self) {
+    self.gc.mark(self.stack.iter());
+    self.gc.mark(self.globals.values());
+    unsafe { self.gc.sweep() };
+  }
+
   fn run(&mut self, frame: CallFrame) {
     let mut frame = frame;
     loop {
+      self.run_gc();
       let op = match frame.read_instruction() {
         Ok(op) => op,
         Err(err) => {
@@ -128,7 +141,8 @@ impl VM {
       match op {
         OpCode::Constant => {
           let c = frame.read_constant();
-          frame.push(c);
+          let value = TaggedValue::from_constant(c, &mut self.gc);
+          frame.push(value);
         }
         OpCode::Function => {
           let f = frame.read_function();
@@ -138,9 +152,10 @@ impl VM {
           let func = frame.pop();
           debug_assert!(func.kind == ValueType::Function);
           let captures = frame.read_byte();
-          frame.push(TaggedValue::closure(
-            unsafe { func.value.function },
-            captures as usize,
+          frame.push(TaggedValue::object(
+            self
+              .gc
+              .alloc_closure(unsafe { func.value.function }, captures as usize),
           ))
         }
         OpCode::GetGlobal => {
@@ -169,7 +184,11 @@ impl VM {
         }
         OpCode::Capture => {
           let val = frame.pop();
-          unsafe { (*frame.top().value.closure).captures.push(val) }
+          unsafe {
+            (*(*frame.top().value.object).value.closure)
+              .captures
+              .push(val)
+          }
         }
         OpCode::GetCapture => {
           debug_assert!(!frame.captures.is_null());
@@ -216,36 +235,29 @@ impl VM {
           unary_operation!(frame, number, ValueType::Number, -);
         }
         OpCode::AddStr => {
-          let mut rhs = frame.pop();
-          let mut lhs = frame.pop();
-          let rhs_str = unsafe { rhs.value.string };
-          let lhs_str = unsafe { lhs.value.string };
-          frame.push(TaggedValue {
-            kind: ValueType::String,
-            value: Value {
-              string: Box::into_raw(Box::new(unsafe { (*lhs_str).clone() + &*rhs_str })),
-            },
-          });
-          unsafe { rhs.free() };
-          unsafe { lhs.free() };
+          let rhs = unsafe { (*frame.pop().value.object).value.string };
+          let lhs = unsafe { (*frame.pop().value.object).value.string };
+          frame.push(TaggedValue::object(
+            self.gc.alloc_string(unsafe { (*lhs).clone() + &*rhs }),
+          ));
         }
         OpCode::LeStr => {
-          binary_operation_deref!(frame, string, boolean, ValueType::Bool, <);
+          binary_string_comp!(frame, <);
         }
         OpCode::GeStr => {
-          binary_operation_deref!(frame, string, boolean, ValueType::Bool, >);
+          binary_string_comp!(frame, >);
         }
         OpCode::LeqStr => {
-          binary_operation_deref!(frame, string, boolean, ValueType::Bool, <=);
+          binary_string_comp!(frame, <=);
         }
         OpCode::GeqStr => {
-          binary_operation_deref!(frame, string, boolean, ValueType::Bool, >=);
+          binary_string_comp!(frame, >=);
         }
         OpCode::SameStr => {
-          binary_operation_deref!(frame, string, boolean, ValueType::Bool, ==);
+          binary_string_comp!(frame, ==);
         }
         OpCode::DiffStr => {
-          binary_operation_deref!(frame, string, boolean, ValueType::Bool, !=);
+          binary_string_comp!(frame, !=);
         }
         OpCode::SameBool => {
           binary_operation!(frame, boolean, boolean, ValueType::Bool, ==);
@@ -264,9 +276,13 @@ impl VM {
               unsafe { function_value.value.function },
               std::ptr::null_mut(),
             ),
-            ValueType::Closure => (
-              unsafe { (*function_value.value.closure).function },
-              unsafe { (*function_value.value.closure).captures.as_mut_ptr() },
+            ValueType::Object => (
+              unsafe { (*(*function_value.value.object).value.closure).function },
+              unsafe {
+                (*(*function_value.value.object).value.closure)
+                  .captures
+                  .as_mut_ptr()
+              },
             ),
             ValueType::ExternFunctionId => {
               let args = (0..arguments).map(|_| frame.pop()).collect();
@@ -302,28 +318,26 @@ impl VM {
           }
           // FIXME: remove this reverse
           members.reverse();
-          frame.push(TaggedValue::aggregate(members));
+          frame.push(TaggedValue::object(self.gc.alloc_aggregate(members)));
         }
         OpCode::GetMember => {
-          let aggregate = unsafe { frame.pop().value.aggregate };
+          let aggregate = unsafe { (*frame.pop().value.object).value.aggregate };
           let id = frame.read_byte();
           let val = unsafe { (*aggregate).members[id as usize] };
           frame.push(val);
         }
         OpCode::SetMember => {
           let id = frame.read_byte();
-          let aggregate = unsafe { frame.pop().value.aggregate };
+          let aggregate = unsafe { (*frame.pop().value.object).value.aggregate };
           let val = frame.top();
           unsafe { (*aggregate).members[id as usize] = val };
         }
         OpCode::Print => {
-          let mut top = frame.pop();
+          let top = frame.pop();
           println!("{}", top.to_string());
-          unsafe { top.free() };
         }
         OpCode::Pop => {
           frame.pop();
-          //unsafe { top.free() };
         }
         OpCode::JumpIfFalsePop => {
           let condition = unsafe { frame.pop().value.boolean };
@@ -384,6 +398,7 @@ impl VM {
     extern_map: HashMap<Identifier, ExternId>,
   ) -> Self {
     Self {
+      gc: GC::new(),
       global_names: name_map,
       extern_map,
       extern_functions: Vec::new(),
