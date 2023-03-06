@@ -38,7 +38,7 @@ impl Compiler {
       extern_map,
       name_map,
     } = parser.parse()?;
-    println!("{ast:?}");
+    println!("{:?}", &ast);
     let generated_code = SemanticAnalizer::analyze(ast, global_types, type_map)?;
     Ok(CompilerResult {
       generated_code,

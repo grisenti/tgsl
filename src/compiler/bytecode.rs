@@ -45,6 +45,8 @@ pub enum OpCode {
 
   // bool
   NotBool,
+  SameBool,
+  DiffBool,
 
   // functions
   Call,

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, hint::unreachable_unchecked};
+use std::{collections::HashMap, hint::unreachable_unchecked};
 
 use crate::compiler::{
   bytecode::{Chunk, Function, OpCode, TaggedValue, Value, ValueType},
@@ -10,10 +10,18 @@ const MAX_LOCALS: usize = u8::MAX as usize;
 const MAX_STACK: usize = MAX_CALLS * MAX_LOCALS;
 
 macro_rules! binary_operation {
-  ($s:ident, $operator:ident, $result:ident, $kind:expr, $op:tt) => {
-    let rhs = unsafe {$s.pop().value.$operator};
-    let lhs = unsafe {$s.pop().value.$operator};
+  ($s:ident, $operand:ident, $result:ident, $kind:expr, $op:tt) => {
+    let rhs = unsafe {$s.pop().value.$operand};
+    let lhs = unsafe {$s.pop().value.$operand};
 	$s.push(TaggedValue{ kind: $kind, value: Value{ $result: lhs $op rhs }});
+  };
+}
+
+macro_rules! binary_operation_deref {
+  ($s:ident, $operand:ident, $result:ident, $kind:expr, $op:tt) => {
+    let rhs = unsafe {$s.pop().value.$operand};
+    let lhs = unsafe {$s.pop().value.$operand};
+	$s.push(TaggedValue{ kind: $kind, value: Value{ $result: unsafe {*lhs $op *rhs} }});
   };
 }
 
@@ -221,6 +229,30 @@ impl VM {
           unsafe { rhs.free() };
           unsafe { lhs.free() };
         }
+        OpCode::LeStr => {
+          binary_operation_deref!(frame, string, boolean, ValueType::Bool, <);
+        }
+        OpCode::GeStr => {
+          binary_operation_deref!(frame, string, boolean, ValueType::Bool, >);
+        }
+        OpCode::LeqStr => {
+          binary_operation_deref!(frame, string, boolean, ValueType::Bool, <=);
+        }
+        OpCode::GeqStr => {
+          binary_operation_deref!(frame, string, boolean, ValueType::Bool, >=);
+        }
+        OpCode::SameStr => {
+          binary_operation_deref!(frame, string, boolean, ValueType::Bool, ==);
+        }
+        OpCode::DiffStr => {
+          binary_operation_deref!(frame, string, boolean, ValueType::Bool, !=);
+        }
+        OpCode::SameBool => {
+          binary_operation!(frame, boolean, boolean, ValueType::Bool, ==);
+        }
+        OpCode::DiffBool => {
+          binary_operation!(frame, boolean, boolean, ValueType::Bool, !=);
+        }
         OpCode::NotBool => {
           unary_operation!(frame, boolean, ValueType::Bool, !);
         }
@@ -242,7 +274,7 @@ impl VM {
               frame.push(self.extern_functions[id](args));
               continue;
             }
-            _ => unsafe { unreachable_unchecked() },
+            _ => unreachable!(),
           };
           let bp = unsafe { frame.sp.sub(arguments) };
           let pc = unsafe { (*function).code.code.as_ptr() };

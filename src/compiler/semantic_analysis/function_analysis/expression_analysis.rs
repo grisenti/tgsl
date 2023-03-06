@@ -274,7 +274,19 @@ impl FunctionAnalizer<'_> {
         }
         TypeId::BOOL
       }
-      (TypeId::BOOL, comp_op, TypeId::BOOL) if comp_op == Operator::Same => TypeId::BOOL,
+      (TypeId::BOOL, comp_op, TypeId::BOOL)
+        if comp_op == Operator::Same || comp_op == Operator::Different =>
+      {
+        let op = if comp_op == Operator::Same {
+          OpCode::SameBool
+        } else {
+          OpCode::DiffBool
+        };
+        unsafe {
+          self.code.push_op(op);
+        }
+        TypeId::BOOL
+      }
       (lhs, op, rhs) => {
         self.emit_error(
           src_info,

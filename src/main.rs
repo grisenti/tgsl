@@ -70,6 +70,7 @@ mod test {
       Err(err) => println!("{}", err.print_long(&source)),
       Ok(res) => {
         let mut vm = VM::new(res.name_map, res.extern_map);
+        println!("{:?}", &res.generated_code);
         vm.bind_function("assert", Box::new(assert));
         vm.interpret(res.generated_code);
       }
