@@ -122,9 +122,11 @@ pub struct VM {
 
 impl VM {
   fn run_gc(&mut self) {
-    self.gc.mark(self.stack.iter());
-    self.gc.mark(self.globals.values());
-    unsafe { self.gc.sweep() };
+    if self.gc.should_run() {
+      self.gc.mark(self.stack.iter());
+      self.gc.mark(self.globals.values());
+      unsafe { self.gc.sweep() };
+    }
   }
 
   fn run(&mut self, frame: CallFrame) {

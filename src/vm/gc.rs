@@ -4,8 +4,12 @@ use crate::compiler::bytecode::Function;
 
 use super::value::*;
 
+const OBJECT_SIZE: u32 = std::mem::size_of::<Object>() as u32;
+
 pub struct GC {
   allocations: Vec<*mut Object>,
+  next_collection: u32,
+  bytes_allocated: u32,
 }
 
 unsafe fn alloc_value<T>(value: T) -> *mut T {
@@ -37,6 +41,12 @@ unsafe fn dealloc_object(obj: *mut Object) {
 }
 
 impl GC {
+  const GROWTH_FACTOR: u32 = 2;
+
+  pub fn should_run(&self) -> bool {
+    self.bytes_allocated > self.next_collection
+  }
+
   fn mark_object(&mut self, obj: *mut Object) {
     let obj = unsafe { &mut (*obj) };
     if obj.marked {
@@ -73,9 +83,11 @@ impl GC {
         true
       } else {
         dealloc_object(obj);
+        self.bytes_allocated -= OBJECT_SIZE;
         false
       }
-    })
+    });
+    self.next_collection = self.bytes_allocated * GC::GROWTH_FACTOR;
   }
 
   pub fn alloc_string(&mut self, val: String) -> *mut Object {
@@ -127,6 +139,8 @@ impl GC {
   pub fn new() -> Self {
     Self {
       allocations: Vec::new(),
+      next_collection: 1024 * 1024,
+      bytes_allocated: 0,
     }
   }
 }
