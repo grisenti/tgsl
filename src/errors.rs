@@ -51,8 +51,7 @@ fn line_str(source: &str, start: usize) -> (usize, String) {
     .map(|(offset, _)| offset + 1) // the +1 skips \n which is 1 byte wide
     .unwrap_or(0);
   let line = source[line_start..]
-    .char_indices()
-    .map(|(_, c)| c)
+    .chars()
     .take_while(|c| *c != '\n')
     .map(|c| if c.is_whitespace() { ' ' } else { c })
     .collect();
