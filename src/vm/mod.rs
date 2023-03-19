@@ -96,7 +96,7 @@ impl CallFrame {
     unsafe { (*self.function).code.get_constant(index as usize) }
   }
 
-  fn read_function(&mut self) -> TaggedValue {
+  fn read_local_function(&mut self) -> TaggedValue {
     let index = self.read_byte();
     unsafe { TaggedValue::function((*self.function).code.get_function(index as usize)) }
   }
@@ -150,7 +150,7 @@ impl VM {
           frame.push(value);
         }
         OpCode::Function => {
-          let f = frame.read_function();
+          let f = frame.read_local_function();
           frame.push(f);
         }
         OpCode::MakeClosure => {
