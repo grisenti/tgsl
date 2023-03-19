@@ -1,5 +1,6 @@
 mod compiler;
 mod errors;
+mod id_hasher;
 mod vm;
 
 use std::fs;

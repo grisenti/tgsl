@@ -1,8 +1,11 @@
 use std::{collections::HashMap, mem::ManuallyDrop};
 
-use crate::compiler::{
-  bytecode::{Chunk, ConstantValue, Function, OpCode},
-  identifier::{ExternId, Identifier},
+use crate::{
+  compiler::{
+    bytecode::{Chunk, ConstantValue, Function, OpCode},
+    identifier::{ExternId, Identifier},
+  },
+  id_hasher::{IdBuildHasher, IdHasher},
 };
 
 mod gc;
@@ -117,7 +120,7 @@ pub struct VM {
   call_stack: [CallFrame; MAX_CALLS],
   gc: GC,
   function_call: usize,
-  globals: HashMap<u16, TaggedValue>,
+  globals: HashMap<u16, TaggedValue, IdBuildHasher>,
 }
 
 impl VM {
@@ -281,7 +284,7 @@ impl VM {
               std::ptr::null_mut(),
             ),
             ValueType::Object => (
-              unsafe { (*(*function_value.value.object).value.closure).function },
+              unsafe { (*function_value.value.object).value.closure.function },
               unsafe {
                 (*(*function_value.value.object).value.closure)
                   .captures
@@ -406,7 +409,7 @@ impl VM {
       global_names: name_map,
       extern_map,
       extern_functions: Vec::new(),
-      globals: HashMap::new(),
+      globals: HashMap::default(),
       stack: [TaggedValue::none(); MAX_STACK],
       call_stack: [EMPTY_CALL_FRAME; MAX_CALLS],
       function_call: 0,
