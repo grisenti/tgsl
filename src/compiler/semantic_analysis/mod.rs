@@ -6,7 +6,7 @@ use super::{
   ast::*,
   bytecode::Chunk,
   identifier::Identifier,
-  types::{type_map::ReverseTypeMap, Type, TypeId},
+  types::{type_map::TypeMap, Type, TypeId},
 };
 use crate::errors::SourceError;
 
@@ -24,10 +24,7 @@ type FunctionMap = HashMap<Identifier, Vec<Type>>;
 
 struct GlobalEnv {
   structs: StructMap,
-  global_types: Vec<TypeId>,
-  type_map: ReverseTypeMap,
   errors: Vec<SourceError>,
-  ast: AST,
 }
 
 pub struct SemanticAnalizer;
@@ -35,23 +32,23 @@ pub struct SemanticAnalizer;
 impl SemanticAnalizer {
   pub fn analyze(
     ast: AST,
-    global_types: Vec<TypeId>,
-    type_map: ReverseTypeMap,
+    global_types: &mut Vec<TypeId>,
+    type_map: &TypeMap,
   ) -> Result<Chunk, SourceError> {
-    let program = ast.get_program().to_owned();
+    let program = ast.get_program();
     let mut global_env = GlobalEnv {
       structs: HashMap::new(),
-      global_types,
-      type_map,
       errors: Vec::new(),
-      ast,
     };
     let FunctionAnalysisResult { code, .. } = FunctionAnalizer::analyze(
       Vec::new(),
-      &program,
+      program,
       true,
       Vec::new(),
       &mut global_env,
+      &ast,
+      type_map,
+      global_types,
       None,
     );
     if global_env.errors.is_empty() {

@@ -25,13 +25,13 @@ impl SourceInfo {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum SourceErrorType {
   Compilation,
   Runtime,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum SourceError {
   One {
     line_no: u32,

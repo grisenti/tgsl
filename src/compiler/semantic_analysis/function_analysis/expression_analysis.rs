@@ -52,12 +52,12 @@ impl FunctionAnalizer<'_> {
     name: StrHandle,
   ) -> Option<(usize, TypeId)> {
     let s = self.global_env.structs[&struct_id].clone();
-    let name = name.get(&self.global_env.ast);
+    let name = name.get(self.ast);
     if let Some((_, member_type)) = s
       .member_names
       .iter()
       .zip(s.member_types.into_iter().enumerate())
-      .find(|(member_name, _)| member_name.get(&self.global_env.ast) == name)
+      .find(|(member_name, _)| member_name.get(self.ast) == name)
     {
       Some(member_type)
     } else {
@@ -74,7 +74,7 @@ impl FunctionAnalizer<'_> {
     name: StrHandle,
   ) -> CallType {
     let typeid = self.get_typeid(id);
-    if let Type::Function { parameters, ret } = self.global_env.type_map.get_type(typeid) {
+    if let Type::Function { parameters, ret } = self.type_map.get_type(typeid) {
       let function_start = self.code.get_next_instruction_address();
       unsafe { self.code.get_id(id) }
       let chunk_end = self.code.get_next_instruction_address();
@@ -89,7 +89,7 @@ impl FunctionAnalizer<'_> {
         name_info,
         format!(
           "identifier {} is neither a struct member nor a function",
-          name.get(&self.global_env.ast)
+          name.get(self.ast)
         ),
       );
       CallType::Other(TypeId::ERROR)
@@ -98,7 +98,7 @@ impl FunctionAnalizer<'_> {
 
   fn try_dot_call(&mut self, expr: ExprHandle) -> CallType {
     let call_start = self.code.get_next_instruction_address();
-    match expr.get(&self.global_env.ast) {
+    match expr.get(self.ast) {
       Expr::Variable { id, .. } => {
         let typeid = self.get_typeid(id);
         unsafe { self.code.get_id(id) }
@@ -160,7 +160,7 @@ impl FunctionAnalizer<'_> {
 
   pub fn literal(&mut self, literal: Literal) -> TypeId {
     let val = match literal {
-      Literal::String(s) => ConstantValue::Str(s.get(&self.global_env.ast).to_owned()),
+      Literal::String(s) => ConstantValue::Str(s.get(self.ast).to_owned()),
       Literal::False => ConstantValue::Bool(false),
       Literal::True => ConstantValue::Bool(true),
       Literal::Number(num) => ConstantValue::Number(num),
@@ -381,7 +381,7 @@ impl FunctionAnalizer<'_> {
     name_info: SourceInfoHandle,
   ) -> DotKind {
     let left = self.analyze_expr(left_expr);
-    if let Type::Struct(id) = self.global_env.type_map.get_type(left) {
+    if let Type::Struct(id) = self.type_map.get_type(left) {
       if let Some((index, member_type)) = self.get_struct_member(*id, rhs_name) {
         unsafe { self.code.push_op2(OpCode::GetMember, index as u8) }
         DotKind::MemberAccess(member_type)
@@ -417,7 +417,7 @@ impl FunctionAnalizer<'_> {
         name_info,
         format!(
           "identifier {} is neither a struct member nor a function",
-          rhs_name.get(&self.global_env.ast)
+          rhs_name.get(self.ast)
         ),
       );
       TypeId::ERROR
@@ -433,7 +433,7 @@ impl FunctionAnalizer<'_> {
   ) -> TypeId {
     let object = self.analyze_expr(object);
     let value = self.analyze_expr(value);
-    if let Type::Struct(id) = self.global_env.type_map.get_type(object) {
+    if let Type::Struct(id) = self.type_map.get_type(object) {
       if let Some((index, member_type)) = self.get_struct_member(*id, member_name) {
         if value == member_type {
           unsafe { self.code.push_op2(OpCode::SetMember, index as u8) }
@@ -443,7 +443,7 @@ impl FunctionAnalizer<'_> {
             member_name_info,
             format!(
               "member '{}' is of type {}, cannot assing value of type {}",
-              member_name.get(&self.global_env.ast),
+              member_name.get(self.ast),
               self.type_string(member_type),
               self.type_string(value)
             ),
@@ -455,7 +455,7 @@ impl FunctionAnalizer<'_> {
           member_name_info,
           format!(
             "{} is not a member of type {object:?}",
-            member_name.get(&self.global_env.ast)
+            member_name.get(self.ast)
           ),
         );
         TypeId::ERROR
@@ -470,7 +470,7 @@ impl FunctionAnalizer<'_> {
   }
 
   pub fn analyze_expr(&mut self, expr: ExprHandle) -> TypeId {
-    match expr.get(&self.global_env.ast) {
+    match expr.get(self.ast) {
       Expr::Lambda {
         info,
         parameters,

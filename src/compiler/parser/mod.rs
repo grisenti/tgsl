@@ -2,15 +2,15 @@ mod environment;
 mod expression_parser;
 mod statement_parser;
 
-use std::collections::HashMap;
-
 use self::environment::Environment;
-use self::types::type_map::ReverseTypeMap;
 
 use super::ast::*;
-use super::identifier::ExternId;
+use super::identifier::GlobalId;
 use super::identifier::Identifier;
+use super::identifier::ModuleId;
 use super::lexer::*;
+use super::modules::GlobalNames;
+use super::modules::ModuleNames;
 use super::types::type_map::TypeMap;
 use super::types::Type;
 use super::types::TypeId;
@@ -18,27 +18,26 @@ use super::*;
 
 pub struct ParseResult {
   pub ast: AST,
-  pub global_types: Vec<TypeId>,
-  pub type_map: ReverseTypeMap,
-  pub name_map: HashMap<String, Identifier>,
-  pub extern_map: HashMap<Identifier, ExternId>,
+  pub module_names: GlobalNames,
+  pub module_extern_functions: Vec<GlobalId>,
+  pub imports: Vec<ModuleId>,
 }
 
-pub struct Parser<'src> {
-  env: Environment,
-  type_map: TypeMap,
-  global_types: Vec<TypeId>,
-  lex: Lexer<'src>,
-  lookahead: Token<'src>,
+pub struct Parser<'parsing> {
+  env: Environment<'parsing>,
+  type_map: &'parsing mut TypeMap,
+  global_types: &'parsing mut Vec<TypeId>,
+  lex: Lexer<'parsing>,
+  lookahead: Token<'parsing>,
   ast: AST,
 }
 
 type SrcErrVec = Vec<SourceError>;
-type TokenPairOpt<'src> = Option<(Token<'src>, SourceInfoHandle)>;
+type TokenPairOpt<'parsing> = Option<(Token<'parsing>, SourceInfoHandle)>;
 type ExprRes = Result<ExprHandle, SourceError>;
 type StmtRes = Result<StmtHandle, SourceError>;
 
-impl<'src> Parser<'src> {
+impl<'parsing> Parser<'parsing> {
   fn is_at_end(&self) -> bool {
     self.lookahead == Token::EndOfFile
   }
@@ -63,7 +62,7 @@ impl<'src> Parser<'src> {
     self.ast.add_source_info(self.lex.prev_token_info())
   }
 
-  fn advance(&mut self) -> Result<Token<'src>, SourceError> {
+  fn advance(&mut self) -> Result<Token<'parsing>, SourceError> {
     let next = self.lex.next_token()?;
     self.lookahead = next;
     Ok(next)
@@ -81,7 +80,7 @@ impl<'src> Parser<'src> {
   fn matches_alternatives(
     &mut self,
     alternatives: &[Token<'static>],
-  ) -> Result<TokenPairOpt<'src>, SourceError> {
+  ) -> Result<TokenPairOpt<'parsing>, SourceError> {
     if alternatives.contains(&self.lookahead) {
       let res = (self.lookahead, self.last_token_info());
       self.advance()?;
@@ -91,7 +90,7 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn match_next(&mut self, tok: Token<'static>) -> Result<TokenPairOpt<'src>, SourceError> {
+  fn match_next(&mut self, tok: Token<'static>) -> Result<TokenPairOpt<'parsing>, SourceError> {
     self.matches_alternatives(&[tok])
   }
 
@@ -192,39 +191,40 @@ impl<'src> Parser<'src> {
     Ok(errors)
   }
 
-  pub fn new(lex: Lexer<'src>) -> Self {
-    Self {
-      lex,
-      type_map: TypeMap::new(),
-      global_types: Vec::new(),
+  pub fn parse(
+    source: &'parsing str,
+    type_map: &'parsing mut TypeMap,
+    loaded_names: &'parsing ModuleNames,
+    global_types: &'parsing mut Vec<TypeId>,
+  ) -> Result<ParseResult, SourceError> {
+    let mut parser = Self {
+      lex: Lexer::new(source),
+      type_map,
+      global_types,
       lookahead: Token::EndOfFile,
       ast: AST::new(),
-      env: Environment::new(),
-    }
-  }
-
-  pub fn parse(mut self) -> Result<ParseResult, SourceError> {
+      env: Environment::new(loaded_names),
+    };
     let mut errors = Vec::new();
-    if let Err(e) = self.advance() {
+    if let Err(e) = parser.advance() {
       errors.push(e)
     }
-    while !self.is_at_end() {
-      match self.parse_decl() {
-        Ok(stmt) => self.ast.program_push(stmt),
+    while !parser.is_at_end() {
+      match parser.parse_decl() {
+        Ok(stmt) => parser.ast.program_push(stmt),
         Err(err) => {
           errors.push(err);
-          errors = self.syncronize_or_errors(errors)?;
+          errors = parser.syncronize_or_errors(errors)?;
         }
       }
     }
     if errors.is_empty() {
-      let (name_map, extern_map) = self.env.finalize();
+      let (name_map, extern_map) = parser.env.finalize();
       Ok(ParseResult {
-        ast: self.ast,
-        global_types: self.global_types,
-        type_map: self.type_map.reverse_map(),
-        name_map,
-        extern_map,
+        ast: parser.ast,
+        module_names: name_map,
+        module_extern_functions: extern_map,
+        imports: vec![],
       })
     } else {
       Err(SourceError::from_err_vec(errors))

@@ -1,12 +1,14 @@
 use crate::{
   compiler::{
-    ast::{SourceInfoHandle, Stmt, StmtHandle},
+    ast::{SourceInfoHandle, Stmt, StmtHandle, AST},
     bytecode::{Chunk, ConstantValue, Function, OpCode},
     codegen::BytecodeBuilder,
     error_from_source_info,
     identifier::Identifier,
-    types::type_map::ReverseTypeMap,
-    types::{Type, TypeId},
+    types::{
+      type_map::{self, TypeMap},
+      Type, TypeId,
+    },
   },
   errors::{SourceError, SourceInfo},
 };
@@ -17,7 +19,7 @@ mod expression_analysis;
 mod statement_analysis;
 
 pub struct FunctionAnalizer<'analysis> {
-  captures: Vec<TypeId>, // FIXME: make it a slice ref
+  captures: Vec<TypeId>,
   locals: Vec<TypeId>,
   scope_depth: u8,
   global_scope: bool,
@@ -26,6 +28,9 @@ pub struct FunctionAnalizer<'analysis> {
   code: BytecodeBuilder,
 
   global_env: &'analysis mut GlobalEnv,
+  ast: &'analysis AST,
+  type_map: &'analysis TypeMap,
+  global_types: &'analysis mut Vec<TypeId>,
   declaration_info: Option<SourceInfoHandle>,
 }
 
@@ -39,7 +44,7 @@ fn set_type_or_push_error(
   rhs: TypeId,
   name_info: SourceInfo,
   errors: &mut Vec<SourceError>,
-  type_map: &ReverseTypeMap,
+  type_map: &TypeMap,
 ) {
   match *lhs {
     TypeId::UNKNOWN => {
@@ -75,14 +80,14 @@ impl<'analysis> FunctionAnalizer<'analysis> {
 
   fn get_type_mut_ref(&mut self, id: Identifier) -> &mut TypeId {
     match id {
-      Identifier::Global(gid) => &mut self.global_env.global_types[gid as usize],
+      Identifier::Global(gid) => &mut self.global_types[gid as usize],
       Identifier::Local(id) => &mut self.locals[id as usize],
       Identifier::Capture(id) => &mut self.captures[id as usize],
     }
   }
 
   fn get_type(&self, id: TypeId) -> &Type {
-    self.global_env.type_map.get_type(id)
+    self.type_map.get_type(id)
   }
 
   fn get_typeid(&mut self, id: Identifier) -> TypeId {
@@ -94,7 +99,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
   }
 
   fn type_string(&self, id: TypeId) -> String {
-    self.global_env.type_map.type_to_string(id)
+    self.type_map.type_to_string(id)
   }
 
   fn declare(&mut self, id: Identifier, var_type: TypeId) {
@@ -120,11 +125,11 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           self.code.push_op(OpCode::SetGlobal);
         }
         set_type_or_push_error(
-          &mut self.global_env.global_types[gid as usize],
+          &mut self.global_types[gid as usize],
           value_type,
-          id_info.get(&self.global_env.ast),
+          id_info.get(self.ast),
           &mut self.global_env.errors,
-          &self.global_env.type_map,
+          &self.type_map,
         );
       }
       Identifier::Local(id) => {
@@ -134,9 +139,9 @@ impl<'analysis> FunctionAnalizer<'analysis> {
         set_type_or_push_error(
           &mut self.locals[id as usize],
           value_type,
-          id_info.get(&self.global_env.ast),
+          id_info.get(self.ast),
           &mut self.global_env.errors,
-          &self.global_env.type_map,
+          &self.type_map,
         );
       }
       Identifier::Capture(id) => {
@@ -146,9 +151,9 @@ impl<'analysis> FunctionAnalizer<'analysis> {
         set_type_or_push_error(
           &mut self.captures[id as usize],
           value_type,
-          id_info.get(&self.global_env.ast),
+          id_info.get(self.ast),
           &mut self.global_env.errors,
-          &self.global_env.type_map,
+          &self.type_map,
         );
       }
     }
@@ -158,7 +163,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     self
       .global_env
       .errors
-      .push(error_from_source_info(&info.get(&self.global_env.ast), msg));
+      .push(error_from_source_info(&info.get(self.ast), msg));
   }
 
   fn check_function(
@@ -175,6 +180,9 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       false,
       capture_types,
       self.global_env,
+      self.ast,
+      self.type_map,
+      self.global_types,
       Some(declaration_info),
     );
     unsafe {
@@ -188,6 +196,9 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     global_scope: bool,
     captures: Vec<TypeId>,
     global_env: &'analysis mut GlobalEnv,
+    ast: &'analysis AST,
+    type_map: &'analysis TypeMap,
+    global_types: &'analysis mut Vec<TypeId>,
     declaration_info: Option<SourceInfoHandle>,
   ) -> FunctionAnalysisResult {
     let mut analizer = Self {
@@ -199,6 +210,9 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       code: BytecodeBuilder::new(),
       global_env,
       declaration_info,
+      type_map,
+      global_types,
+      ast,
     };
     let ret = analizer.process_statements(body);
     match ret {

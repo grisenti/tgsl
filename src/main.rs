@@ -5,8 +5,6 @@ mod vm;
 
 use std::fs;
 
-use compiler::Compiler;
-use errors::SourceError;
 use vm::{value::TaggedValue, *};
 
 use crate::vm::value::{Value, ValueType};
@@ -23,20 +21,16 @@ fn sum(values: Vec<TaggedValue>) -> TaggedValue {
   }
 }
 
-fn test(program: &str) -> Result<(), SourceError> {
-  let program = Compiler::compile(program)?;
-  let mut vm = VM::new(program.name_map, program.extern_map);
-  vm.bind_function("", Box::new(sum));
-  println!("{:?}", program.generated_code);
-  vm.interpret(program.generated_code);
-  Ok(())
+fn test(program: &str) {
+  let mut vm = VM::new();
+  if let Err(msg) = vm.load_module("test".to_string(), program) {
+    println!("{}", msg);
+  }
 }
 
 fn main() {
   let program = fs::read_to_string("program.pr").unwrap();
-  if let Err(err) = test(&program) {
-    println!("{}", err.print_long(&program));
-  }
+  test(&program);
 }
 
 #[cfg(test)]

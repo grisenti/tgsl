@@ -1,4 +1,7 @@
-use crate::compiler::identifier::{ExternId, Identifier};
+use crate::compiler::{
+  identifier::{ExternId, GlobalId, Identifier, ModuleId},
+  modules::ModuleNames,
+};
 
 use super::*;
 use std::collections::{HashMap, HashSet};
@@ -19,26 +22,37 @@ struct Function {
   captures: Vec<CaptureId>,
 }
 
-// worries about ids and scopes
-#[derive(Default)]
-pub struct Environment {
+pub struct Environment<'compilation> {
+  imported_modules: Vec<ModuleId>,
+  globals: &'compilation ModuleNames,
+  module_globals: GlobalNames,
+  last_global_id: u16,
+
   locals: Vec<(String, LocalId)>,
   last_local_id: u8,
-  globals: HashMap<String, Identifier>,
-  extern_map: HashMap<Identifier, ExternId>,
+
+  extern_ids: Vec<GlobalId>,
+  extern_id_start: u16,
   functions_declaration_stack: Vec<Function>,
   declared: HashSet<Identifier>,
-  last_global_id: u16,
-  last_extern_name: u16,
   scope_depth: u8,
 }
 
-impl Environment {
+impl<'compilation> Environment<'compilation> {
   fn add_global_name(&mut self, name: String) -> Identifier {
-    let id = Identifier::Global(self.last_global_id);
-    self.globals.insert(name, id);
+    let id = self.last_global_id;
+    self.module_globals.insert(name, id);
     self.last_global_id += 1;
-    id
+    Identifier::Global(id)
+  }
+
+  fn get_global_name(&self, name: &str) -> Option<Identifier> {
+    self
+      .module_globals
+      .get(name)
+      .copied()
+      .or_else(|| self.globals.get_id(&self.imported_modules, name).unwrap())
+      .map(Identifier::Global)
   }
 
   fn declare_global_name(
@@ -47,9 +61,7 @@ impl Environment {
     name_src_info: SourceInfo,
   ) -> Result<Identifier, SourceError> {
     let id = self
-      .globals
-      .get(name)
-      .copied()
+      .get_global_name(name)
       .unwrap_or_else(|| self.add_global_name(name.to_string()));
     if self.declared.contains(&id) {
       Err(error_from_source_info(
@@ -110,8 +122,13 @@ impl Environment {
   pub fn get_name_or_add_global(&mut self, name: &str) -> Identifier {
     if let Some(id) = self.find_local(name) {
       self.capture(id)
-    } else if let Some(global_id) = self.globals.get(name) {
-      *global_id
+    } else if let Some(global_id) = self
+      .module_globals
+      .get(name)
+      .copied()
+      .or_else(|| self.globals.get_id(&self.imported_modules, name).unwrap())
+    {
+      Identifier::Global(global_id)
     } else {
       self.add_global_name(name.to_string())
     }
@@ -200,24 +217,39 @@ impl Environment {
   }
 
   pub fn create_extern_id(&mut self, id: Identifier) -> ExternId {
-    let extern_id = ExternId(self.last_extern_name);
-    self.extern_map.insert(id, extern_id);
-    extern_id
-  }
-
-  pub fn new() -> Self {
-    Self {
-      ..Default::default()
+    if let Identifier::Global(id) = id {
+      self.extern_ids.push(id);
+      ExternId(self.extern_id_start + id)
+    } else {
+      panic!()
     }
   }
 
-  pub fn finalize(self) -> (HashMap<String, Identifier>, HashMap<Identifier, ExternId>) {
-    (self.globals, self.extern_map)
+  pub fn new(global_names: &'compilation ModuleNames) -> Self {
+    Self {
+      imported_modules: Vec::new(),
+      globals: global_names,
+      module_globals: HashMap::new(),
+      last_global_id: global_names.last_global_id(),
+      locals: Vec::new(),
+      last_local_id: 0,
+      extern_ids: Vec::new(),
+      extern_id_start: 0,
+      functions_declaration_stack: Vec::new(),
+      declared: HashSet::new(),
+      scope_depth: 0,
+    }
+  }
+
+  pub fn finalize(self) -> (GlobalNames, Vec<GlobalId>) {
+    (self.module_globals, self.extern_ids)
   }
 }
 
 #[cfg(test)]
 mod test {
+  use std::collections::HashMap;
+
   use crate::{compiler::identifier::Identifier, errors::SourceInfo};
 
   use super::Environment;
@@ -230,7 +262,7 @@ mod test {
 
   #[test]
   fn capture_once() {
-    let mut env = Environment::new();
+    let mut env = Environment::new(&HashMap::new());
     env.push_function();
     env.declare_name_or_err("x", FAKE_SOURCE_INFO).unwrap();
     env.push_function();
@@ -243,7 +275,7 @@ mod test {
 
   #[test]
   fn multilevel_capture() {
-    let mut env = Environment::new();
+    let mut env = Environment::new(&HashMap::new());
     env.push_function();
     env.declare_name_or_err("x", FAKE_SOURCE_INFO).unwrap();
     env.push_function();

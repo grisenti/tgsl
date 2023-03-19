@@ -118,6 +118,16 @@ pub struct Chunk {
   pub constants: Vec<ConstantValue>,
 }
 
+impl Default for Chunk {
+  fn default() -> Self {
+    Self {
+      code: Vec::new(),
+      constants: vec![ConstantValue::None],
+      functions: Vec::new(),
+    }
+  }
+}
+
 impl Chunk {
   pub fn get_constant(&self, index: usize) -> &ConstantValue {
     &self.constants[index]
@@ -128,11 +138,7 @@ impl Chunk {
   }
 
   pub fn empty() -> Self {
-    Self {
-      code: Vec::new(),
-      constants: vec![ConstantValue::None],
-      functions: Vec::new(),
-    }
+    Default::default()
   }
 }
 

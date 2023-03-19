@@ -34,7 +34,7 @@ impl FunctionAnalizer<'_> {
   }
 
   fn check_self_assignment(&mut self, lhs_id: Identifier, expression: ExprHandle) {
-    match expression.get(&self.global_env.ast) {
+    match expression.get(self.ast) {
       Expr::Variable {
         id: rhs_id,
         id_info,
@@ -237,7 +237,7 @@ impl FunctionAnalizer<'_> {
   }
 
   pub(super) fn analyze_stmt(&mut self, stmt: StmtHandle) -> OptRet {
-    match stmt.clone().get(&self.global_env.ast) {
+    match stmt.clone().get(self.ast) {
       Stmt::VarDecl {
         identifier,
         id_info,

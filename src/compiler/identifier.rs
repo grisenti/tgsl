@@ -1,6 +1,6 @@
-pub type GlobalId = u16;
 pub type CaptureId = u8;
 pub type LocalId = u8;
+pub type GlobalId = u16;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub enum Identifier {
@@ -11,3 +11,6 @@ pub enum Identifier {
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub struct ExternId(pub u16);
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
+pub struct ModuleId(pub u16);

@@ -1,9 +1,11 @@
-use std::{collections::HashMap, mem::ManuallyDrop};
+use std::{any::TypeId, collections::HashMap, mem::ManuallyDrop};
 
 use crate::{
   compiler::{
     bytecode::{Chunk, ConstantValue, Function, OpCode},
-    identifier::{ExternId, Identifier},
+    identifier::{ExternId, GlobalId, Identifier},
+    modules::{LoadedModules, Module},
+    Compiler,
   },
   id_hasher::{IdBuildHasher, IdHasher},
 };
@@ -113,8 +115,8 @@ impl CallFrame {
 type ExternFunction = Box<dyn Fn(Vec<TaggedValue>) -> TaggedValue>;
 
 pub struct VM {
-  global_names: HashMap<String, Identifier>,
-  extern_map: HashMap<Identifier, ExternId>,
+  state: LoadedModules,
+  compiler: Compiler,
   extern_functions: Vec<ExternFunction>,
   stack: [TaggedValue; MAX_STACK],
   call_stack: [CallFrame; MAX_CALLS],
@@ -400,14 +402,27 @@ impl VM {
     self.extern_functions.push(func);
   }
 
-  pub fn new(
-    name_map: HashMap<String, Identifier>,
-    extern_map: HashMap<Identifier, ExternId>,
-  ) -> Self {
+  pub fn load_module(&mut self, name: String, source: &str) -> Result<(), String> {
+    let Module {
+      extern_functions,
+      imports,
+      code,
+      names,
+    } = match self.compiler.compile(source, &self.state) {
+      Err(err) => return Err(err.print_long(source)),
+      Ok(module) => module,
+    };
+    self.state.module_names.update(names);
+    self.state.extern_functions.extend(extern_functions);
+    self.interpret(code);
+    Ok(())
+  }
+
+  pub fn new() -> Self {
     Self {
       gc: GC::new(),
-      global_names: name_map,
-      extern_map,
+      compiler: Compiler::new(),
+      state: Default::default(),
       extern_functions: Vec::new(),
       globals: HashMap::default(),
       stack: [TaggedValue::none(); MAX_STACK],
