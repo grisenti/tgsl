@@ -20,7 +20,6 @@ struct Struct {
 }
 
 type StructMap = HashMap<Identifier, Struct>;
-type FunctionMap = HashMap<Identifier, Vec<Type>>;
 
 struct GlobalEnv {
   structs: StructMap,

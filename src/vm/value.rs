@@ -140,7 +140,6 @@ impl ToString for TaggedValue {
       ValueType::None => "<none>".to_string(),
       ValueType::ExternFunctionId => unsafe { format!("<extern {}>", self.value.id) },
       ValueType::Object => unsafe { (*self.value.object).to_string() },
-      _ => todo!(),
     }
   }
 }

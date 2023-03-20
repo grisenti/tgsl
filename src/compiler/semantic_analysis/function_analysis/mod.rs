@@ -6,7 +6,7 @@ use crate::{
     error_from_source_info,
     identifier::Identifier,
     types::{
-      type_map::{self, TypeMap},
+      type_map::{TypeMap},
       Type, TypeId,
     },
   },

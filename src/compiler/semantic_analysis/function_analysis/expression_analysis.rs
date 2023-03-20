@@ -477,7 +477,7 @@ impl FunctionAnalizer<'_> {
         captures,
         fn_type,
         body,
-        return_type,
+        return_type: _,
       } => self.closure(info, parameters, captures, fn_type, body),
       Expr::Assignment { id, id_info, value } => self.assignment(id, id_info, value),
       Expr::Variable { id, .. } => self.variable(id),

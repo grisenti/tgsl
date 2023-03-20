@@ -120,7 +120,7 @@ impl<'src> Parser<'src> {
       condition,
       loop_body: while_body,
     });
-    let locals = self.env.pop_scope(); // for statement scope
+    let _locals = self.env.pop_scope(); // for statement scope
     Ok(self.ast.add_statement(Stmt::Block {
       statements: vec![init, while_loop],
       locals: 0, // FIXME: maybe not 0

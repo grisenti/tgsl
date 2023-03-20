@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use super::{
   bytecode::Chunk,
   identifier::{GlobalId, ModuleId},
-  types::TypeId,
 };
 
 pub type GlobalNames = HashMap<String, GlobalId>;

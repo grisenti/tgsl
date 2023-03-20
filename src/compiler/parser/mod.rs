@@ -146,7 +146,7 @@ impl<'parsing> Parser<'parsing> {
       }
       Token::Fn => {
         self.advance()?;
-        let mut parameters = self.parse_function_param_types()?;
+        let parameters = self.parse_function_param_types()?;
         self.match_or_err(Token::ThinArrow)?;
         let ret = self.match_type_name_or_err()?;
         Ok(self.type_map.get_or_add(Type::Function { parameters, ret }))

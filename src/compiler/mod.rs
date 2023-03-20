@@ -3,13 +3,11 @@ use std::collections::HashMap;
 use crate::errors::*;
 
 use self::{
-  bytecode::Chunk,
-  identifier::{ExternId, Identifier},
   lexer::Lexer,
   modules::{LoadedModules, Module},
   parser::{ParseResult, Parser},
   semantic_analysis::SemanticAnalizer,
-  types::{type_map::TypeMap, Type, TypeId},
+  types::{type_map::TypeMap, TypeId},
 };
 
 pub mod ast;

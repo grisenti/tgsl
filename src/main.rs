@@ -40,7 +40,7 @@ fn main() {
 mod test {
   use std::fs;
 
-  use crate::{compiler::Compiler, vm::value::TaggedValue, vm::VM};
+  use crate::{vm::value::TaggedValue, vm::VM};
 
   macro_rules! test_file {
     ($name:ident) => {

@@ -257,7 +257,7 @@ impl FunctionAnalizer<'_> {
         name_info,
         member_names,
         member_types,
-        struct_type,
+        struct_type: _,
         constructor_type,
       } => {
         self.struct_stmt(

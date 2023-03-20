@@ -1,13 +1,13 @@
-use std::{any::TypeId, collections::HashMap, mem::ManuallyDrop};
+use std::{collections::HashMap, mem::ManuallyDrop};
 
 use crate::{
   compiler::{
     bytecode::{Chunk, ConstantValue, Function, OpCode},
-    identifier::{ExternId, GlobalId, Identifier, ModuleId},
+    identifier::{ModuleId},
     modules::{GlobalNames, LoadedModules, Module},
     Compiler,
   },
-  id_hasher::{IdBuildHasher, IdHasher},
+  id_hasher::{IdBuildHasher},
 };
 
 mod gc;
