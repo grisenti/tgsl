@@ -4,7 +4,7 @@ use crate::{
   compiler::{
     bytecode::{Chunk, ConstantValue, Function, OpCode},
     identifier::{ExternId, GlobalId, Identifier},
-    modules::{LoadedModules, Module},
+    modules::{GlobalNames, LoadedModules, Module},
     Compiler,
   },
   id_hasher::{IdBuildHasher, IdHasher},
@@ -398,22 +398,47 @@ impl VM {
     self.run(global_frame);
   }
 
-  pub fn bind_function(&mut self, name: &str, func: ExternFunction) {
-    self.extern_functions.push(func);
+  fn bind_functions(
+    &mut self,
+    names: &GlobalNames,
+    external_ids: &[u16],
+    extern_functions: Vec<(&str, ExternFunction)>,
+  ) -> Result<(), String> {
+    let mut extern_pair = extern_functions
+      .into_iter()
+      .filter_map(|(name, func)| names.get(name).map(|id| (id, func)))
+      .collect::<Vec<_>>();
+    if extern_pair.len() < external_ids.len() {
+      return Err("missing external function in module loading".to_string());
+    }
+    extern_pair.sort_by_key(|(id, _)| *id);
+    for ((id, func), ext_id) in extern_pair.into_iter().zip(external_ids) {
+      if id != ext_id {
+        return Err("trying to bind a function that is not marked extern".to_string());
+      }
+      self.extern_functions.push(func);
+    }
+    Ok(())
   }
 
-  pub fn load_module(&mut self, name: String, source: &str) -> Result<(), String> {
+  pub fn load_module(
+    &mut self,
+    name: String,
+    source: &str,
+    extern_functions: Vec<(&str, ExternFunction)>,
+  ) -> Result<(), String> {
     let Module {
-      extern_functions,
-      imports,
+      extern_functions: ext_ids,
+      imports: _,
       code,
       names,
     } = match self.compiler.compile(source, &self.state) {
       Err(err) => return Err(err.print_long(source)),
       Ok(module) => module,
     };
+    self.bind_functions(&names, &ext_ids, extern_functions)?;
     self.state.module_names.update(names);
-    self.state.extern_functions.extend(extern_functions);
+    self.state.extern_functions.extend(ext_ids);
     self.interpret(code);
     Ok(())
   }
