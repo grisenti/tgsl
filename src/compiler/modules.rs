@@ -49,4 +49,5 @@ impl ModuleNames {
 pub struct LoadedModules {
   pub module_names: ModuleNames,
   pub extern_functions: Vec<GlobalId>,
+  pub module_ids: HashMap<String, ModuleId>,
 }

@@ -28,6 +28,7 @@ pub struct Parser<'parsing> {
   type_map: &'parsing mut TypeMap,
   lex: Lexer<'parsing>,
   lookahead: Token<'parsing>,
+  loaded_modules: &'parsing HashMap<String, ModuleId>,
   ast: AST,
 }
 
@@ -195,11 +196,13 @@ impl<'parsing> Parser<'parsing> {
     type_map: &'parsing mut TypeMap,
     loaded_names: &'parsing ModuleNames,
     global_types: &'parsing mut Vec<TypeId>,
+    loaded_modules: &'parsing HashMap<String, ModuleId>,
   ) -> Result<ParseResult, SourceError> {
     let mut parser = Self {
       lex: Lexer::new(source),
       type_map,
       lookahead: Token::EndOfFile,
+      loaded_modules,
       ast: AST::new(),
       env: Environment::new(loaded_names, global_types),
     };

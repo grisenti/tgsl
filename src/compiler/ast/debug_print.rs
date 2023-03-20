@@ -130,6 +130,9 @@ impl AST {
   				\n{spaces}-member_types: {member_types:?}"
         )
       }
+      Stmt::Import { module_id } => {
+        format!("\n{spaces}Import: module_id: {}", module_id.0)
+      }
     }
   }
 

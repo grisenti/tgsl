@@ -310,6 +310,7 @@ impl FunctionAnalizer<'_> {
         self.extern_function(name_id, fn_type, extern_id);
         None
       }
+      Stmt::Import { .. } => None,
     }
   }
 }

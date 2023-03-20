@@ -33,6 +33,7 @@ pub enum Token<'src> {
   Break,
   Struct,
   Extern,
+  Import,
 
   EndOfFile,
 }
@@ -55,6 +56,7 @@ fn indentifier_token(input: &str) -> Token {
     "for" => Token::For,
     "break" => Token::Break,
     "extern" => Token::Extern,
+    "import" => Token::Import,
     _ => Token::Id(input),
   }
 }

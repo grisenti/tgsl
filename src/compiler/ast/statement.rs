@@ -1,5 +1,5 @@
 use crate::compiler::{
-  identifier::{ExternId, Identifier},
+  identifier::{ExternId, Identifier, ModuleId},
   types::TypeId,
 };
 
@@ -64,5 +64,8 @@ pub enum Stmt {
     struct_type: TypeId,
     member_names: Vec<StrHandle>,
     member_types: Vec<TypeId>,
+  },
+  Import {
+    module_id: ModuleId,
   },
 }

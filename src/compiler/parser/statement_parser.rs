@@ -303,12 +303,41 @@ impl<'src> Parser<'src> {
     }))
   }
 
+  fn parse_import(&mut self) -> StmtRes {
+    assert_eq!(self.lookahead, Token::Import);
+    self.advance()?;
+    if !self.env.in_global_scope() {
+      return Err(error_from_lexer_state(
+        &self.lex,
+        "import statements can only be in global scope".to_string(),
+      ));
+    }
+    if let Token::String(module) = self.lookahead {
+      self.advance()?;
+      if let Some(&module_id) = self.loaded_modules.get(module) {
+        self.env.import_module(module_id);
+        Ok(self.ast.add_statement(Stmt::Import { module_id }))
+      } else {
+        Err(error_from_lexer_state(
+          &self.lex,
+          format!("{} is not a loaded module", module),
+        ))
+      }
+    } else {
+      Err(error_from_lexer_state(
+        &self.lex,
+        format!("expected module string, got {}", self.lookahead),
+      ))
+    }
+  }
+
   pub(super) fn parse_decl(&mut self) -> StmtRes {
     let ret = match self.lookahead {
       Token::Var => self.parse_var_decl()?,
       Token::Fn => self.parse_function_decl()?,
       Token::Struct => self.parse_struct_decl()?,
       Token::Extern => self.parse_extern_function()?,
+      Token::Import => self.parse_import()?,
       _ => self.parse_statement()?,
     };
     Ok(ret)

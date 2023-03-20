@@ -233,6 +233,10 @@ impl<'compilation> Environment<'compilation> {
     }
   }
 
+  pub fn import_module(&mut self, id: ModuleId) {
+    self.imported_modules.push(id);
+  }
+
   pub fn new(
     global_names: &'compilation ModuleNames,
     global_types: &'compilation mut Vec<TypeId>,

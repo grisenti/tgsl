@@ -3,7 +3,7 @@ use std::{any::TypeId, collections::HashMap, mem::ManuallyDrop};
 use crate::{
   compiler::{
     bytecode::{Chunk, ConstantValue, Function, OpCode},
-    identifier::{ExternId, GlobalId, Identifier},
+    identifier::{ExternId, GlobalId, Identifier, ModuleId},
     modules::{GlobalNames, LoadedModules, Module},
     Compiler,
   },
@@ -121,6 +121,7 @@ pub struct VM {
   stack: [TaggedValue; MAX_STACK],
   call_stack: [CallFrame; MAX_CALLS],
   gc: GC,
+  loaded_functions: Vec<Function>,
   function_call: usize,
   globals: HashMap<u16, TaggedValue, IdBuildHasher>,
 }
@@ -396,6 +397,7 @@ impl VM {
       captures: std::ptr::null_mut(),
     };
     self.run(global_frame);
+    self.loaded_functions.push(func);
   }
 
   fn bind_functions(
@@ -439,6 +441,8 @@ impl VM {
     self.bind_functions(&names, &ext_ids, extern_functions)?;
     self.state.module_names.update(names);
     self.state.extern_functions.extend(ext_ids);
+    let mod_id = self.state.module_ids.len() as u16;
+    self.state.module_ids.insert(name, ModuleId(mod_id));
     self.interpret(code);
     Ok(())
   }
@@ -450,6 +454,7 @@ impl VM {
       state: Default::default(),
       extern_functions: Vec::new(),
       globals: HashMap::default(),
+      loaded_functions: Vec::new(),
       stack: [TaggedValue::none(); MAX_STACK],
       call_stack: [EMPTY_CALL_FRAME; MAX_CALLS],
       function_call: 0,

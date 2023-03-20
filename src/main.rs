@@ -21,16 +21,19 @@ fn sum(values: Vec<TaggedValue>) -> TaggedValue {
   }
 }
 
-fn test(program: &str) {
+fn test() -> Result<(), String> {
   let mut vm = VM::new();
-  if let Err(msg) = vm.load_module("test".to_string(), program) {
-    println!("{}", msg);
-  }
+  let p1 = fs::read_to_string("program.pr").unwrap();
+  let p2 = fs::read_to_string("prog2.pr").unwrap();
+  vm.load_module("hello".to_string(), &p1, vec![])?;
+  vm.load_module("test".to_string(), &p2, vec![])?;
+  Ok(())
 }
 
 fn main() {
-  let program = fs::read_to_string("program.pr").unwrap();
-  test(&program);
+  if let Err(msg) = test() {
+    println!("{}", msg);
+  }
 }
 
 #[cfg(test)]

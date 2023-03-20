@@ -41,8 +41,11 @@ impl Compiler {
       &mut self.type_map,
       &loaded.module_names,
       &mut self.global_types,
+      &loaded.module_ids,
     )?;
+    println!("{:?}", ast);
     let generated_code = SemanticAnalizer::analyze(ast, &mut self.global_types, &self.type_map)?;
+    println!("{:?}", generated_code);
     Ok(Module {
       extern_functions: module_extern_functions,
       names: module_names,
