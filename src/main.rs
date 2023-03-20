@@ -62,15 +62,13 @@ mod test {
 
   fn compile_and_run(filename: &str) {
     let source = fs::read_to_string(filename).unwrap();
-    let res = Compiler::compile(&source);
-    match res {
-      Err(err) => println!("{}", err.print_long(&source)),
-      Ok(res) => {
-        let mut vm = VM::new(res.name_map, res.extern_map);
-        println!("{:?}", &res.generated_code);
-        vm.bind_function("assert", Box::new(assert));
-        vm.interpret(res.generated_code);
-      }
+    let mut vm = VM::new();
+    if let Err(msg) = vm.load_module(
+      "test".to_string(),
+      &source,
+      vec![("assert", Box::new(assert))],
+    ) {
+      println!("{}", msg);
     }
   }
 
