@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use self::function_analysis::{FunctionAnalizer, FunctionAnalysisResult};
+use self::function_analysis::{FunctionAnalizer, FunctionAnalysisResult, FunctionInfo};
 
 use super::{
   ast::*,
@@ -21,9 +21,14 @@ struct Struct {
 
 type StructMap = HashMap<Identifier, Struct>;
 
-struct GlobalEnv {
+struct SemAState {
   structs: StructMap,
   errors: Vec<SourceError>,
+}
+
+struct SemAParameters<'a> {
+  ast: &'a AST,
+  type_map: &'a TypeMap,
 }
 
 pub struct SemanticAnalizer;
@@ -35,20 +40,19 @@ impl SemanticAnalizer {
     type_map: &TypeMap,
   ) -> Result<Chunk, SourceError> {
     let program = ast.get_program();
-    let mut global_env = GlobalEnv {
+    let mut global_env = SemAState {
       structs: HashMap::new(),
       errors: Vec::new(),
     };
     let FunctionAnalysisResult { code, .. } = FunctionAnalizer::analyze(
-      Vec::new(),
+      FunctionInfo::default(),
       program,
-      true,
-      Vec::new(),
+      SemAParameters {
+        ast: &ast,
+        type_map,
+      },
       &mut global_env,
-      &ast,
-      type_map,
       global_types,
-      None,
     );
     if global_env.errors.is_empty() {
       Ok(code)

@@ -10,10 +10,17 @@ use crate::{
   errors::{SourceError, SourceInfo},
 };
 
-use super::{return_analysis::ReturnType, GlobalEnv};
+use super::{return_analysis::ReturnType, SemAParameters, SemAState};
 
 mod expression_analysis;
 mod statement_analysis;
+
+#[derive(Default)]
+pub struct FunctionInfo {
+  parameters: Vec<TypeId>,
+  captures: Vec<TypeId>,
+  declaration_src_info: Option<SourceInfoHandle>,
+}
 
 pub struct FunctionAnalizer<'analysis> {
   captures: Vec<TypeId>,
@@ -24,7 +31,7 @@ pub struct FunctionAnalizer<'analysis> {
 
   code: BytecodeBuilder,
 
-  global_env: &'analysis mut GlobalEnv,
+  global_env: &'analysis mut SemAState,
   ast: &'analysis AST,
   type_map: &'analysis TypeMap,
   global_types: &'analysis mut Vec<TypeId>,
@@ -138,7 +145,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           value_type,
           id_info.get(self.ast),
           &mut self.global_env.errors,
-          &self.type_map,
+          self.type_map,
         );
       }
       Identifier::Capture(id) => {
@@ -150,7 +157,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           value_type,
           id_info.get(self.ast),
           &mut self.global_env.errors,
-          &self.type_map,
+          self.type_map,
         );
       }
     }
@@ -172,15 +179,18 @@ impl<'analysis> FunctionAnalizer<'analysis> {
   ) {
     let capture_types = captures.iter().map(|id| self.get_typeid(*id)).collect();
     let result = FunctionAnalizer::analyze(
-      param_types.to_vec(),
+      FunctionInfo {
+        parameters: param_types.to_vec(),
+        captures: capture_types,
+        declaration_src_info: Some(declaration_info),
+      },
       &body,
-      false,
-      capture_types,
+      SemAParameters {
+        ast: self.ast,
+        type_map: self.type_map,
+      },
       self.global_env,
-      self.ast,
-      self.type_map,
       self.global_types,
-      Some(declaration_info),
     );
     unsafe {
       self.code.push_function(Function { code: result.code });
@@ -188,28 +198,25 @@ impl<'analysis> FunctionAnalizer<'analysis> {
   }
 
   pub(super) fn analyze(
-    parameters: Vec<TypeId>,
+    function_info: FunctionInfo,
     body: &[StmtHandle],
-    global_scope: bool,
-    captures: Vec<TypeId>,
-    global_env: &'analysis mut GlobalEnv,
-    ast: &'analysis AST,
-    type_map: &'analysis TypeMap,
+    analysis_parameters: SemAParameters<'analysis>,
+    global_env: &'analysis mut SemAState,
     global_types: &'analysis mut Vec<TypeId>,
-    declaration_info: Option<SourceInfoHandle>,
   ) -> FunctionAnalysisResult {
     let mut analizer = Self {
-      captures,
-      locals: parameters,
+      captures: function_info.captures,
+      locals: function_info.parameters,
       scope_depth: 0,
-      global_scope,
+      // TODO: maybe remove this member and add function
+      global_scope: function_info.declaration_src_info.is_some(),
       loop_depth: 0,
       code: BytecodeBuilder::new(),
       global_env,
-      declaration_info,
-      type_map,
+      declaration_info: function_info.declaration_src_info,
+      type_map: analysis_parameters.type_map,
       global_types,
-      ast,
+      ast: analysis_parameters.ast,
     };
     let ret = analizer.process_statements(body);
     match ret {
@@ -225,7 +232,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       }
       Some(ReturnType::Conditional(_)) => {
         analizer.emit_error(
-          declaration_info.unwrap(),
+          analizer.declaration_info.unwrap(),
           "function has only conditional return types".to_string(),
         );
         FunctionAnalysisResult {
