@@ -6,7 +6,7 @@ use super::{
   ast::*,
   bytecode::Chunk,
   identifier::Identifier,
-  types::{type_map::TypeMap, Type, TypeId},
+  types::{type_map::TypeMap, TypeId},
 };
 use crate::errors::SourceError;
 

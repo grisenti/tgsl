@@ -195,7 +195,7 @@ impl<'src> Parser<'src> {
     loop {
       self.match_id_or_err()?;
       let mem_type = self.parse_type_specifier_or_err()?;
-      parameter_types.push(mem_type.clone());
+      parameter_types.push(mem_type);
       if self.matches_alternatives(&[Token::Basic(',')])?.is_none() {
         break;
       }

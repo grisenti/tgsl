@@ -5,10 +5,7 @@ use crate::{
     codegen::BytecodeBuilder,
     error_from_source_info,
     identifier::Identifier,
-    types::{
-      type_map::{TypeMap},
-      Type, TypeId,
-    },
+    types::{type_map::TypeMap, Type, TypeId},
   },
   errors::{SourceError, SourceInfo},
 };
@@ -129,7 +126,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           value_type,
           id_info.get(self.ast),
           &mut self.global_env.errors,
-          &self.type_map,
+          self.type_map,
         );
       }
       Identifier::Local(id) => {
