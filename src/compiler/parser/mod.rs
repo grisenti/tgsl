@@ -26,7 +26,6 @@ pub struct ParseResult {
 pub struct Parser<'parsing> {
   env: Environment<'parsing>,
   type_map: &'parsing mut TypeMap,
-  global_types: &'parsing mut Vec<TypeId>,
   lex: Lexer<'parsing>,
   lookahead: Token<'parsing>,
   ast: AST,
@@ -200,10 +199,9 @@ impl<'parsing> Parser<'parsing> {
     let mut parser = Self {
       lex: Lexer::new(source),
       type_map,
-      global_types,
       lookahead: Token::EndOfFile,
       ast: AST::new(),
-      env: Environment::new(loaded_names),
+      env: Environment::new(loaded_names, global_types),
     };
     let mut errors = Vec::new();
     if let Err(e) = parser.advance() {

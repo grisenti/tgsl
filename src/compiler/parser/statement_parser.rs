@@ -166,9 +166,7 @@ impl<'src> Parser<'src> {
     self.advance()?;
     let (identifier, id_info) = self.match_id_or_err()?;
     let var_type = self.parse_opt_type_specifier()?;
-    if self.env.in_global_scope() {
-      self.global_types.push(var_type);
-    }
+    self.env.set_type_if_global(identifier, var_type);
     let ret = if self.lookahead == Token::Basic('=') {
       self.advance()?; // consume '='
       Stmt::VarDecl {
@@ -241,9 +239,7 @@ impl<'src> Parser<'src> {
       parameters: param_types.clone(),
       ret: return_type,
     });
-    if self.env.in_global_scope() {
-      self.global_types.push(fn_type);
-    }
+    self.env.set_type_if_global(name_id, fn_type);
     Ok(self.ast.add_statement(Stmt::Function {
       id: name_id,
       name_info,
@@ -272,9 +268,7 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic('}'))?;
     let (struct_type, constructor_type) =
       self.type_map.add_struct_type(name_id, member_types.clone());
-    if self.env.in_global_scope() {
-      self.global_types.push(constructor_type);
-    }
+    self.env.set_type_if_global(name_id, constructor_type);
     Ok(self.ast.add_statement(Stmt::Struct {
       name: name_id,
       name_info,
@@ -300,7 +294,7 @@ impl<'src> Parser<'src> {
     let parameters = self.parse_function_param_types()?;
     let ret = self.parse_function_return_type()?;
     let fn_type = self.type_map.get_or_add(Type::Function { parameters, ret });
-    self.global_types.push(fn_type);
+    self.env.set_type_if_global(name_id, fn_type);
     Ok(self.ast.add_statement(Stmt::ExternFunction {
       name_id,
       name_info,

@@ -25,6 +25,7 @@ struct Function {
 pub struct Environment<'compilation> {
   imported_modules: Vec<ModuleId>,
   globals: &'compilation ModuleNames,
+  global_types: &'compilation mut Vec<TypeId>,
   module_globals: GlobalNames,
   last_global_id: u16,
 
@@ -43,6 +44,7 @@ impl<'compilation> Environment<'compilation> {
     let id = self.last_global_id;
     self.module_globals.insert(name, id);
     self.last_global_id += 1;
+    self.global_types.push(TypeId::NOTHING);
     Identifier::Global(id)
   }
 
@@ -131,6 +133,12 @@ impl<'compilation> Environment<'compilation> {
       Identifier::Global(global_id)
     } else {
       self.add_global_name(name.to_string())
+    }
+  }
+
+  pub fn set_type_if_global(&mut self, id: Identifier, type_id: TypeId) {
+    if let Identifier::Global(id) = id {
+      self.global_types[id as usize] = type_id;
     }
   }
 
@@ -225,10 +233,14 @@ impl<'compilation> Environment<'compilation> {
     }
   }
 
-  pub fn new(global_names: &'compilation ModuleNames) -> Self {
+  pub fn new(
+    global_names: &'compilation ModuleNames,
+    global_types: &'compilation mut Vec<TypeId>,
+  ) -> Self {
     Self {
       imported_modules: Vec::new(),
       globals: global_names,
+      global_types,
       module_globals: HashMap::new(),
       last_global_id: global_names.last_global_id(),
       locals: Vec::new(),
