@@ -175,7 +175,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     param_types: &[TypeId],
     captures: &[Identifier],
     declaration_info: SourceInfoHandle,
-    body: Vec<StmtHandle>,
+    body: &[StmtHandle],
   ) {
     let capture_types = captures.iter().map(|id| self.get_typeid(*id)).collect();
     let result = FunctionAnalizer::analyze(
@@ -184,7 +184,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
         captures: capture_types,
         declaration_src_info: Some(declaration_info),
       },
-      &body,
+      body,
       SemAParameters {
         ast: self.ast,
         type_map: self.type_map,
@@ -209,7 +209,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       locals: function_info.parameters,
       scope_depth: 0,
       // TODO: maybe remove this member and add function
-      global_scope: function_info.declaration_src_info.is_some(),
+      global_scope: function_info.declaration_src_info.is_none(),
       loop_depth: 0,
       code: BytecodeBuilder::new(),
       global_env,

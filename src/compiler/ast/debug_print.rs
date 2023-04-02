@@ -12,7 +12,10 @@ impl AST {
         ..
       } => {
         let init_expr = if let Some(expr) = expression {
-          format!("\n{spaces}-init_expr: {}", self.print_expr(expr, depth + 1))
+          format!(
+            "\n{spaces}-init_expr: {}",
+            self.print_expr(*expr, depth + 1)
+          )
         } else {
           "".to_string()
         };
@@ -21,15 +24,15 @@ impl AST {
         )
       }
       Stmt::Expr(expr) => {
-        format!("\n{spaces}Expr:{}", self.print_expr(expr, depth + 1))
+        format!("\n{spaces}Expr:{}", self.print_expr(*expr, depth + 1))
       }
       Stmt::Print(expr) => {
-        format!("\n{spaces}Print:{}", self.print_expr(expr, depth + 1))
+        format!("\n{spaces}Print:{}", self.print_expr(*expr, depth + 1))
       }
       Stmt::Block { statements, locals } => {
         let mut result = format!("\n{spaces}Block:\n{spaces}-locals: {locals}");
         for s in statements {
-          result += &self.print_stmt(s, depth + 1);
+          result += &self.print_stmt(*s, depth + 1);
         }
         result
       }
@@ -42,15 +45,15 @@ impl AST {
         let else_banch = if let Some(stmt) = else_branch {
           format!(
             "\n{spaces}-else branch: {}",
-            self.print_stmt(stmt, depth + 1)
+            self.print_stmt(*stmt, depth + 1)
           )
         } else {
           "".to_string()
         };
         format!(
           "\n{spaces}IfBranch:\n{spaces}-condition:{}\n{spaces}-true branch:{}{else_banch}",
-          self.print_expr(condition, depth + 1),
-          self.print_stmt(true_branch, depth + 1)
+          self.print_expr(*condition, depth + 1),
+          self.print_stmt(*true_branch, depth + 1)
         )
       }
       Stmt::While {
@@ -60,8 +63,8 @@ impl AST {
       } => {
         format!(
           "\n{spaces}While:\n{spaces}-condition: {}\n{spaces}-body: {}",
-          self.print_expr(condition, depth + 1),
-          self.print_stmt(loop_body, depth + 1)
+          self.print_expr(*condition, depth + 1),
+          self.print_stmt(*loop_body, depth + 1)
         )
       }
       Stmt::Function {
@@ -107,7 +110,7 @@ impl AST {
           format!(
             "\n{spaces}Return:\
              \n{spaces}-expression: {}",
-            self.print_expr(expr, depth + 1)
+            self.print_expr(*expr, depth + 1)
           )
         } else {
           format!("\n{spaces}Return")
@@ -155,8 +158,8 @@ impl AST {
           \n{spaces}-left:{}\
           \n{spaces}-right:{}",
           operator.op,
-          self.print_expr(left, depth + 1),
-          self.print_expr(right, depth + 1)
+          self.print_expr(*left, depth + 1),
+          self.print_expr(*right, depth + 1)
         )
       }
       Expr::Unary { operator, right } => {
@@ -165,7 +168,7 @@ impl AST {
           \n{spaces}-operator: {}\
           \n{spaces}-right:{}",
           operator.op,
-          self.print_expr(right, depth + 1)
+          self.print_expr(*right, depth + 1)
         )
       }
       Expr::Literal { literal, .. } => {
@@ -179,7 +182,7 @@ impl AST {
           "\n{spaces}Assignment:\
   				\n{spaces}id: {id:?}\
   				\n{spaces}value: {}",
-          self.print_expr(value, depth + 1)
+          self.print_expr(*value, depth + 1)
         )
       }
       Expr::Lambda {
@@ -210,7 +213,7 @@ impl AST {
           "\n{spaces}FnCall:\
           \n{spaces}-function: {}\
           \n{spaces}-arguments: {arguments:?}",
-          self.print_expr(func, depth + 1)
+          self.print_expr(*func, depth + 1)
         )
       }
       Expr::Dot {
@@ -225,7 +228,7 @@ impl AST {
           \n{spaces}-rhs-id: {identifier:?}\
           \n{spaces}-lhs-expr: {}",
           name.get(self),
-          self.print_expr(lhs, depth + 1)
+          self.print_expr(*lhs, depth + 1)
         )
       }
 
@@ -240,9 +243,9 @@ impl AST {
           \n{spaces}-object: {}\
           \n{spaces}-name: '{}'\
           \n{spaces}-value: {}",
-          self.print_expr(object, depth + 1),
+          self.print_expr(*object, depth + 1),
           name.get(self),
-          self.print_expr(value, depth + 1)
+          self.print_expr(*value, depth + 1)
         )
       }
     }

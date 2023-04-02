@@ -35,7 +35,7 @@ impl FunctionAnalizer<'_> {
 
   fn check_self_assignment(&mut self, lhs_id: Identifier, expression: ExprHandle) {
     match expression.get(self.ast) {
-      Expr::Variable {
+      &Expr::Variable {
         id: rhs_id,
         id_info,
       } if rhs_id == lhs_id => {
@@ -97,33 +97,17 @@ impl FunctionAnalizer<'_> {
     to_conditional(ret)
   }
 
-  fn generate_constructor(
-    &mut self,
-    id: Identifier,
-    member_types: Vec<TypeId>,
-    constructor_type: TypeId,
-  ) {
-    let members = member_types.len();
-    // TODO: maybe move this to codegen
-    // --
-    let mut constructor_code = BytecodeBuilder::new();
-    unsafe {
-      constructor_code.push_op2(OpCode::Construct, members as u8);
-      constructor_code.push_op(OpCode::Return);
-      self.code.push_function(Function {
-        code: constructor_code.finalize(),
-      });
-    }
+  fn generate_constructor(&mut self, id: Identifier, members: usize, constructor_type: TypeId) {
+    self.code.create_constructor(members as u8);
     self.declare(id, constructor_type);
-    // --
   }
 
   fn struct_stmt(
     &mut self,
     id: Identifier,
     name_info: SourceInfoHandle,
-    member_names: Vec<StrHandle>,
-    member_types: Vec<TypeId>,
+    member_names: &[StrHandle],
+    member_types: &[TypeId],
     constructor_type: TypeId,
   ) {
     if !self.global_scope || self.scope_depth > 0 {
@@ -132,12 +116,12 @@ impl FunctionAnalizer<'_> {
         "cannot declare struct in local scope".to_string(),
       )
     }
-    self.generate_constructor(id, member_types.clone(), constructor_type);
+    self.generate_constructor(id, member_types.len(), constructor_type);
     self.global_env.structs.insert(
       id,
       Struct {
-        member_names,
-        member_types,
+        member_names: member_names.to_vec(),
+        member_types: member_types.to_vec(),
       },
     );
   }
@@ -166,9 +150,9 @@ impl FunctionAnalizer<'_> {
     self.merge_return_types(ret_true, ret_false)
   }
 
-  fn block_stmt(&mut self, statements: Vec<StmtHandle>, locals: u8) -> OptRet {
+  fn block_stmt(&mut self, statements: &[StmtHandle], locals: u8) -> OptRet {
     self.push_scope();
-    let ret = self.process_statements(&statements);
+    let ret = self.process_statements(statements);
     self.pop_scope(locals);
     ret
   }
@@ -176,11 +160,11 @@ impl FunctionAnalizer<'_> {
   fn function_stmt(
     &mut self,
     id: Identifier,
-    parameters: Vec<TypeId>,
+    parameters: &[TypeId],
     fn_type: TypeId,
-    captures: Vec<Identifier>,
+    captures: &[Identifier],
     declaration_info: SourceInfoHandle,
-    body: Vec<StmtHandle>,
+    body: &[StmtHandle],
   ) {
     self.check_function(&parameters, &captures, declaration_info, body);
     unsafe {
@@ -237,35 +221,35 @@ impl FunctionAnalizer<'_> {
   }
 
   pub(super) fn analyze_stmt(&mut self, stmt: StmtHandle) -> OptRet {
-    match stmt.clone().get(self.ast) {
+    match stmt.get(self.ast) {
       Stmt::VarDecl {
         identifier,
         id_info,
         var_type,
         expression,
       } => {
-        self.var_decl(identifier, var_type, id_info, expression);
+        self.var_decl(*identifier, *var_type, *id_info, *expression);
         None
       }
       Stmt::While {
         info,
         condition,
         loop_body,
-      } => self.while_stmt(info, condition, loop_body),
+      } => self.while_stmt(*info, *condition, *loop_body),
       Stmt::Struct {
         name,
         name_info,
         member_names,
         member_types,
-        struct_type: _,
         constructor_type,
+        ..
       } => {
         self.struct_stmt(
-          name,
-          name_info,
+          *name,
+          *name_info,
           member_names,
           member_types,
-          constructor_type,
+          *constructor_type,
         );
         None
       }
@@ -274,8 +258,8 @@ impl FunctionAnalizer<'_> {
         condition,
         true_branch,
         else_branch,
-      } => self.if_stmt(if_info, condition, true_branch, else_branch),
-      Stmt::Block { statements, locals } => self.block_stmt(statements, locals),
+      } => self.if_stmt(*if_info, *condition, *true_branch, *else_branch),
+      Stmt::Block { statements, locals } => self.block_stmt(statements, *locals),
       Stmt::Function {
         id,
         name_info,
@@ -285,20 +269,20 @@ impl FunctionAnalizer<'_> {
         parameters,
         ..
       } => {
-        self.function_stmt(id, parameters, fn_type, captures, name_info, body);
+        self.function_stmt(*id, parameters, *fn_type, captures, *name_info, body);
         None
       }
       Stmt::Break(info) => {
-        self.break_stmt(info);
+        self.break_stmt(*info);
         None
       }
-      Stmt::Return { expr, src_info } => Some(self.return_stmt(expr, src_info)),
+      Stmt::Return { expr, src_info } => Some(self.return_stmt(*expr, *src_info)),
       Stmt::Print(expr) => {
-        self.print_stmt(expr);
+        self.print_stmt(*expr);
         None
       }
       Stmt::Expr(expr) => {
-        self.expr_stmt(expr);
+        self.expr_stmt(*expr);
         None
       }
       Stmt::ExternFunction {
@@ -307,7 +291,7 @@ impl FunctionAnalizer<'_> {
         extern_id,
         ..
       } => {
-        self.extern_function(name_id, fn_type, extern_id);
+        self.extern_function(*name_id, *fn_type, *extern_id);
         None
       }
       Stmt::Import { .. } => None,

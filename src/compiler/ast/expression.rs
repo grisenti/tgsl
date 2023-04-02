@@ -44,7 +44,7 @@ pub fn to_operator(token: Token) -> Operator {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Literal {
   String(StrHandle),
   Number(f64),
@@ -74,7 +74,7 @@ pub fn literal_from_token(token: Token, ast: &mut AST) -> Literal {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct OperatorPair {
   pub op: Operator,
   pub src_info: SourceInfoHandle,

@@ -19,10 +19,10 @@ macro_rules! generate_ast_handle {
 
 generate_ast_handle!(ExprHandle);
 impl ExprHandle {
-  pub fn get(&self, ast: &AST) -> Expr {
+  pub fn get<'a>(&'a self, ast: &'a AST) -> &'a Expr {
     assert!(self.index < ast.nodes.len() as u32);
     if let ASTNode::Expr(e) = &ast.nodes[self.index as usize] {
-      e.clone() // FIXME: remove clone
+      e
     } else {
       panic!("expression handle refers to a node thats not an expression");
     }
@@ -31,10 +31,10 @@ impl ExprHandle {
 
 generate_ast_handle!(StmtHandle);
 impl StmtHandle {
-  pub fn get(&self, ast: &AST) -> Stmt {
+  pub fn get<'a>(&'a self, ast: &'a AST) -> &'a Stmt {
     assert!(self.index < ast.nodes.len() as u32);
     if let ASTNode::Stmt(s) = &ast.nodes[self.index as usize] {
-      s.clone() // FIXME: remove clone
+      s
     } else {
       panic!("statement handle refers to a node thats not a statement");
     }

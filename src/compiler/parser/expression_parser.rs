@@ -159,12 +159,12 @@ impl<'src> Parser<'src> {
     if let Some((_, eq_src_info)) = self.match_next(Token::Basic('='))? {
       let rhs = self.parse_logical_operation(0)?;
       match lhs.get(&self.ast) {
-        Expr::Variable { id, id_info } => Ok(self.ast.add_expression(Expr::Assignment {
+        &Expr::Variable { id, id_info } => Ok(self.ast.add_expression(Expr::Assignment {
           id,
           id_info,
           value: rhs,
         })),
-        Expr::Dot {
+        &Expr::Dot {
           lhs: object,
           name,
           identifier: _,

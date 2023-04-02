@@ -99,7 +99,7 @@ impl FunctionAnalizer<'_> {
   fn try_dot_call(&mut self, expr: ExprHandle) -> CallType {
     let call_start = self.code.get_next_instruction_address();
     match expr.get(self.ast) {
-      Expr::Variable { id, .. } => {
+      &Expr::Variable { id, .. } => {
         let typeid = self.get_typeid(id);
         unsafe { self.code.get_id(id) }
         if let Type::Function { .. } = self.get_type(typeid) {
@@ -108,7 +108,7 @@ impl FunctionAnalizer<'_> {
           CallType::Other(typeid)
         }
       }
-      Expr::Dot {
+      &Expr::Dot {
         lhs,
         name,
         identifier,
@@ -129,10 +129,10 @@ impl FunctionAnalizer<'_> {
   pub fn closure(
     &mut self,
     info: SourceInfoHandle,
-    parameters: Vec<TypeId>,
-    captures: Vec<Identifier>,
+    parameters: &[TypeId],
+    captures: &[Identifier],
     fn_type: TypeId,
-    body: Vec<StmtHandle>,
+    body: &[StmtHandle],
   ) -> TypeId {
     self.check_function(&parameters, &captures, info, body);
     unsafe {
@@ -478,38 +478,38 @@ impl FunctionAnalizer<'_> {
         fn_type,
         body,
         return_type: _,
-      } => self.closure(info, parameters, captures, fn_type, body),
-      Expr::Assignment { id, id_info, value } => self.assignment(id, id_info, value),
-      Expr::Variable { id, .. } => self.variable(id),
-      Expr::Literal { literal, .. } => self.literal(literal),
+      } => self.closure(*info, parameters, captures, *fn_type, body),
+      Expr::Assignment { id, id_info, value } => self.assignment(*id, *id_info, *value),
+      Expr::Variable { id, .. } => self.variable(*id),
+      Expr::Literal { literal, .. } => self.literal(*literal),
       Expr::FnCall {
         func,
         call_info,
         arguments,
-      } => self.function_call(func, call_info, &arguments),
+      } => self.function_call(*func, *call_info, arguments),
       Expr::Binary {
         left,
         operator,
         right,
-      } => self.binary_operation(left, operator, right),
+      } => self.binary_operation(*left, *operator, *right),
       Expr::Logical {
         left,
         operator,
         right,
-      } => self.logical_operation(left, operator, right),
-      Expr::Unary { operator, right } => self.unary_operation(operator, right),
+      } => self.logical_operation(*left, *operator, *right),
+      Expr::Unary { operator, right } => self.unary_operation(*operator, *right),
       Expr::Dot {
         lhs,
         name,
         identifier,
         name_info,
-      } => self.dot(lhs, name, identifier, name_info),
+      } => self.dot(*lhs, *name, *identifier, *name_info),
       Expr::Set {
         object,
         name,
         name_info,
         value,
-      } => self.set(object, name, name_info, value),
+      } => self.set(*object, *name, *name_info, *value),
     }
   }
 }
