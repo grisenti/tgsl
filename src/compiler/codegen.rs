@@ -106,6 +106,17 @@ impl BytecodeBuilder {
     }
   }
 
+  pub fn create_constructor(&mut self, members: u8) {
+    let mut constructor_code = Self::new();
+    unsafe {
+      constructor_code.push_op2(OpCode::Construct, members as u8);
+      constructor_code.push_op(OpCode::Return);
+      self.push_function(Function {
+        code: constructor_code.finalize(),
+      });
+    }
+  }
+
   pub unsafe fn maybe_create_closure(&mut self, captures: &[Identifier]) {
     if !captures.is_empty() {
       self.push_op2(OpCode::MakeClosure, captures.len() as u8);
