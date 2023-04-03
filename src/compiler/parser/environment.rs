@@ -217,9 +217,11 @@ impl<'compilation> Environment<'compilation> {
 
 #[cfg(test)]
 mod test {
-  use std::collections::HashMap;
 
-  use crate::{compiler::identifier::Identifier, errors::SourceInfo};
+  use crate::{
+    compiler::{global_env::GlobalEnv, identifier::Identifier},
+    errors::SourceInfo,
+  };
 
   use super::Environment;
 
@@ -231,25 +233,39 @@ mod test {
 
   #[test]
   fn capture_once() {
-    let mut env = Environment::new(&HashMap::new());
+    let mut global_env = GlobalEnv::new();
+    let mut env = Environment::new(&mut global_env);
     env.push_function();
     env.declare_name_or_err("x", FAKE_SOURCE_INFO).unwrap();
     env.push_function();
-    assert_eq!(env.get_name_or_add_global("x"), Identifier::Capture(0));
-    assert_eq!(env.get_name_or_add_global("x"), Identifier::Capture(0));
-    assert_eq!(env.get_name_or_add_global("x"), Identifier::Capture(0));
+    assert_eq!(
+      env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
+      Ok(Identifier::Capture(0))
+    );
+    assert_eq!(
+      env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
+      Ok(Identifier::Capture(0))
+    );
+    assert_eq!(
+      env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
+      Ok(Identifier::Capture(0))
+    );
     let captures = env.pop_function();
     assert_eq!(captures, vec![Identifier::Local(0)]);
   }
 
   #[test]
   fn multilevel_capture() {
-    let mut env = Environment::new(&HashMap::new());
+    let mut global_env = GlobalEnv::new();
+    let mut env = Environment::new(&mut global_env);
     env.push_function();
     env.declare_name_or_err("x", FAKE_SOURCE_INFO).unwrap();
     env.push_function();
     env.push_function();
-    assert_eq!(env.get_name_or_add_global("x"), Identifier::Capture(0));
+    assert_eq!(
+      env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
+      Ok(Identifier::Capture(0))
+    );
     let captures = env.pop_function();
     assert_eq!(captures, vec![Identifier::Capture(0)]);
     let captures = env.pop_function();
