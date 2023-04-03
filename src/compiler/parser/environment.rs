@@ -1,10 +1,9 @@
 use crate::compiler::{
+  global_env::GlobalEnv,
   identifier::{ExternId, GlobalId, Identifier, ModuleId},
-  modules::ModuleNames,
 };
 
 use super::*;
-use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy)]
 struct LocalId {
@@ -24,10 +23,7 @@ struct Function {
 
 pub struct Environment<'compilation> {
   imported_modules: Vec<ModuleId>,
-  globals: &'compilation ModuleNames,
-  global_types: &'compilation mut Vec<TypeId>,
-  module_globals: GlobalNames,
-  last_global_id: u16,
+  global: &'compilation mut GlobalEnv,
 
   locals: Vec<(String, LocalId)>,
   last_local_id: u8,
@@ -35,47 +31,10 @@ pub struct Environment<'compilation> {
   extern_ids: Vec<GlobalId>,
   extern_id_start: u16,
   functions_declaration_stack: Vec<Function>,
-  declared: HashSet<Identifier>,
   scope_depth: u8,
 }
 
 impl<'compilation> Environment<'compilation> {
-  fn add_global_name(&mut self, name: String) -> Identifier {
-    let id = self.last_global_id;
-    self.module_globals.insert(name, id);
-    self.last_global_id += 1;
-    self.global_types.push(TypeId::NOTHING);
-    Identifier::Global(id)
-  }
-
-  fn get_global_name(&self, name: &str) -> Option<Identifier> {
-    self
-      .module_globals
-      .get(name)
-      .copied()
-      .or_else(|| self.globals.get_id(&self.imported_modules, name).unwrap())
-      .map(Identifier::Global)
-  }
-
-  fn declare_global_name(
-    &mut self,
-    name: &str,
-    name_src_info: SourceInfo,
-  ) -> Result<Identifier, SourceError> {
-    let id = self
-      .get_global_name(name)
-      .unwrap_or_else(|| self.add_global_name(name.to_string()));
-    if self.declared.contains(&id) {
-      Err(error_from_source_info(
-        &name_src_info,
-        format!("redeclaration of global name {name}"),
-      ))
-    } else {
-      self.declared.insert(id);
-      Ok(id)
-    }
-  }
-
   pub fn in_global_scope(&self) -> bool {
     self.scope_depth == 0
   }
@@ -121,25 +80,22 @@ impl<'compilation> Environment<'compilation> {
     capture_id
   }
 
-  pub fn get_name_or_add_global(&mut self, name: &str) -> Identifier {
+  pub fn get_name_or_add_global(
+    &mut self,
+    name: &str,
+    source_info: SourceInfo,
+  ) -> Result<Identifier, SourceError> {
     if let Some(id) = self.find_local(name) {
-      self.capture(id)
-    } else if let Some(global_id) = self
-      .module_globals
-      .get(name)
-      .copied()
-      .or_else(|| self.globals.get_id(&self.imported_modules, name).unwrap())
-    {
-      Identifier::Global(global_id)
+      Ok(self.capture(id))
     } else {
-      self.add_global_name(name.to_string())
+      self
+        .global
+        .get_or_add(&self.imported_modules, name, source_info)
     }
   }
 
   pub fn set_type_if_global(&mut self, id: Identifier, type_id: TypeId) {
-    if let Identifier::Global(id) = id {
-      self.global_types[id as usize] = type_id;
-    }
+    self.global.set_type_if_global(id, type_id);
   }
 
   pub fn declare_name_or_err(
@@ -159,7 +115,7 @@ impl<'compilation> Environment<'compilation> {
         format!("cannot redeclare name '{name}' in the same scope"),
       ))
     } else if self.in_global_scope() {
-      self.declare_global_name(name, name_src_info)
+      self.global.declare_name(name, name_src_info)
     } else {
       if self.last_local_id == u8::MAX {
         return Err(error_from_source_info(
@@ -237,28 +193,25 @@ impl<'compilation> Environment<'compilation> {
     self.imported_modules.push(id);
   }
 
-  pub fn new(
-    global_names: &'compilation ModuleNames,
-    global_types: &'compilation mut Vec<TypeId>,
-  ) -> Self {
+  pub fn new(global_env: &'compilation mut GlobalEnv) -> Self {
     Self {
+      global: global_env,
       imported_modules: Vec::new(),
-      globals: global_names,
-      global_types,
-      module_globals: HashMap::new(),
-      last_global_id: global_names.last_global_id(),
       locals: Vec::new(),
       last_local_id: 0,
       extern_ids: Vec::new(),
       extern_id_start: 0,
       functions_declaration_stack: Vec::new(),
-      declared: HashSet::new(),
       scope_depth: 0,
     }
   }
 
-  pub fn finalize(self) -> (GlobalNames, Vec<GlobalId>) {
-    (self.module_globals, self.extern_ids)
+  pub fn finalize(self) -> Result<Vec<GlobalId>, SourceError> {
+    if let Err(err) = self.global.finalize_current_module() {
+      Err(err)
+    } else {
+      Ok(self.extern_ids)
+    }
   }
 }
 

@@ -5,12 +5,11 @@ mod statement_parser;
 use self::environment::Environment;
 
 use super::ast::*;
+use super::global_env::GlobalEnv;
 use super::identifier::GlobalId;
 use super::identifier::Identifier;
 use super::identifier::ModuleId;
 use super::lexer::*;
-use super::modules::GlobalNames;
-use super::modules::ModuleNames;
 use super::types::type_map::TypeMap;
 use super::types::Type;
 use super::types::TypeId;
@@ -18,7 +17,6 @@ use super::*;
 
 pub struct ParseResult {
   pub ast: AST,
-  pub module_names: GlobalNames,
   pub module_extern_functions: Vec<GlobalId>,
   pub imports: Vec<ModuleId>,
 }
@@ -139,7 +137,9 @@ impl<'parsing> Parser<'parsing> {
           "num" => Ok(TypeId::NUM),
           "bool" => Ok(TypeId::BOOL),
           other => {
-            let struct_id = self.env.get_name_or_add_global(other);
+            let struct_id = self
+              .env
+              .get_name_or_add_global(other, self.lex.prev_token_info())?;
             Ok(self.type_map.get_or_add(Type::Struct(struct_id)))
           }
         }
@@ -194,8 +194,7 @@ impl<'parsing> Parser<'parsing> {
   pub fn parse(
     source: &'parsing str,
     type_map: &'parsing mut TypeMap,
-    loaded_names: &'parsing ModuleNames,
-    global_types: &'parsing mut Vec<TypeId>,
+    global_env: &'parsing mut GlobalEnv,
     loaded_modules: &'parsing HashMap<String, ModuleId>,
   ) -> Result<ParseResult, SourceError> {
     let mut parser = Self {
@@ -204,7 +203,7 @@ impl<'parsing> Parser<'parsing> {
       lookahead: Token::EndOfFile,
       loaded_modules,
       ast: AST::new(),
-      env: Environment::new(loaded_names, global_types),
+      env: Environment::new(global_env),
     };
     let mut errors = Vec::new();
     if let Err(e) = parser.advance() {
@@ -219,11 +218,16 @@ impl<'parsing> Parser<'parsing> {
         }
       }
     }
+    let extern_map = match parser.env.finalize() {
+      Ok(extern_map) => extern_map,
+      Err(e) => {
+        errors.push(e);
+        return Err(SourceError::from_err_vec(errors));
+      }
+    };
     if errors.is_empty() {
-      let (name_map, extern_map) = parser.env.finalize();
       Ok(ParseResult {
         ast: parser.ast,
-        module_names: name_map,
         module_extern_functions: extern_map,
         imports: vec![],
       })

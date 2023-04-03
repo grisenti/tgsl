@@ -3,11 +3,11 @@ use std::{collections::HashMap, mem::ManuallyDrop};
 use crate::{
   compiler::{
     bytecode::{Chunk, ConstantValue, Function, OpCode},
-    identifier::{ModuleId},
+    identifier::ModuleId,
     modules::{GlobalNames, LoadedModules, Module},
     Compiler,
   },
-  id_hasher::{IdBuildHasher},
+  id_hasher::IdBuildHasher,
 };
 
 mod gc;
@@ -402,20 +402,25 @@ impl VM {
 
   fn bind_functions(
     &mut self,
-    names: &GlobalNames,
     external_ids: &[u16],
+    module_id: ModuleId,
     extern_functions: Vec<(&str, ExternFunction)>,
   ) -> Result<(), String> {
     let mut extern_pair = extern_functions
       .into_iter()
-      .filter_map(|(name, func)| names.get(name).map(|id| (id, func)))
+      .filter_map(|(name, func)| {
+        self
+          .compiler
+          .get_global(module_id, name)
+          .map(|id| (id, func))
+      })
       .collect::<Vec<_>>();
     if extern_pair.len() < external_ids.len() {
       return Err("missing external function in module loading".to_string());
     }
     extern_pair.sort_by_key(|(id, _)| *id);
     for ((id, func), ext_id) in extern_pair.into_iter().zip(external_ids) {
-      if id != ext_id {
+      if id != *ext_id {
         return Err("trying to bind a function that is not marked extern".to_string());
       }
       self.extern_functions.push(func);
@@ -432,14 +437,13 @@ impl VM {
     let Module {
       extern_functions: ext_ids,
       imports: _,
+      id,
       code,
-      names,
     } = match self.compiler.compile(source, &self.state) {
       Err(err) => return Err(err.print_long(source)),
       Ok(module) => module,
     };
-    self.bind_functions(&names, &ext_ids, extern_functions)?;
-    self.state.module_names.update(names);
+    self.bind_functions(&ext_ids, id, extern_functions)?;
     self.state.extern_functions.extend(ext_ids);
     let mod_id = self.state.module_ids.len() as u16;
     self.state.module_ids.insert(name, ModuleId(mod_id));

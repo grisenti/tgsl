@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use crate::errors::*;
 
 use self::{
+  global_env::GlobalEnv,
+  identifier::{GlobalId, Identifier, ModuleId},
   lexer::Lexer,
   modules::{LoadedModules, Module},
   parser::{ParseResult, Parser},
@@ -13,49 +15,57 @@ use self::{
 pub mod ast;
 pub mod bytecode;
 mod codegen;
+mod global_env;
 pub mod identifier;
-pub mod lexer;
+mod lexer;
 pub mod modules;
-pub mod parser;
-pub mod semantic_analysis;
+mod parser;
+mod semantic_analysis;
 mod types;
 
 type CompilerResult<T> = Result<T, SourceError>;
 
 pub struct Compiler {
   type_map: TypeMap,
-  global_types: Vec<TypeId>,
+  global_env: GlobalEnv,
+  last_module: u16,
 }
 
 impl Compiler {
   pub fn compile(&mut self, source: &str, loaded: &LoadedModules) -> CompilerResult<Module> {
     let ParseResult {
       ast,
-      module_names,
       module_extern_functions,
       imports,
     } = Parser::parse(
       source,
       &mut self.type_map,
-      &loaded.module_names,
-      &mut self.global_types,
+      &mut self.global_env,
       &loaded.module_ids,
     )?;
     println!("{:?}", ast);
-    let generated_code = SemanticAnalizer::analyze(ast, &mut self.global_types, &self.type_map)?;
+    let generated_code =
+      SemanticAnalizer::analyze(ast, &mut self.global_env.types, &self.type_map)?;
     println!("{:?}", generated_code);
-    Ok(Module {
+    let ret = Ok(Module {
+      id: ModuleId(self.last_module),
       extern_functions: module_extern_functions,
-      names: module_names,
       imports,
       code: generated_code,
-    })
+    });
+    self.last_module += 1;
+    ret
+  }
+
+  pub fn get_global(&self, module_id: ModuleId, name: &str) -> Option<GlobalId> {
+    self.global_env.get_id(module_id, name)
   }
 
   pub fn new() -> Self {
     Self {
-      global_types: Vec::new(),
       type_map: TypeMap::new(),
+      global_env: GlobalEnv::new(),
+      last_module: 0,
     }
   }
 }

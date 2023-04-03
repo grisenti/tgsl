@@ -26,7 +26,9 @@ impl<'src> Parser<'src> {
       }
       Token::Id(id) => {
         let id_info = self.last_token_info();
-        let id = self.env.get_name_or_add_global(id);
+        let id = self
+          .env
+          .get_name_or_add_global(id, id_info.get(&self.ast))?;
         let ret = Ok(self.ast.add_expression(Expr::Variable { id, id_info }));
         self.advance()?;
         ret
@@ -88,7 +90,9 @@ impl<'src> Parser<'src> {
         Token::Basic('.') => {
           self.advance()?;
           if let Token::Id(name) = self.lookahead {
-            let id = self.env.get_name_or_add_global(name);
+            let id = self
+              .env
+              .get_name_or_add_global(name, self.lex.prev_token_info())?;
             let name_info = self.last_token_info();
             self.advance()?;
             let name = self.ast.add_str(name);
