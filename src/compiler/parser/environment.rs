@@ -25,7 +25,7 @@ pub struct Environment<'compilation> {
   imported_modules: Vec<ModuleId>,
   global: &'compilation mut GlobalEnv,
 
-  locals: Vec<(String, LocalId)>,
+  locals: Vec<(&'compilation str, LocalId)>,
   last_local_id: u8,
 
   extern_ids: Vec<GlobalId>,
@@ -44,7 +44,7 @@ impl<'compilation> Environment<'compilation> {
       .locals
       .iter()
       .rev()
-      .find(|(local_name, _)| local_name == name)
+      .find(|(local_name, _)| *local_name == name)
       .map(|pair| pair.1)
   }
 
@@ -100,7 +100,7 @@ impl<'compilation> Environment<'compilation> {
 
   pub fn declare_name_or_err(
     &mut self,
-    name: &str,
+    name: &'compilation str,
     name_src_info: SourceInfo,
   ) -> Result<Identifier, SourceError> {
     if self
@@ -108,7 +108,7 @@ impl<'compilation> Environment<'compilation> {
       .iter()
       .rev()
       .take_while(|(_, LocalId { scope_depth, .. })| self.scope_depth == *scope_depth)
-      .any(|(local_name, _)| local_name == name)
+      .any(|(local_name, _)| *local_name == name)
     {
       Err(error_from_source_info(
         &name_src_info,
@@ -128,7 +128,7 @@ impl<'compilation> Environment<'compilation> {
         id: self.last_local_id,
       };
       self.last_local_id += 1;
-      self.locals.push((name.to_string(), id));
+      self.locals.push((name, id));
       Ok(Identifier::Local(id.id))
     }
   }
