@@ -1,4 +1,4 @@
-use crate::{compiler::ast::ASTNode, errors::SourceInfo};
+use crate::errors::SourceInfo;
 
 use super::{Expr, Stmt, AST};
 
@@ -20,24 +20,16 @@ macro_rules! generate_ast_handle {
 generate_ast_handle!(ExprHandle);
 impl ExprHandle {
   pub fn get<'a>(&'a self, ast: &'a AST) -> &'a Expr {
-    assert!(self.index < ast.nodes.len() as u32);
-    if let ASTNode::Expr(e) = &ast.nodes[self.index as usize] {
-      e
-    } else {
-      panic!("expression handle refers to a node thats not an expression");
-    }
+    assert!(self.index < ast.expressions.len() as u32);
+    &ast.expressions[self.index as usize]
   }
 }
 
 generate_ast_handle!(StmtHandle);
 impl StmtHandle {
   pub fn get<'a>(&'a self, ast: &'a AST) -> &'a Stmt {
-    assert!(self.index < ast.nodes.len() as u32);
-    if let ASTNode::Stmt(s) = &ast.nodes[self.index as usize] {
-      s
-    } else {
-      panic!("statement handle refers to a node thats not a statement");
-    }
+    assert!(self.index < ast.statements.len() as u32);
+    &ast.statements[self.index as usize]
   }
 }
 

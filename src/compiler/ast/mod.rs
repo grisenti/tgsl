@@ -11,16 +11,12 @@ pub use statement::*;
 
 use crate::errors::SourceInfo;
 
-pub enum ASTNode {
-  Expr(Expr),
-  Stmt(Stmt),
-}
-
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Default)]
 pub struct AST {
   strings: String,
-  nodes: Vec<ASTNode>,
+  statements: Vec<Stmt>,
+  expressions: Vec<Expr>,
   source_ptrs: Vec<SourceInfo>,
   program: Vec<StmtHandle>,
 }
@@ -31,13 +27,13 @@ impl AST {
   }
 
   pub fn add_expression(&mut self, expr: Expr) -> ExprHandle {
-    self.nodes.push(ASTNode::Expr(expr));
-    ExprHandle::new((self.nodes.len() - 1) as u32)
+    self.expressions.push(expr);
+    ExprHandle::new((self.expressions.len() - 1) as u32)
   }
 
   pub fn add_statement(&mut self, stmt: Stmt) -> StmtHandle {
-    self.nodes.push(ASTNode::Stmt(stmt));
-    StmtHandle::new((self.nodes.len() - 1) as u32)
+    self.statements.push(stmt);
+    StmtHandle::new((self.statements.len() - 1) as u32)
   }
 
   pub fn add_str(&mut self, s: &str) -> StrHandle {
