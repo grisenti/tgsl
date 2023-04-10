@@ -1,9 +1,26 @@
+use json::object;
+use json::JsonValue;
+
+use crate::compiler::identifier::Identifier;
+use crate::compiler::types::TypeId;
+
 use super::*;
 use core::fmt::Debug;
 
+impl Into<JsonValue> for Identifier {
+  fn into(self) -> JsonValue {
+    JsonValue::String(format!("{self:?}"))
+  }
+}
+
+impl Into<JsonValue> for TypeId {
+  fn into(self) -> JsonValue {
+    JsonValue::String(format!("{}", self.0))
+  }
+}
+
 impl AST {
-  fn print_stmt(&self, stmt: StmtHandle, depth: u16) -> String {
-    let spaces = (0..depth).map(|_| "  ").collect::<String>();
+  fn print_stmt(&self, stmt: StmtHandle) -> JsonValue {
     match stmt.get(self) {
       Stmt::VarDecl {
         identifier,
@@ -12,29 +29,39 @@ impl AST {
         ..
       } => {
         let init_expr = if let Some(expr) = expression {
-          format!(
-            "\n{spaces}-init_expr: {}",
-            self.print_expr(*expr, depth + 1)
-          )
+          self.print_expr(*expr)
         } else {
-          "".to_string()
+          JsonValue::Null
         };
-        format!(
-          "\n{spaces}VarDecl:\n{spaces}-id: {identifier:?}\n{spaces}-type: {var_type:?}{init_expr}"
-        )
+        object! {
+          "VarDecl": {
+            "id": *identifier,
+            "type": format!("{var_type:?}"),
+            "init expr": init_expr
+          }
+        }
       }
       Stmt::Expr(expr) => {
-        format!("\n{spaces}Expr:{}", self.print_expr(*expr, depth + 1))
+        object! {
+          "Expr": self.print_expr(*expr)
+        }
       }
       Stmt::Print(expr) => {
-        format!("\n{spaces}Print:{}", self.print_expr(*expr, depth + 1))
+        object! {
+          "Print": self.print_expr(*expr)
+        }
       }
       Stmt::Block { statements, locals } => {
-        let mut result = format!("\n{spaces}Block:\n{spaces}-locals: {locals}");
-        for s in statements {
-          result += &self.print_stmt(*s, depth + 1);
+        let stmts = statements
+          .iter()
+          .map(|s| self.print_stmt(*s))
+          .collect::<Vec<_>>();
+        object! {
+          "Block": {
+            "locals": format!("{locals}"),
+            "statements": stmts
+          }
         }
-        result
       }
       Stmt::IfBranch {
         condition,
@@ -42,30 +69,30 @@ impl AST {
         else_branch,
         ..
       } => {
-        let else_banch = if let Some(stmt) = else_branch {
-          format!(
-            "\n{spaces}-else branch: {}",
-            self.print_stmt(*stmt, depth + 1)
-          )
+        let else_branch = if let Some(stmt) = else_branch {
+          self.print_stmt(*stmt)
         } else {
-          "".to_string()
+          JsonValue::Null
         };
-        format!(
-          "\n{spaces}IfBranch:\n{spaces}-condition:{}\n{spaces}-true branch:{}{else_banch}",
-          self.print_expr(*condition, depth + 1),
-          self.print_stmt(*true_branch, depth + 1)
-        )
+        object! {
+          "IfBranch": {
+            "condition": self.print_expr(*condition),
+            "true branch": self.print_stmt(*true_branch),
+            "else branch": else_branch
+          }
+        }
       }
       Stmt::While {
         condition,
         loop_body,
         ..
       } => {
-        format!(
-          "\n{spaces}While:\n{spaces}-condition: {}\n{spaces}-body: {}",
-          self.print_expr(*condition, depth + 1),
-          self.print_stmt(*loop_body, depth + 1)
-        )
+        object! {
+          "While": {
+            "condition": self.print_expr(*condition),
+            "body": self.print_stmt(*loop_body)
+          }
+        }
       }
       Stmt::Function {
         id,
@@ -78,16 +105,17 @@ impl AST {
       } => {
         let body = body
           .iter()
-          .map(|stmt| self.print_stmt(*stmt, depth + 1))
-          .collect::<String>();
-        format!(
-          "\n{spaces}Function:\n{spaces}-id: {id:?}\
-          \n{spaces}-captures: {captures:?}\
-          \n{spaces}-function type: {fn_type:?}\
-          \n{spaces}-parameter types: {parameters:?}\
-          \n{spaces}-return type: {return_type:?}
-          \n{spaces}-body: {body}"
-        )
+          .map(|stmt| self.print_stmt(*stmt))
+          .collect::<Vec<_>>();
+        object! {
+          "Function": {
+            "id": *id,
+            "captures": captures.as_slice(),
+            "function type": *fn_type,
+            "return type": *return_type,
+            "body": body
+          }
+        }
       }
       Stmt::ExternFunction {
         name_id: id,
@@ -95,25 +123,25 @@ impl AST {
         extern_id,
         ..
       } => {
-        format!(
-          "\n{spaces}ExternFunction:\
-          \n{spaces}-id: {id:?}\
-          \n{spaces}-function type: {fn_type:?}
-          \n{spaces}-extern id: {extern_id:?}"
-        )
+        object! {
+          "ExternalFunction": {
+            "id": *id,
+            "function type": *fn_type,
+            "extern id": format!("{extern_id:?}")
+          }
+        }
       }
-      Stmt::Break(_) => {
-        format!("\n{spaces}Break")
-      }
+      Stmt::Break(_) => JsonValue::String("Break".to_string()),
       Stmt::Return { expr, .. } => {
-        if let Some(expr) = expr {
-          format!(
-            "\n{spaces}Return:\
-             \n{spaces}-expression: {}",
-            self.print_expr(*expr, depth + 1)
-          )
+        let ret_expr = if let Some(expr) = expr {
+          self.print_expr(*expr)
         } else {
-          format!("\n{spaces}Return")
+          JsonValue::Null
+        };
+        object! {
+          "Return": {
+            "expr": ret_expr
+          }
         }
       }
       Stmt::Struct {
@@ -126,21 +154,25 @@ impl AST {
           .iter()
           .map(|handle| handle.get(self).to_string())
           .collect::<Vec<String>>();
-        format!(
-          "\n{spaces}Struct:\
-  				\n{spaces}-id: {name:?}\
-  				\n{spaces}-member names: {member_names:?}\
-  				\n{spaces}-member_types: {member_types:?}"
-        )
+        object! {
+          "Struct": {
+            "id": *name,
+            "member_names": member_names,
+            "member_types": member_types.as_slice()
+          }
+        }
       }
       Stmt::Import { module_id } => {
-        format!("\n{spaces}Import: module_id: {}", module_id.0)
+        object! {
+          "Import": {
+            "module id": format!("{}", module_id.0)
+          }
+        }
       }
     }
   }
 
-  fn print_expr(&self, expr: ExprHandle, depth: u16) -> String {
-    let spaces = (0..depth).map(|_| "  ").collect::<String>();
+  fn print_expr(&self, expr: ExprHandle) -> JsonValue {
     match expr.get(self) {
       Expr::Logical {
         left,
@@ -152,38 +184,39 @@ impl AST {
         operator,
         right,
       } => {
-        format!(
-          "\n{spaces}Binary:\
-          \n{spaces}-operator: {}\
-          \n{spaces}-left:{}\
-          \n{spaces}-right:{}",
-          operator.op,
-          self.print_expr(*left, depth + 1),
-          self.print_expr(*right, depth + 1)
-        )
+        object! {
+          "Binary": {
+            "operator": format!("{}", operator.op),
+            "left": self.print_expr(*left),
+            "right": self.print_expr(*right),
+          }
+        }
       }
       Expr::Unary { operator, right } => {
-        format!(
-          "\n{spaces}Unary:\
-          \n{spaces}-operator: {}\
-          \n{spaces}-right:{}",
-          operator.op,
-          self.print_expr(*right, depth + 1)
-        )
+        object! {
+          "Unary": {
+            "operator": format!("{}", operator.op),
+            "right": self.print_expr(*right),
+          }
+        }
       }
       Expr::Literal { literal, .. } => {
-        format!("\n{spaces}Literal: {literal:?}")
+        object! {
+          "Literal": literal.display(self)
+        }
       }
       Expr::Variable { id, .. } => {
-        format!("\n{spaces}Variable:\n{spaces}-id: {id:?}")
+        object! {
+          "Variable": *id
+        }
       }
       Expr::Assignment { id, value, .. } => {
-        format!(
-          "\n{spaces}Assignment:\
-  				\n{spaces}id: {id:?}\
-  				\n{spaces}value: {}",
-          self.print_expr(*value, depth + 1)
-        )
+        object! {
+          "Assignment": {
+            "id": *id,
+            "value": self.print_expr(*value)
+          }
+        }
       }
       Expr::Lambda {
         parameters,
@@ -195,26 +228,31 @@ impl AST {
       } => {
         let body = body
           .iter()
-          .map(|stmt| self.print_stmt(*stmt, depth + 1))
-          .collect::<String>();
-        format!(
-          "\n{spaces}Lambda:\
-          \n{spaces}-captures: {captures:?}\
-          \n{spaces}-function type: {fn_type:?}\
-          \n{spaces}-return type: {return_type:?}\
-          \n{spaces}-parameter: {parameters:?}\
-          \n{spaces}-body: {body}"
-        )
+          .map(|stmt| self.print_stmt(*stmt))
+          .collect::<Vec<_>>();
+        object! {
+          "Lambda": {
+            "captures": captures.as_slice(),
+            "fn type": *fn_type,
+            "return type": *return_type,
+            "parameters": parameters.as_slice(),
+            "body": body
+          }
+        }
       }
       Expr::FnCall {
         func, arguments, ..
       } => {
-        format!(
-          "\n{spaces}FnCall:\
-          \n{spaces}-function: {}\
-          \n{spaces}-arguments: {arguments:?}",
-          self.print_expr(*func, depth + 1)
-        )
+        let arguments = arguments
+          .iter()
+          .map(|e| self.print_expr(*e))
+          .collect::<Vec<_>>();
+        object! {
+          "FnCall": {
+            "function": self.print_expr(*func),
+            "arguments": arguments
+          }
+        }
       }
       Expr::Dot {
         lhs,
@@ -222,31 +260,27 @@ impl AST {
         identifier,
         ..
       } => {
-        format!(
-          "\n{spaces}Dot:\
-          \n{spaces}-rhs-name: '{}'\
-          \n{spaces}-rhs-id: {identifier:?}\
-          \n{spaces}-lhs-expr: {}",
-          name.get(self),
-          self.print_expr(*lhs, depth + 1)
-        )
+        object! {
+          "Dot": {
+            "rhs name": name.get(self),
+            "rhs id": *identifier,
+            "lhs expr": self.print_expr(*lhs)
+          }
+        }
       }
-
       Expr::Set {
         object,
         name,
         value,
         ..
       } => {
-        format!(
-          "\n{spaces}Set:\
-          \n{spaces}-object: {}\
-          \n{spaces}-name: '{}'\
-          \n{spaces}-value: {}",
-          self.print_expr(*object, depth + 1),
-          name.get(self),
-          self.print_expr(*value, depth + 1)
-        )
+        object! {
+          "Set": {
+            "object": self.print_expr(*object),
+            "name": name.get(self),
+            "value": self.print_expr(*value)
+          }
+        }
       }
     }
   }
@@ -254,10 +288,11 @@ impl AST {
 
 impl Debug for AST {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let mut result = String::new();
-    for stmt in &self.program {
-      result += &self.print_stmt(*stmt, 0);
-    }
-    write!(f, "{result}")
+    let out = self
+      .program
+      .iter()
+      .map(|s| self.print_stmt(*s))
+      .collect::<Vec<_>>();
+    write!(f, "{}", json::stringify_pretty(out, 2))
   }
 }
