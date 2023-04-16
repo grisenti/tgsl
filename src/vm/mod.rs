@@ -387,12 +387,12 @@ impl VM {
   }
 
   pub fn interpret(&mut self, chunk: Chunk) {
-    let mut func = Function { code: chunk };
+    let func = Function { code: chunk };
     let function = std::ptr::addr_of!(func);
     let global_frame = CallFrame {
       bp: self.stack.as_mut_ptr(),
       sp: self.stack.as_mut_ptr(),
-      pc: func.code.code.as_mut_ptr(),
+      pc: func.code.code.as_ptr(),
       function,
       captures: std::ptr::null_mut(),
     };
