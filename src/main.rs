@@ -38,19 +38,21 @@ fn main() {
 
 #[cfg(test)]
 mod test {
-  use std::fs;
-
   use crate::{vm::value::TaggedValue, vm::VM};
 
-  macro_rules! test_file {
-    ($name:ident) => {
-      #[test]
-      #[allow(non_snake_case)]
-      fn $name() {
-        compile_and_run(&format!(
-          "tests/{}.wds",
-          stringify!($name).replace("__", "/")
-        ));
+  macro_rules! test_files {
+    ($module:ident, $($test:ident),+) => {
+      mod $module {
+				use super::compile_and_run;
+      $(
+        #[test]
+        #[allow(non_snake_case)]
+        fn $test() {
+          compile_and_run(include_str!(
+            concat!("../tests/", stringify!($module), "/", stringify!($test), ".wds")
+          ));
+        }
+          )+
       }
     };
   }
@@ -60,35 +62,31 @@ mod test {
     TaggedValue::none()
   }
 
-  fn compile_and_run(filename: &str) {
-    let source = fs::read_to_string(filename).unwrap();
+  fn compile_and_run(test_file: &str) {
     let mut vm = VM::new();
     if let Err(msg) = vm.load_module(
       "test".to_string(),
-      &source,
+      test_file,
       vec![("assert", Box::new(assert))],
     ) {
       println!("{}", msg);
     }
   }
 
-  test_file!(closures__capture_single_one_level);
-  test_file!(closures__capture_single_multi_level);
-  test_file!(closures__capture_copy);
-
-  test_file!(ufc__primitive_types);
-  test_file!(ufc__struct);
-  test_file!(ufc__nested);
-
-  test_file!(function_declaration);
-  test_file!(passing_closures);
-  test_file!(primitive_operations);
-  test_file!(recursive_function);
-  test_file!(struct_declaration);
-  test_file!(struct_construction);
-  test_file!(struct_member_access);
-  test_file!(mutually_recursive_functions);
-  test_file!(nested_structs);
-  test_file!(conditional_return_types);
-  test_file!(if_condition);
+  test_files!(closures, capture_single_one_level, capture_copy);
+  test_files!(ufc, primitive_types, aggregates, nested);
+  test_files!(
+    misc,
+    function_declaration,
+    passing_closures,
+    primitive_operations,
+    recursive_function,
+    struct_declaration,
+    struct_construction,
+    struct_member_access,
+    mutually_recursive_functions,
+    nested_structs,
+    conditional_return_types,
+    if_condition
+  );
 }
