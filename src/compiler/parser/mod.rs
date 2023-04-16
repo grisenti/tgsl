@@ -133,6 +133,7 @@ impl<'parsing> Parser<'parsing> {
       Token::Id(type_name) => {
         self.advance()?;
         match type_name {
+          "any" => Ok(TypeId::ANY),
           "str" => Ok(TypeId::STR),
           "num" => Ok(TypeId::NUM),
           "bool" => Ok(TypeId::BOOL),

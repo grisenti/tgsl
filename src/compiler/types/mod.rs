@@ -4,6 +4,7 @@ pub mod type_map;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
+  Any,
   Str,
   Num,
   Bool,
@@ -21,12 +22,13 @@ pub enum Type {
 pub struct TypeId(pub u32);
 
 impl TypeId {
-  pub const STR: TypeId = TypeId(0);
-  pub const NUM: TypeId = TypeId(1);
-  pub const BOOL: TypeId = TypeId(2);
-  pub const UNKNOWN: TypeId = TypeId(3);
-  pub const NOTHING: TypeId = TypeId(4);
-  pub const ERROR: TypeId = TypeId(5);
+  pub const ANY: TypeId = TypeId(0);
+  pub const STR: TypeId = TypeId(1);
+  pub const NUM: TypeId = TypeId(2);
+  pub const BOOL: TypeId = TypeId(3);
+  pub const UNKNOWN: TypeId = TypeId(4);
+  pub const NOTHING: TypeId = TypeId(5);
+  pub const ERROR: TypeId = TypeId(6);
 
   pub fn from_literal(lit: Literal) -> Self {
     match lit {
@@ -38,7 +40,8 @@ impl TypeId {
   }
 }
 
-pub const DEFAULT_TYPEIDS: [(Type, TypeId); 6] = [
+pub const DEFAULT_TYPEIDS: [(Type, TypeId); 7] = [
+  (Type::Any, TypeId::ANY),
   (Type::Str, TypeId::STR),
   (Type::Num, TypeId::NUM),
   (Type::Bool, TypeId::BOOL),

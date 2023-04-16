@@ -191,7 +191,7 @@ impl FunctionAnalizer<'_> {
       return TypeId::ERROR;
     }
     for (arg_num, (param_type, arg_type)) in parameters.iter().zip(args).enumerate() {
-      if arg_type != param_type {
+      if *param_type != TypeId::ANY && arg_type != param_type {
         self.emit_error(
           call_info,
           format!(
@@ -219,6 +219,7 @@ impl FunctionAnalizer<'_> {
     let ret = match call_type {
       CallType::Call(type_id) => {
         let args = arguments.collect::<Vec<TypeId>>();
+        // FIXME: remove clone, maybe refactor check_call_arguments
         if let Type::Function { parameters, ret } = self.get_type(type_id).clone() {
           self.check_call_arguments(&parameters, ret, &args, call_info)
         } else {
