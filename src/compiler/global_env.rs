@@ -56,7 +56,7 @@ impl GlobalEnv {
         None => Ok(Some(Identifier::Global(*id))),
         Some(_) => Err(error_from_source_info(
           &source_info,
-          "identifier '{name}' declared in multiple imported modules".to_string(),
+          format!("identifier '{name}' declared in multiple imported modules"),
         )),
       })
   }
@@ -88,7 +88,7 @@ impl GlobalEnv {
       if self.current_module_declarations[module_relative_id] {
         Err(error_from_source_info(
           &source_info,
-          "redeclaration of global identifier '{name}'".to_string(),
+          format!("redeclaration of global identifier '{name}'"),
         ))
       } else {
         self.current_module_declarations[module_relative_id] = true;
@@ -110,24 +110,22 @@ impl GlobalEnv {
   }
 
   pub fn finalize_current_module(&mut self) -> Result<(), SourceError> {
-    let undeclared_names = self.current_module_declarations.len() - self.current_module_names.len();
-    if undeclared_names == 0 {
-      self.clear_current_module();
-      Ok(())
-    } else {
-      let mut errs = Vec::with_capacity(undeclared_names);
-      let first_module_id = self.last_global_id as usize - self.current_module_names.len();
-      for (_, id) in &self.current_module_names {
-        let module_relative_id = *id as usize - first_module_id;
-        if !self.current_module_declarations[module_relative_id] {
-          errs.push(error_from_source_info(
-            &self.current_module_first_uses[module_relative_id],
-            "identifier was not declared in the current module".to_string(),
-          ));
-        }
+    let mut errs = Vec::new();
+    let first_module_id = self.last_global_id as usize - self.current_module_names.len();
+    for (_, id) in &self.current_module_names {
+      let module_relative_id = *id as usize - first_module_id;
+      if !self.current_module_declarations[module_relative_id] {
+        errs.push(error_from_source_info(
+          &self.current_module_first_uses[module_relative_id],
+          "identifier was not declared in the current module".to_string(),
+        ));
       }
-      self.clear_current_module();
+    }
+    self.clear_current_module();
+    if errs.len() > 0 {
       Err(SourceError::from_err_vec(errs))
+    } else {
+      Ok(())
     }
   }
 
