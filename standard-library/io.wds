@@ -1,1 +1,2 @@
 extern fn println(any)
+extern fn print(any)
