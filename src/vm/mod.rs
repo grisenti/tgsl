@@ -8,6 +8,7 @@ use crate::{
     Compiler,
   },
   id_hasher::IdBuildHasher,
+  standard_library::load_standard_library,
 };
 
 mod gc;
@@ -452,7 +453,7 @@ impl VM {
   }
 
   pub fn new() -> Self {
-    Self {
+    let mut vm = Self {
       gc: GC::new(),
       compiler: Compiler::new(),
       state: Default::default(),
@@ -462,6 +463,8 @@ impl VM {
       stack: [TaggedValue::none(); MAX_STACK],
       call_stack: [EMPTY_CALL_FRAME; MAX_CALLS],
       function_call: 0,
-    }
+    };
+    load_standard_library(&mut vm);
+    vm
   }
 }

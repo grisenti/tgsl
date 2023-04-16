@@ -1,6 +1,7 @@
 mod compiler;
 mod errors;
 mod id_hasher;
+mod standard_library;
 mod vm;
 
 use std::fs;
