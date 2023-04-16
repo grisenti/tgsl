@@ -46,11 +46,6 @@ impl AST {
           "Expr": self.print_expr(*expr)
         }
       }
-      Stmt::Print(expr) => {
-        object! {
-          "Print": self.print_expr(*expr)
-        }
-      }
       Stmt::Block { statements, locals } => {
         let stmts = statements
           .iter()

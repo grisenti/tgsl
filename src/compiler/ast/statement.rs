@@ -21,7 +21,6 @@ pub enum Stmt {
     expression: Option<ExprHandle>,
   },
   Expr(ExprHandle),
-  Print(ExprHandle),
   Block {
     statements: Vec<StmtHandle>,
     locals: u8,

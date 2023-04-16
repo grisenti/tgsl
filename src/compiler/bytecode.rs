@@ -60,7 +60,6 @@ pub enum OpCode {
   JumpIfFalsePop,
   JumpIfFalseNoPop,
 
-  Print,
   Pop,
 
   Last,

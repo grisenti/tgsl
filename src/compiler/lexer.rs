@@ -51,7 +51,6 @@ fn indentifier_token(input: &str) -> Token {
     "return" => Token::Return,
     "var" => Token::Var,
     "struct" => Token::Struct,
-    "print" => Token::Print,
     "while" => Token::While,
     "for" => Token::For,
     "break" => Token::Break,

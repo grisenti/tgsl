@@ -1,15 +1,6 @@
 use super::*;
 
 impl<'src> Parser<'src> {
-  fn parse_print_stmt(&mut self) -> StmtRes {
-    assert_eq!(self.lookahead, Token::Print);
-    self.advance()?;
-    let expr = self.parse_expression()?;
-    let ret = Ok(self.ast.add_statement(Stmt::Print(expr)));
-    self.match_or_err(Token::Basic(';'))?;
-    ret
-  }
-
   pub(super) fn parse_unscoped_block(&mut self) -> Result<Vec<StmtHandle>, SourceError> {
     // FIXME: this is very similar to the one below
     self.match_or_err(Token::Basic('{'))?;
@@ -150,7 +141,6 @@ impl<'src> Parser<'src> {
 
   fn parse_statement(&mut self) -> StmtRes {
     match self.lookahead {
-      Token::Print => self.parse_print_stmt(),
       Token::Basic('{') => self.parse_block(),
       Token::If => self.parse_if_stmt(),
       Token::While => self.parse_while_stmt(),

@@ -201,11 +201,6 @@ impl FunctionAnalizer<'_> {
     ret
   }
 
-  fn print_stmt(&mut self, expr: ExprHandle) {
-    self.analyze_expr(expr);
-    unsafe { self.code.push_op(OpCode::Print) };
-  }
-
   fn expr_stmt(&mut self, expr: ExprHandle) {
     self.analyze_expr(expr);
     unsafe { self.code.push_op(OpCode::Pop) }
@@ -277,10 +272,6 @@ impl FunctionAnalizer<'_> {
         None
       }
       Stmt::Return { expr, src_info } => Some(self.return_stmt(*expr, *src_info)),
-      Stmt::Print(expr) => {
-        self.print_stmt(*expr);
-        None
-      }
       Stmt::Expr(expr) => {
         self.expr_stmt(*expr);
         None

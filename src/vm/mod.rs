@@ -343,10 +343,6 @@ impl VM {
           let val = frame.top();
           aggregate.members[id as usize] = val;
         }
-        OpCode::Print => {
-          let top = frame.pop();
-          println!("{}", top.to_string());
-        }
         OpCode::Pop => {
           frame.pop();
         }
