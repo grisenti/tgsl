@@ -89,7 +89,7 @@ impl SourceError {
     Self::Many(errs)
   }
 
-  pub fn print_long(&self, source: &str) -> String {
+  fn print_long_rec(&self, source: &str) -> String {
     match self {
       Self::One {
         line_no,
@@ -121,10 +121,14 @@ impl SourceError {
       Self::Many(others) => {
         let mut res = String::new();
         for err in others {
-          res += &err.print_long(source);
+          res += &err.print_long_rec(source);
         }
         res
       }
     }
+  }
+
+  pub fn print_long(&self, source: &str, module: &str) -> String {
+    format!("module: {}\n{}", module, self.print_long_rec(source))
   }
 }

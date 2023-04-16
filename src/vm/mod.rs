@@ -437,7 +437,7 @@ impl VM {
       id,
       code,
     } = match self.compiler.compile(source, &self.state) {
-      Err(err) => return Err(err.print_long(source)),
+      Err(err) => return Err(err.print_long(source, &name)),
       Ok(module) => module,
     };
     self.bind_functions(&ext_ids, id, extern_functions)?;
