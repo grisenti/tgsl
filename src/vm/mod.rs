@@ -3,7 +3,7 @@ use std::{collections::HashMap, mem::ManuallyDrop};
 use crate::{
   compiler::{
     bytecode::{Chunk, ConstantValue, Function, OpCode},
-    identifier::ModuleId,
+    identifier::{GlobalId, ModuleId},
     modules::{GlobalNames, LoadedModules, Module},
     Compiler,
   },
@@ -128,18 +128,21 @@ pub struct VM {
 }
 
 impl VM {
-  fn run_gc(&mut self) {
-    if self.gc.should_run() {
-      self.gc.mark(self.stack.iter());
-      self.gc.mark(self.globals.values());
-      unsafe { self.gc.sweep() };
-    }
-  }
-
-  fn run(&mut self, frame: CallFrame) {
-    let mut frame = frame;
+  fn run(&mut self, global_env: &Function) {
+    let function = std::ptr::addr_of!(*global_env);
+    let mut frame = CallFrame {
+      bp: self.stack.as_mut_ptr(),
+      sp: self.stack.as_mut_ptr(),
+      pc: global_env.code.code.as_ptr(),
+      function,
+      captures: std::ptr::null_mut(),
+    };
     loop {
-      self.run_gc();
+      if self.gc.should_run() {
+        self.gc.mark(self.stack.iter());
+        self.gc.mark(self.globals.values());
+        unsafe { self.gc.sweep() };
+      }
       let op = match frame.read_instruction() {
         Ok(op) => op,
         Err(err) => {
@@ -385,15 +388,7 @@ impl VM {
 
   pub fn interpret(&mut self, chunk: Chunk) {
     let func = Function { code: chunk };
-    let function = std::ptr::addr_of!(func);
-    let global_frame = CallFrame {
-      bp: self.stack.as_mut_ptr(),
-      sp: self.stack.as_mut_ptr(),
-      pc: func.code.code.as_ptr(),
-      function,
-      captures: std::ptr::null_mut(),
-    };
-    self.run(global_frame);
+    self.run(&func);
     self.loaded_functions.push(func);
   }
 
