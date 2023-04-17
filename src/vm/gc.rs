@@ -1,15 +1,18 @@
-use std::{alloc::Layout, mem::ManuallyDrop};
+use std::{
+  alloc::Layout,
+  mem::{size_of, ManuallyDrop},
+};
 
 use crate::compiler::bytecode::Function;
 
 use super::value::*;
 
-const OBJECT_SIZE: u32 = std::mem::size_of::<Object>() as u32;
+const OBJECT_SIZE: usize = std::mem::size_of::<Object>();
 
 pub struct GC {
   allocations: Vec<*mut Object>,
-  next_collection: u32,
-  bytes_allocated: u32,
+  next_collection: usize,
+  bytes_allocated: usize,
 }
 
 unsafe fn alloc_value<T>(value: T) -> *mut T {
@@ -23,25 +26,32 @@ unsafe fn dealloc_value<T>(value: *mut T) {
   std::alloc::dealloc(value as *mut u8, Layout::new::<T>())
 }
 
-unsafe fn dealloc_object(obj: *mut Object) {
+unsafe fn dealloc_object(obj: *mut Object) -> usize {
   match (*obj).kind {
     ObjectType::String => {
+      let size = (*obj).value.string.len();
       ManuallyDrop::drop(&mut (*obj).value.string);
       dealloc_value(obj);
+      size
     }
     ObjectType::Closure => {
+      let size = (*obj).value.closure.captures.len();
       ManuallyDrop::drop(&mut (*obj).value.closure);
       dealloc_value(obj);
+      size
     }
     ObjectType::Aggregate => {
+      let size = (*obj).value.aggregate.members.len();
       ManuallyDrop::drop(&mut (*obj).value.aggregate);
       dealloc_value(obj);
+      size
     }
   }
 }
 
 impl GC {
-  const GROWTH_FACTOR: u32 = 2;
+  const GROWTH_FACTOR: usize = 2;
+  const MIN_HEAP_SIZE: usize = 1024 * 1024;
 
   pub fn should_run(&self) -> bool {
     self.bytes_allocated > self.next_collection
@@ -77,20 +87,21 @@ impl GC {
   }
 
   pub unsafe fn sweep(&mut self) {
+    println!("running gc at {}", self.bytes_allocated);
     self.allocations.retain(|&obj| unsafe {
       if (*obj).marked {
         (*obj).marked = false;
         true
       } else {
-        dealloc_object(obj);
-        self.bytes_allocated -= OBJECT_SIZE;
+        self.bytes_allocated -= dealloc_object(obj);
         false
       }
     });
-    self.next_collection = self.bytes_allocated * GC::GROWTH_FACTOR;
+    self.next_collection = usize::max(self.bytes_allocated * GC::GROWTH_FACTOR, GC::MIN_HEAP_SIZE);
   }
 
   pub fn alloc_string(&mut self, val: String) -> *mut Object {
+    self.bytes_allocated += val.len();
     let obj = unsafe {
       alloc_value(Object {
         kind: ObjectType::String,
@@ -105,6 +116,7 @@ impl GC {
   }
 
   pub fn alloc_closure(&mut self, function: *const Function, captures: usize) -> *mut Object {
+    self.bytes_allocated += captures * size_of::<TaggedValue>();
     let obj = unsafe {
       alloc_value(Object {
         kind: ObjectType::Closure,
@@ -122,7 +134,7 @@ impl GC {
   }
 
   pub fn alloc_aggregate(&mut self, members: Vec<TaggedValue>) -> *mut Object {
-    println!("alloc aggregate");
+    self.bytes_allocated += members.len();
     let obj = unsafe {
       alloc_value(Object {
         kind: ObjectType::Aggregate,
