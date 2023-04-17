@@ -70,14 +70,14 @@ impl CallFrame {
     val
   }
 
-  fn read_instruction(&mut self) -> Result<OpCode, &'static str> {
-    if self.sp as usize - self.bp as usize > MAX_LOCALS {
-      Err("STACK OVERFLOW")
-    } else {
-      let instruction = self.read_byte();
-      debug_assert!(instruction < OpCode::Last as u8);
-      Ok(unsafe { std::mem::transmute::<u8, OpCode>(instruction) })
-    }
+  fn overflowed_stack(&self) -> bool {
+    self.sp as usize - self.bp as usize > MAX_LOCALS
+  }
+
+  fn read_instruction(&mut self) -> OpCode {
+    let instruction = self.read_byte();
+    debug_assert!(instruction < OpCode::Last as u8);
+    unsafe { std::mem::transmute::<u8, OpCode>(instruction) }
   }
 
   fn pop(&mut self) -> TaggedValue {
@@ -150,13 +150,10 @@ impl VM {
         self.gc.mark(self.globals.values());
         unsafe { self.gc.sweep() };
       }
-      let op = match frame.read_instruction() {
-        Ok(op) => op,
-        Err(err) => {
-          eprintln!("{err}");
-          return;
-        }
-      };
+      if frame.overflowed_stack() {
+        eprintln!("STACK OVERFLOW");
+      }
+      let op = frame.read_instruction();
       match op {
         OpCode::Constant => {
           let c = frame.read_constant();
