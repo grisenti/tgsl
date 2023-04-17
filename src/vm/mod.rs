@@ -2,17 +2,19 @@ use std::{collections::HashMap, mem::ManuallyDrop};
 
 use crate::{
   compiler::{
-    bytecode::{Chunk, ConstantValue, Function, OpCode},
-    identifier::{GlobalId, ModuleId},
-    modules::{GlobalNames, LoadedModules, Module},
+    bytecode::{ConstantValue, OpCode},
+    identifier::ModuleId,
+    modules::{LoadedModules, Module},
     Compiler,
   },
   id_hasher::IdBuildHasher,
   standard_library::load_standard_library,
 };
 
+mod chunk;
 mod gc;
 pub mod value;
+use chunk::*;
 use gc::GC;
 use value::*;
 
@@ -94,9 +96,14 @@ impl CallFrame {
     unsafe { *self.sp.sub(1) }
   }
 
-  fn read_constant(&mut self) -> &ConstantValue {
+  fn read_constant(&mut self) -> TaggedValue {
     let index = self.read_byte();
     unsafe { (*self.function).code.get_constant(index as usize) }
+  }
+
+  fn read_string_constant(&mut self) -> &String {
+    let index = self.read_byte();
+    unsafe { (*self.function).code.get_string_constant(index as usize) }
   }
 
   fn read_local_function(&mut self) -> TaggedValue {
@@ -153,8 +160,12 @@ impl VM {
       match op {
         OpCode::Constant => {
           let c = frame.read_constant();
-          let value = TaggedValue::from_constant(c, &mut self.gc);
-          frame.push(value);
+          frame.push(c);
+        }
+        OpCode::ConstantStr => {
+          let const_str = frame.read_string_constant();
+          let allocated_string = self.gc.alloc_string(const_str.clone());
+          frame.push(TaggedValue::object(allocated_string))
         }
         OpCode::Function => {
           let f = frame.read_local_function();
@@ -439,7 +450,7 @@ impl VM {
     self.state.extern_functions.extend(ext_ids);
     let mod_id = self.state.module_ids.len() as u16;
     self.state.module_ids.insert(name, ModuleId(mod_id));
-    self.interpret(code);
+    self.interpret(Chunk::new(code));
     Ok(())
   }
 

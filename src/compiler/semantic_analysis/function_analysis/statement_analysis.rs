@@ -1,6 +1,6 @@
 use crate::compiler::{
   ast::{Expr, ExprHandle, SourceInfoHandle, StrHandle},
-  bytecode::{ConstantValue, Function},
+  bytecode::ConstantValue,
   identifier::ExternId,
   semantic_analysis::{return_analysis::to_conditional, Struct},
 };

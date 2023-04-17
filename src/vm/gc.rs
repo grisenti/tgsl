@@ -3,9 +3,7 @@ use std::{
   mem::{size_of, ManuallyDrop},
 };
 
-use crate::compiler::bytecode::Function;
-
-use super::value::*;
+use super::{chunk::Function, value::*};
 
 const OBJECT_SIZE: usize = std::mem::size_of::<Object>();
 

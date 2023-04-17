@@ -1,7 +1,7 @@
-use crate::compiler::bytecode::{ConstantValue, Function};
+use crate::compiler::bytecode::ConstantValue;
 use std::{fmt::Debug, mem::ManuallyDrop};
 
-use super::gc::GC;
+use super::{chunk::Function, gc::GC};
 
 #[derive(Clone)]
 pub struct Closure {

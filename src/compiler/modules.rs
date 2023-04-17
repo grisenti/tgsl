@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::{
-  bytecode::Chunk,
+  codegen::BytecodeBuilder,
   identifier::{GlobalId, ModuleId},
 };
 
@@ -12,7 +12,7 @@ pub struct Module {
   pub id: ModuleId,
   pub extern_functions: Vec<GlobalId>,
   pub imports: Vec<ModuleId>,
-  pub code: Chunk,
+  pub code: BytecodeBuilder,
 }
 
 #[derive(Default)]

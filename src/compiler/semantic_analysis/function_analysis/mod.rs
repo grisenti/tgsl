@@ -1,7 +1,7 @@
 use crate::{
   compiler::{
     ast::{SourceInfoHandle, Stmt, StmtHandle, AST},
-    bytecode::{Chunk, ConstantValue, Function, OpCode},
+    bytecode::{ConstantValue, OpCode},
     codegen::BytecodeBuilder,
     error_from_source_info,
     identifier::Identifier,
@@ -39,7 +39,7 @@ pub struct FunctionAnalizer<'analysis> {
 }
 
 pub struct FunctionAnalysisResult {
-  pub code: Chunk,
+  pub code: BytecodeBuilder,
   pub return_type: TypeId,
 }
 
@@ -193,7 +193,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       self.global_types,
     );
     unsafe {
-      self.code.push_function(Function { code: result.code });
+      self.code.push_function(result.code);
     }
   }
 
@@ -226,7 +226,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           analizer.code.push_op(OpCode::Return);
         }
         FunctionAnalysisResult {
-          code: analizer.code.finalize(),
+          code: analizer.code,
           return_type: TypeId::NOTHING,
         }
       }
@@ -236,12 +236,12 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           "function has only conditional return types".to_string(),
         );
         FunctionAnalysisResult {
-          code: Chunk::empty(),
+          code: BytecodeBuilder::new(),
           return_type: TypeId::ERROR,
         }
       }
       Some(ReturnType::Unconditional(return_type)) => FunctionAnalysisResult {
-        code: analizer.code.finalize(),
+        code: analizer.code,
         return_type,
       },
     }

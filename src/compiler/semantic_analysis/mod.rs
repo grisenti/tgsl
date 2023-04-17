@@ -4,7 +4,7 @@ use self::function_analysis::{FunctionAnalizer, FunctionAnalysisResult, Function
 
 use super::{
   ast::*,
-  bytecode::Chunk,
+  codegen::BytecodeBuilder,
   identifier::Identifier,
   types::{type_map::TypeMap, TypeId},
 };
@@ -38,7 +38,7 @@ impl SemanticAnalizer {
     ast: AST,
     global_types: &mut Vec<TypeId>,
     type_map: &TypeMap,
-  ) -> Result<Chunk, SourceError> {
+  ) -> Result<BytecodeBuilder, SourceError> {
     let program = ast.get_program();
     let mut global_env = SemAState {
       structs: HashMap::new(),
