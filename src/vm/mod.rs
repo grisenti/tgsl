@@ -442,10 +442,12 @@ impl VM {
       imports: _,
       id,
       code,
+      global_identifiers,
     } = match self.compiler.compile(source, &self.state) {
       Err(err) => return Err(err.print_long(source, &name)),
       Ok(module) => module,
     };
+    self.globals.reserve(global_identifiers);
     self.bind_functions(&ext_ids, id, extern_functions)?;
     self.state.extern_functions.extend(ext_ids);
     let mod_id = self.state.module_ids.len() as u16;

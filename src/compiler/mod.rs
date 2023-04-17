@@ -4,17 +4,17 @@ use crate::errors::*;
 
 use self::{
   global_env::GlobalEnv,
-  identifier::{GlobalId, Identifier, ModuleId},
+  identifier::{GlobalId, ModuleId},
   lexer::Lexer,
   modules::{LoadedModules, Module},
   parser::{ParseResult, Parser},
   semantic_analysis::SemanticAnalizer,
-  types::{type_map::TypeMap, TypeId},
+  types::type_map::TypeMap,
 };
 
 pub mod ast;
 pub mod bytecode;
-mod codegen;
+pub mod codegen;
 mod global_env;
 pub mod identifier;
 mod lexer;
@@ -43,15 +43,16 @@ impl Compiler {
       &mut self.global_env,
       &loaded.module_ids,
     )?;
-    println!("{:?}", ast);
     let generated_code =
       SemanticAnalizer::analyze(ast, &mut self.global_env.types, &self.type_map)?;
-    println!("{:?}", generated_code);
+    let id = ModuleId(self.last_module);
+    let global_identifiers = self.global_env.get_globals_count(id);
     let ret = Ok(Module {
-      id: ModuleId(self.last_module),
+      id,
       extern_functions: module_extern_functions,
       imports,
       code: generated_code,
+      global_identifiers,
     });
     self.last_module += 1;
     ret

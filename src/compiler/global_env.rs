@@ -65,6 +65,10 @@ impl GlobalEnv {
     self.names[module_id.0 as usize].get(name).copied()
   }
 
+  pub fn get_globals_count(&self, module_id: ModuleId) -> usize {
+    self.names[module_id.0 as usize].len()
+  }
+
   pub fn get_or_add(
     &mut self,
     imported_modules: &[ModuleId],
