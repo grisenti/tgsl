@@ -8,6 +8,7 @@ use super::*;
 #[derive(Debug, Clone, Copy)]
 struct LocalId {
   scope_depth: u8,
+  function_depth: u8,
   id: u8,
 }
 
@@ -51,11 +52,12 @@ impl<'compilation> Environment<'compilation> {
   fn capture(
     &mut self,
     LocalId {
-      scope_depth: target_depth,
+      function_depth: target_depth,
       id,
+      ..
     }: LocalId,
   ) -> Identifier {
-    let start_depth = self.scope_depth;
+    let start_depth = self.functions_declaration_stack.len() as u8;
     debug_assert!(start_depth >= target_depth);
     let mut capture_id = Identifier::Local(id);
     for func in self
@@ -125,6 +127,7 @@ impl<'compilation> Environment<'compilation> {
       }
       let id = LocalId {
         scope_depth: self.scope_depth,
+        function_depth: self.functions_declaration_stack.len() as u8,
         id: self.last_local_id,
       };
       self.last_local_id += 1;
@@ -180,6 +183,7 @@ impl<'compilation> Environment<'compilation> {
       .collect()
   }
 
+  // TODO: move this functionality out of here
   pub fn create_extern_id(&mut self, id: Identifier) -> ExternId {
     if let Identifier::Global(id) = id {
       self.extern_ids.push(id);
@@ -236,7 +240,9 @@ mod test {
     let mut global_env = GlobalEnv::new();
     let mut env = Environment::new(&mut global_env);
     env.push_function();
-    env.declare_name_or_err("x", FAKE_SOURCE_INFO).unwrap();
+    env
+      .declare_name_or_err("x", FAKE_SOURCE_INFO)
+      .expect("could not declare name");
     env.push_function();
     assert_eq!(
       env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
@@ -259,7 +265,9 @@ mod test {
     let mut global_env = GlobalEnv::new();
     let mut env = Environment::new(&mut global_env);
     env.push_function();
-    env.declare_name_or_err("x", FAKE_SOURCE_INFO).unwrap();
+    env
+      .declare_name_or_err("x", FAKE_SOURCE_INFO)
+      .expect("could not declare name");
     env.push_function();
     env.push_function();
     assert_eq!(
@@ -270,5 +278,46 @@ mod test {
     assert_eq!(captures, vec![Identifier::Capture(0)]);
     let captures = env.pop_function();
     assert_eq!(captures, vec![Identifier::Local(0)]);
+  }
+
+  #[test]
+  fn no_capture_for_globals() {
+    let mut global_env = GlobalEnv::new();
+    let mut env = Environment::new(&mut global_env);
+    env
+      .declare_name_or_err("x", FAKE_SOURCE_INFO)
+      .expect("could not declare name");
+    env.push_function();
+    assert_eq!(env.pop_function(), vec![]);
+  }
+
+  #[test]
+  fn no_capture_for_globals_in_inner_scope() {
+    let mut global_env = GlobalEnv::new();
+    let mut env = Environment::new(&mut global_env);
+    env
+      .declare_name_or_err("x", FAKE_SOURCE_INFO)
+      .expect("could not declare name");
+    env.push_function();
+    env.push_scope();
+    assert_eq!(
+      env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
+      Ok(Identifier::Global(0))
+    );
+  }
+
+  #[test]
+  fn no_capture_same_function_different_scope() {
+    let mut global_env = GlobalEnv::new();
+    let mut env = Environment::new(&mut global_env);
+    env.push_function();
+    env
+      .declare_name_or_err("x", FAKE_SOURCE_INFO)
+      .expect("could not declare name");
+    env.push_scope();
+    assert_eq!(
+      env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
+      Ok(Identifier::Local(0))
+    );
   }
 }
