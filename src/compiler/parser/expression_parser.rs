@@ -232,109 +232,80 @@ impl<'src> Parser<'src> {
 
 #[cfg(test)]
 mod test {
-  use crate::compiler::{
-    ast::{Expr, Literal, Operator},
-    identifier::Identifier,
-    lexer::Lexer,
-    parser::Parser,
+  use json::JsonValue;
+
+  use crate::{
+    compiler::{
+      ast::AST,
+      global_env::GlobalEnv,
+      lexer::{Lexer, Token},
+      parser::{environment::Environment, Parser},
+      types::type_map::TypeMap,
+    },
+    errors::SourceError,
   };
 
-  fn create_parser(input: &str) -> Parser {
-    let lex = Lexer::new(input);
-    let mut parser = Parser::new(lex);
-    parser.advance().unwrap();
-    parser
+  use std::collections::HashMap;
+
+  fn parse_expression(expr: &str) -> Result<JsonValue, SourceError> {
+    let mut empty_type_map = TypeMap::new();
+    let empty_loaded_modules = HashMap::new();
+    let mut empty_global_env = GlobalEnv::new();
+    let mut parser = Parser {
+      lex: Lexer::new(expr),
+      type_map: &mut empty_type_map,
+      lookahead: Token::EndOfFile,
+      loaded_modules: &empty_loaded_modules,
+      ast: AST::new(),
+      env: Environment::new(&mut empty_global_env),
+    };
+    parser.advance()?;
+    let handle = parser.parse_expression()?;
+    Ok(handle.to_json(&parser.ast))
   }
 
   #[test]
-  fn parse_literal_num() {
-    let mut parser = create_parser("1");
-    let literal = parser.parse_expression().unwrap();
-    assert!(matches!(
-      literal.get(&parser.ast),
-      Expr::Literal {
-        literal: Literal::Number(n),
-        info: _
-      } if n == 1.0
-    ))
+  fn literal_num() {
+    let literal = parse_expression("1").expect("parsing error");
+    assert_eq!(literal["Literal"], "1");
   }
 
   #[test]
-  fn parse_literal_string() {
-    let mut parser = create_parser("\"str\"");
-    let literal = parser.parse_expression().unwrap();
-    assert!(matches!(
-      literal.get(&parser.ast),
-      Expr::Literal {
-        literal: Literal::String(s),
-        info: _
-      } if s.get(&parser.ast) == "str"
-    ))
+  fn literal_string() {
+    let literal = parse_expression("\"str\"").expect("parsing error");
+    assert_eq!(literal["Literal"], "\"str\"");
   }
 
   #[test]
   fn binary_op() {
-    let mut parser = create_parser("1 + 1");
-    let binexp = parser.parse_expression().unwrap();
-    assert!(
-      matches!(binexp.get(&parser.ast), Expr::Binary{left: _, operator, right: _} if operator.op == Operator::Basic('+'))
-    );
-  }
-
-  #[test]
-  fn operator_precedece() {
-    let mut parser = create_parser("1 * 1 + 1 < 1 == 1");
-    let operators = [
-      Operator::Same,
-      Operator::Basic('<'),
-      Operator::Basic('+'),
-      Operator::Basic('*'),
-    ];
-    let mut binexp = parser.parse_expression().unwrap();
-    for op in operators {
-      match binexp.get(&parser.ast) {
-        Expr::Binary {
-          left,
-          operator,
-          right: _,
-        } if operator.op == op => {
-          binexp = left;
-        }
-        _ => panic!("wrong precedence"),
-      }
-    }
+    let bin_op = parse_expression("1 + 1").expect("parsing error");
+    assert_eq!(bin_op["Binary"]["operator"], "+");
+    assert_eq!(bin_op["Binary"]["left"]["Literal"], "1");
+    assert_eq!(bin_op["Binary"]["right"]["Literal"], "1");
   }
 
   #[test]
   fn assign_to_lvalue_error() {
-    let mut parser = create_parser("1 = 2");
-    let assignment = parser.parse_expression();
-    assert!(matches!(assignment, Err(_)));
+    parse_expression("1 = 2").expect_err("can assign to lvalue");
   }
 
   #[test]
   fn assign_to_rvalue() {
-    let mut parser = create_parser("id = 2");
-    let assignment = parser.parse_expression().unwrap();
-    assert!(matches!(
-      assignment.get(&parser.ast),
-      Expr::Assignment {
-        id: _,
-        id_info: _,
-        value: _
-      }
-    ));
+    let assignment = parse_expression("id = 2").expect("parsing error");
+    assert_eq!(assignment["Assignment"]["id"], "Global(0)");
+    assert_eq!(assignment["Assignment"]["value"]["Literal"], "2");
   }
 
   #[test]
   fn parse_identifier() {
-    let mut parser = create_parser("identifier");
-    let variable = parser.parse_expression().unwrap();
-    match variable.get(&parser.ast) {
-      Expr::Variable { id, id_info: _ } => {
-        assert_eq!(id, Identifier::Global(0))
-      }
-      a => panic!("expected variable, got {a:?}"),
-    }
+    let identifier = parse_expression("identifier").expect("parsing error");
+    assert_eq!(identifier["Variable"], "Global(0)");
+  }
+
+  #[test]
+  fn operator_precedece() {
+    let expr_no_parens = parse_expression("1 * 1 + 1 < 1 == 1").expect("parsing error");
+    let expr_parens = parse_expression("(((1 * 1) + 1) < 1) == 1").expect("parsing error");
+    assert_eq!(expr_no_parens, expr_parens);
   }
 }
