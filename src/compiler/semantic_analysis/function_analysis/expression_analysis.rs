@@ -110,9 +110,9 @@ impl FunctionAnalizer<'_> {
       }
       &Expr::Dot {
         lhs,
-        name,
-        identifier,
-        name_info,
+        rhs_name: name,
+        rhs_id: identifier,
+        rhs_info: name_info,
       } => match self.dot_kind(lhs, name, identifier, name_info) {
         DotKind::MaybeCall {
           rhs_id,
@@ -482,7 +482,7 @@ impl FunctionAnalizer<'_> {
       } => self.closure(*info, parameters, captures, *fn_type, body),
       Expr::Assignment { id, id_info, value } => self.assignment(*id, *id_info, *value),
       Expr::Variable { id, .. } => self.variable(*id),
-      Expr::Literal { literal, .. } => self.literal(*literal),
+      Expr::Literal { value, .. } => self.literal(*value),
       Expr::FnCall {
         func,
         call_info,
@@ -501,16 +501,16 @@ impl FunctionAnalizer<'_> {
       Expr::Unary { operator, right } => self.unary_operation(*operator, *right),
       Expr::Dot {
         lhs,
-        name,
-        identifier,
-        name_info,
-      } => self.dot(*lhs, *name, *identifier, *name_info),
+        rhs_name,
+        rhs_id,
+        rhs_info,
+      } => self.dot(*lhs, *rhs_name, *rhs_id, *rhs_info),
       Expr::Set {
         object,
-        name,
-        name_info,
+        member_name,
+        member_name_info,
         value,
-      } => self.set(*object, *name, *name_info, *value),
+      } => self.set(*object, *member_name, *member_name_info, *value),
     }
   }
 }

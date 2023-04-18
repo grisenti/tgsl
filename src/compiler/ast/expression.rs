@@ -103,7 +103,7 @@ pub enum Expr {
     right: ExprHandle,
   },
   Literal {
-    literal: Literal,
+    value: Literal,
     info: SourceInfoHandle,
   },
   Variable {
@@ -130,14 +130,14 @@ pub enum Expr {
   },
   Dot {
     lhs: ExprHandle,
-    name: StrHandle,
-    identifier: Identifier,
-    name_info: SourceInfoHandle,
+    rhs_name: StrHandle,
+    rhs_id: Identifier,
+    rhs_info: SourceInfoHandle,
   },
   Set {
     object: ExprHandle,
-    name: StrHandle,
-    name_info: SourceInfoHandle,
+    member_name: StrHandle,
+    member_name_info: SourceInfoHandle,
     value: ExprHandle,
   },
 }

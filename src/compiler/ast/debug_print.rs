@@ -170,18 +170,26 @@ impl StmtHandle {
 impl ExprHandle {
   pub fn to_json(&self, ast: &AST) -> JsonValue {
     match self.get(ast) {
-      Expr::Logical {
-        left,
-        operator,
-        right,
-      }
-      | Expr::Binary {
+      Expr::Binary {
         left,
         operator,
         right,
       } => {
         object! {
           "Binary": {
+            "operator": format!("{}", operator.op),
+            "left": left.to_json(ast),
+            "right": right.to_json(ast),
+          }
+        }
+      }
+      Expr::Logical {
+        left,
+        operator,
+        right,
+      } => {
+        object! {
+          "Logical": {
             "operator": format!("{}", operator.op),
             "left": left.to_json(ast),
             "right": right.to_json(ast),
@@ -196,9 +204,11 @@ impl ExprHandle {
           }
         }
       }
-      Expr::Literal { literal, .. } => {
+      Expr::Literal { value, .. } => {
         object! {
-          "Literal": literal.display(ast)
+          "Literal": {
+            value: value.display(ast)
+          }
         }
       }
       Expr::Variable { id, .. } => {
@@ -249,28 +259,28 @@ impl ExprHandle {
       }
       Expr::Dot {
         lhs,
-        name,
-        identifier,
+        rhs_name: name,
+        rhs_id: identifier,
         ..
       } => {
         object! {
           "Dot": {
-            "rhs name": name.get(ast),
-            "rhs id": *identifier,
-            "lhs expr": lhs.to_json(ast)
+            "lhs": lhs.to_json(ast),
+            "rhs_name": name.get(ast),
+            "rhs_id": *identifier
           }
         }
       }
       Expr::Set {
         object,
-        name,
+        member_name,
         value,
         ..
       } => {
         object! {
           "Set": {
             "object": object.to_json(ast),
-            "name": name.get(ast),
+            "member_name": member_name.get(ast),
             "value": value.to_json(ast)
           }
         }

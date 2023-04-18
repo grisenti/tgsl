@@ -18,9 +18,9 @@ impl<'src> Parser<'src> {
   fn parse_primary(&mut self) -> ExprRes {
     match self.lookahead {
       Token::Number(_) | Token::String(_) | Token::True | Token::False | Token::Null => {
-        let literal = literal_from_token(self.lookahead, &mut self.ast);
+        let value = literal_from_token(self.lookahead, &mut self.ast);
         let info = self.last_token_info();
-        let ret = Ok(self.ast.add_expression(Expr::Literal { literal, info }));
+        let ret = Ok(self.ast.add_expression(Expr::Literal { value, info }));
         self.advance()?;
         ret
       }
@@ -98,9 +98,9 @@ impl<'src> Parser<'src> {
             let name = self.ast.add_str(name);
             expr = self.ast.add_expression(Expr::Dot {
               lhs: expr,
-              identifier: id,
-              name,
-              name_info,
+              rhs_id: id,
+              rhs_name: name,
+              rhs_info: name_info,
             });
           }
         }
@@ -170,13 +170,13 @@ impl<'src> Parser<'src> {
         })),
         &Expr::Dot {
           lhs: object,
-          name,
-          identifier: _,
-          name_info,
+          rhs_name: name,
+          rhs_id: _,
+          rhs_info: name_info,
         } => Ok(self.ast.add_expression(Expr::Set {
           object,
-          name,
-          name_info,
+          member_name: name,
+          member_name_info: name_info,
           value: rhs,
         })),
         _ => Err(error_from_source_info(
@@ -267,21 +267,21 @@ mod test {
   #[test]
   fn literal_num() {
     let literal = parse_expression("1").expect("parsing error");
-    assert_eq!(literal["Literal"], "1");
+    assert_eq!(literal["Literal"]["value"], "1");
   }
 
   #[test]
   fn literal_string() {
     let literal = parse_expression("\"str\"").expect("parsing error");
-    assert_eq!(literal["Literal"], "\"str\"");
+    assert_eq!(literal["Literal"]["value"], "\"str\"");
   }
 
   #[test]
   fn binary_op() {
     let bin_op = parse_expression("1 + 1").expect("parsing error");
     assert_eq!(bin_op["Binary"]["operator"], "+");
-    assert_eq!(bin_op["Binary"]["left"]["Literal"], "1");
-    assert_eq!(bin_op["Binary"]["right"]["Literal"], "1");
+    assert_eq!(bin_op["Binary"]["left"]["Literal"]["value"], "1");
+    assert_eq!(bin_op["Binary"]["right"]["Literal"]["value"], "1");
   }
 
   #[test]
@@ -293,7 +293,7 @@ mod test {
   fn assign_to_rvalue() {
     let assignment = parse_expression("id = 2").expect("parsing error");
     assert_eq!(assignment["Assignment"]["id"], "Global(0)");
-    assert_eq!(assignment["Assignment"]["value"]["Literal"], "2");
+    assert_eq!(assignment["Assignment"]["value"]["Literal"]["value"], "2");
   }
 
   #[test]
