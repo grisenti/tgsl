@@ -2,7 +2,7 @@ use std::{collections::HashMap, mem::ManuallyDrop};
 
 use crate::{
   compiler::{
-    bytecode::{ConstantValue, OpCode},
+    bytecode::OpCode,
     identifier::ModuleId,
     modules::{LoadedModules, Module},
     Compiler,
@@ -131,7 +131,7 @@ pub struct VM {
   gc: GC,
   loaded_functions: Vec<Function>,
   function_call: usize,
-  globals: HashMap<u16, TaggedValue, IdBuildHasher>,
+  globals: Vec<TaggedValue>,
 }
 
 impl VM {
@@ -147,7 +147,7 @@ impl VM {
     loop {
       if self.gc.should_run() {
         self.gc.mark(self.stack.iter());
-        self.gc.mark(self.globals.values());
+        self.gc.mark(self.globals.iter());
         unsafe { self.gc.sweep() };
       }
       if frame.overflowed_stack() {
@@ -180,18 +180,18 @@ impl VM {
         }
         OpCode::GetGlobal => {
           let id = unsafe { frame.pop().value.id };
-          if let Some(value) = self.globals.get(&id) {
-            frame.push(*value);
-          } else {
+          let value = unsafe { self.globals.get_unchecked(id as usize) };
+          if value.kind == ValueType::None {
             eprint!("trying to access undefined global variable");
             return;
           }
+          frame.push(*value);
         }
         OpCode::SetGlobal => {
           debug_assert!(frame.top().kind == ValueType::GlobalId);
           let id = unsafe { frame.pop().value.id };
           let val = frame.top();
-          self.globals.insert(id, val);
+          self.globals[id as usize] = val;
         }
         OpCode::SetLocal => {
           let id = frame.read_byte();
@@ -444,7 +444,9 @@ impl VM {
       Err(err) => return Err(err.print_long(source, &name)),
       Ok(module) => module,
     };
-    self.globals.reserve(global_identifiers);
+    self
+      .globals
+      .resize(self.globals.len() + global_identifiers, TaggedValue::none());
     self.bind_functions(&ext_ids, id, extern_functions)?;
     self.state.extern_functions.extend(ext_ids);
     let mod_id = self.state.module_ids.len() as u16;
@@ -459,7 +461,7 @@ impl VM {
       compiler: Compiler::new(),
       state: Default::default(),
       extern_functions: Vec::new(),
-      globals: HashMap::default(),
+      globals: Vec::new(),
       loaded_functions: Vec::new(),
       stack: [TaggedValue::none(); MAX_STACK],
       call_stack: [EMPTY_CALL_FRAME; MAX_CALLS],
