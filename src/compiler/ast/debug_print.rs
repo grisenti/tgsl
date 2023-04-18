@@ -19,9 +19,9 @@ impl Into<JsonValue> for TypeId {
   }
 }
 
-impl AST {
-  fn print_stmt(&self, stmt: StmtHandle) -> JsonValue {
-    match stmt.get(self) {
+impl StmtHandle {
+  pub fn to_json(&self, ast: &AST) -> JsonValue {
+    match self.get(ast) {
       Stmt::VarDecl {
         identifier,
         var_type,
@@ -29,7 +29,7 @@ impl AST {
         ..
       } => {
         let init_expr = if let Some(expr) = expression {
-          self.print_expr(*expr)
+          expr.to_json(ast)
         } else {
           JsonValue::Null
         };
@@ -43,13 +43,13 @@ impl AST {
       }
       Stmt::Expr(expr) => {
         object! {
-          "Expr": self.print_expr(*expr)
+          "Expr": expr.to_json(ast)
         }
       }
       Stmt::Block { statements, locals } => {
         let stmts = statements
           .iter()
-          .map(|s| self.print_stmt(*s))
+          .map(|s| s.to_json(ast))
           .collect::<Vec<_>>();
         object! {
           "Block": {
@@ -65,14 +65,14 @@ impl AST {
         ..
       } => {
         let else_branch = if let Some(stmt) = else_branch {
-          self.print_stmt(*stmt)
+          stmt.to_json(ast)
         } else {
           JsonValue::Null
         };
         object! {
           "IfBranch": {
-            "condition": self.print_expr(*condition),
-            "true branch": self.print_stmt(*true_branch),
+            "condition": condition.to_json(ast),
+            "true branch": true_branch.to_json(ast),
             "else branch": else_branch
           }
         }
@@ -84,15 +84,14 @@ impl AST {
       } => {
         object! {
           "While": {
-            "condition": self.print_expr(*condition),
-            "body": self.print_stmt(*loop_body)
+            "condition": condition.to_json(ast),
+            "body": loop_body.to_json(ast)
           }
         }
       }
       Stmt::Function {
         id,
         captures,
-        parameters,
         fn_type,
         body,
         return_type,
@@ -100,7 +99,7 @@ impl AST {
       } => {
         let body = body
           .iter()
-          .map(|stmt| self.print_stmt(*stmt))
+          .map(|stmt| stmt.to_json(ast))
           .collect::<Vec<_>>();
         object! {
           "Function": {
@@ -129,7 +128,7 @@ impl AST {
       Stmt::Break(_) => JsonValue::String("Break".to_string()),
       Stmt::Return { expr, .. } => {
         let ret_expr = if let Some(expr) = expr {
-          self.print_expr(*expr)
+          expr.to_json(ast)
         } else {
           JsonValue::Null
         };
@@ -147,7 +146,7 @@ impl AST {
       } => {
         let member_names = member_names
           .iter()
-          .map(|handle| handle.get(self).to_string())
+          .map(|handle| handle.get(ast).to_string())
           .collect::<Vec<String>>();
         object! {
           "Struct": {
@@ -166,9 +165,11 @@ impl AST {
       }
     }
   }
+}
 
-  fn print_expr(&self, expr: ExprHandle) -> JsonValue {
-    match expr.get(self) {
+impl ExprHandle {
+  pub fn to_json(&self, ast: &AST) -> JsonValue {
+    match self.get(ast) {
       Expr::Logical {
         left,
         operator,
@@ -182,8 +183,8 @@ impl AST {
         object! {
           "Binary": {
             "operator": format!("{}", operator.op),
-            "left": self.print_expr(*left),
-            "right": self.print_expr(*right),
+            "left": left.to_json(ast),
+            "right": right.to_json(ast),
           }
         }
       }
@@ -191,13 +192,13 @@ impl AST {
         object! {
           "Unary": {
             "operator": format!("{}", operator.op),
-            "right": self.print_expr(*right),
+            "right": right.to_json(ast),
           }
         }
       }
       Expr::Literal { literal, .. } => {
         object! {
-          "Literal": literal.display(self)
+          "Literal": literal.display(ast)
         }
       }
       Expr::Variable { id, .. } => {
@@ -209,7 +210,7 @@ impl AST {
         object! {
           "Assignment": {
             "id": *id,
-            "value": self.print_expr(*value)
+            "value": value.to_json(ast)
           }
         }
       }
@@ -223,7 +224,7 @@ impl AST {
       } => {
         let body = body
           .iter()
-          .map(|stmt| self.print_stmt(*stmt))
+          .map(|stmt| stmt.to_json(ast))
           .collect::<Vec<_>>();
         object! {
           "Lambda": {
@@ -238,13 +239,10 @@ impl AST {
       Expr::FnCall {
         func, arguments, ..
       } => {
-        let arguments = arguments
-          .iter()
-          .map(|e| self.print_expr(*e))
-          .collect::<Vec<_>>();
+        let arguments = arguments.iter().map(|e| e.to_json(ast)).collect::<Vec<_>>();
         object! {
           "FnCall": {
-            "function": self.print_expr(*func),
+            "function": func.to_json(ast),
             "arguments": arguments
           }
         }
@@ -257,9 +255,9 @@ impl AST {
       } => {
         object! {
           "Dot": {
-            "rhs name": name.get(self),
+            "rhs name": name.get(ast),
             "rhs id": *identifier,
-            "lhs expr": self.print_expr(*lhs)
+            "lhs expr": lhs.to_json(ast)
           }
         }
       }
@@ -271,9 +269,9 @@ impl AST {
       } => {
         object! {
           "Set": {
-            "object": self.print_expr(*object),
-            "name": name.get(self),
-            "value": self.print_expr(*value)
+            "object": object.to_json(ast),
+            "name": name.get(ast),
+            "value": value.to_json(ast)
           }
         }
       }
@@ -286,7 +284,7 @@ impl Debug for AST {
     let out = self
       .program
       .iter()
-      .map(|s| self.print_stmt(*s))
+      .map(|s| s.to_json(self))
       .collect::<Vec<_>>();
     write!(f, "{}", json::stringify_pretty(out, 2))
   }
