@@ -277,11 +277,39 @@ mod test {
   }
 
   #[test]
+  fn literal_in_parenthesis() {
+    let literal = parse_expression("(1)").expect("parsing error");
+    assert_eq!(literal["Literal"]["value"], "1");
+  }
+
+  #[test]
+  fn parse_empty_function_call() {
+    let call = parse_expression("main()").expect("parsing error");
+    assert_eq!(call["FnCall"]["function"]["Variable"]["id"], "Global(0)");
+    assert_eq!(call["FnCall"]["arguments"], JsonValue::Array(vec![]));
+  }
+
+  #[test]
+  fn parse_function_call_with_arguments() {
+    let call = parse_expression("main(1, 1 + 1, \"hello\")").expect("parsing error");
+    assert_eq!(call["FnCall"]["function"]["Variable"]["id"], "Global(0)");
+    assert_eq!(call["FnCall"]["arguments"].len(), 3);
+  }
+
+  #[test]
   fn binary_op() {
     let bin_op = parse_expression("1 + 1").expect("parsing error");
     assert_eq!(bin_op["Binary"]["operator"], "+");
     assert_eq!(bin_op["Binary"]["left"]["Literal"]["value"], "1");
     assert_eq!(bin_op["Binary"]["right"]["Literal"]["value"], "1");
+  }
+
+  #[test]
+  fn logical_op() {
+    let logical_op = parse_expression("1 and 1").expect("parsing error");
+    assert_eq!(logical_op["Logical"]["operator"], "and");
+    assert_eq!(logical_op["Logical"]["left"]["Literal"]["value"], "1");
+    assert_eq!(logical_op["Logical"]["right"]["Literal"]["value"], "1");
   }
 
   #[test]
@@ -299,7 +327,7 @@ mod test {
   #[test]
   fn parse_identifier() {
     let identifier = parse_expression("identifier").expect("parsing error");
-    assert_eq!(identifier["Variable"], "Global(0)");
+    assert_eq!(identifier["Variable"]["id"], "Global(0)");
   }
 
   #[test]

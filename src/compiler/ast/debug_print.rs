@@ -213,7 +213,9 @@ impl ExprHandle {
       }
       Expr::Variable { id, .. } => {
         object! {
-          "Variable": *id
+          "Variable": {
+            id: *id
+          }
         }
       }
       Expr::Assignment { id, value, .. } => {
