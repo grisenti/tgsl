@@ -227,9 +227,9 @@ impl ExprHandle {
         }
       }
       Expr::Lambda {
-        parameters,
+        parameter_types,
         captures,
-        fn_type,
+        function_type_id,
         body,
         return_type,
         ..
@@ -241,9 +241,9 @@ impl ExprHandle {
         object! {
           "Lambda": {
             "captures": captures.as_slice(),
-            "fn type": *fn_type,
-            "return type": *return_type,
-            "parameters": parameters.as_slice(),
+            "function_type_id": *function_type_id,
+            "return_type": *return_type,
+            "parameters": parameter_types.as_slice(),
             "body": body
           }
         }

@@ -126,7 +126,7 @@ impl FunctionAnalizer<'_> {
     }
   }
 
-  pub fn closure(
+  pub fn lambda(
     &mut self,
     info: SourceInfoHandle,
     parameters: &[TypeId],
@@ -474,12 +474,12 @@ impl FunctionAnalizer<'_> {
     match expr.get(self.ast) {
       Expr::Lambda {
         info,
-        parameters,
+        parameter_types,
         captures,
-        fn_type,
+        function_type_id,
         body,
-        return_type: _,
-      } => self.closure(*info, parameters, captures, *fn_type, body),
+        ..
+      } => self.lambda(*info, parameter_types, captures, *function_type_id, body),
       Expr::Assignment { id, id_info, value } => self.assignment(*id, *id_info, *value),
       Expr::Variable { id, .. } => self.variable(*id),
       Expr::Literal { value, .. } => self.literal(*value),

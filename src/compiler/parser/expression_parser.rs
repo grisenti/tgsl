@@ -189,41 +189,42 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_closure(&mut self) -> ExprRes {
-    let call_start = self.lex.prev_token_info();
+  fn parse_lambda(&mut self) -> ExprRes {
+    let parameters_sloc_start = self.lex.prev_token_info();
     self.env.push_function();
     self.match_or_err(Token::Basic('('))?;
     let parameters = if self.lookahead != Token::Basic(')') {
-      self.parse_function_params(call_start)
+      self.parse_function_params(parameters_sloc_start)
     } else {
       Ok(Vec::new())
     };
     self.match_or_err(Token::Basic(')'))?;
     let return_type = self.parse_function_return_type()?;
-    let call_end = self.lex.prev_token_info();
+    let parameters_sloc_end = self.lex.prev_token_info();
     let body = self.parse_unscoped_block()?;
     let captures = self.env.pop_function();
-    let param_types = parameters?;
-    let fn_type = self.type_map.get_or_add(Type::Function {
-      parameters: param_types.clone(),
+    let parameter_types = parameters?;
+    let function_type_id = self.type_map.get_or_add(Type::Function {
+      parameters: parameter_types.clone(),
       ret: return_type,
     });
-    let info = self
-      .ast
-      .add_source_info(SourceInfo::union(call_start, call_end));
+    let info = self.ast.add_source_info(SourceInfo::union(
+      parameters_sloc_start,
+      parameters_sloc_end,
+    ));
     Ok(self.ast.add_expression(Expr::Lambda {
       captures,
       info,
-      parameters: param_types,
+      parameter_types,
       body,
-      fn_type,
+      function_type_id,
       return_type,
     }))
   }
 
   pub(super) fn parse_expression(&mut self) -> ExprRes {
     if self.match_next(Token::Fn)?.is_some() {
-      self.parse_closure()
+      self.parse_lambda()
     } else {
       self.parse_assignment()
     }

@@ -118,9 +118,9 @@ pub enum Expr {
   Lambda {
     info: SourceInfoHandle,
     captures: Vec<Identifier>,
-    parameters: Vec<TypeId>,
+    parameter_types: Vec<TypeId>,
     return_type: TypeId,
-    fn_type: TypeId,
+    function_type_id: TypeId,
     body: Vec<StmtHandle>,
   },
   FnCall {
