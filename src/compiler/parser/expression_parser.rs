@@ -298,6 +298,13 @@ mod test {
   }
 
   #[test]
+  fn parse_dot() {
+    let dot_expr = parse_expression("object.member").expect("parsing error");
+    assert_eq!(dot_expr["Dot"]["lhs"]["Variable"]["id"], "Global(0)");
+    assert_eq!(dot_expr["Dot"]["rhs_id"], "Global(1)");
+  }
+
+  #[test]
   fn binary_op() {
     let bin_op = parse_expression("1 + 1").expect("parsing error");
     assert_eq!(bin_op["Binary"]["operator"], "+");
