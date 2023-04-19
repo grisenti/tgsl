@@ -261,15 +261,15 @@ impl ExprHandle {
       }
       Expr::Dot {
         lhs,
-        rhs_name: name,
-        rhs_id: identifier,
+        rhs_name,
+        rhs_id,
         ..
       } => {
         object! {
           "Dot": {
             "lhs": lhs.to_json(ast),
-            "rhs_name": name.get(ast),
-            "rhs_id": *identifier
+            "rhs_name": rhs_name.get(ast),
+            "rhs_id": *rhs_id
           }
         }
       }
