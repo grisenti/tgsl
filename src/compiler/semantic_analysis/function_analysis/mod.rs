@@ -1,5 +1,5 @@
 use crate::compiler::{
-  ast::{SourceInfoHandle, Stmt, StmtHandle, AST},
+  ast::{Stmt, StmtHandle, AST},
   bytecode::{ConstantValue, OpCode},
   codegen::BytecodeBuilder,
   errors::{sema_err, CompilerError},

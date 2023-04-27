@@ -1,4 +1,4 @@
-use super::{ast::Operator, codegen::BytecodeBuilder};
+use super::{ast::Operator};
 use core::fmt::Debug;
 
 #[repr(u8)]

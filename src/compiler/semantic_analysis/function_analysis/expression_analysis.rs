@@ -1,14 +1,11 @@
-use crate::{
-  compiler::{
-    ast::{Expr, ExprHandle, Literal, Operator, StmtHandle, StrHandle},
-    bytecode::{ConstantValue, OpCode},
-    codegen::Address,
-    errors::sema_err,
-    identifier::Identifier,
-    lexer::SourceRange,
-    types::{Type, TypeId},
-  },
-  vm::value::ObjectValue,
+use crate::compiler::{
+  ast::{Expr, ExprHandle, Literal, Operator, StmtHandle, StrHandle},
+  bytecode::{ConstantValue, OpCode},
+  codegen::Address,
+  errors::sema_err,
+  identifier::Identifier,
+  lexer::SourceRange,
+  types::{Type, TypeId},
 };
 
 use super::FunctionAnalizer;
@@ -279,7 +276,7 @@ impl FunctionAnalizer<'_> {
       (lhs, op, rhs) => {
         self.emit_error(sema_err::incorrect_binary_operator(
           operator_sr,
-          operator,
+          op,
           self.type_string(lhs),
           self.type_string(rhs),
         ));

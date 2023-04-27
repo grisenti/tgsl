@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem::ManuallyDrop};
+use std::{mem::ManuallyDrop};
 
 use crate::{
   compiler::{
@@ -8,7 +8,6 @@ use crate::{
     modules::{LoadedModules, Module},
     Compiler,
   },
-  id_hasher::IdBuildHasher,
   standard_library::load_standard_library,
 };
 

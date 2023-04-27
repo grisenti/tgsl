@@ -2,7 +2,7 @@ mod environment;
 mod expression_parser;
 mod statement_parser;
 
-use std::ops::Index;
+
 
 use self::environment::Environment;
 

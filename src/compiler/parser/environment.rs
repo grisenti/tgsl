@@ -218,7 +218,6 @@ mod test {
 
   use crate::{
     compiler::{global_env::GlobalEnv, identifier::Identifier, lexer::SourceRange},
-    errors::SourceInfo,
   };
 
   use super::Environment;

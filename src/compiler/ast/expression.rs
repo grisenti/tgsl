@@ -6,7 +6,7 @@ use crate::compiler::{
   types::TypeId,
 };
 
-use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle, AST};
+use super::{ExprHandle, StmtHandle, StrHandle, AST};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Operator {

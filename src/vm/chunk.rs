@@ -1,7 +1,7 @@
-use std::{collections, mem::ManuallyDrop};
+use std::{mem::ManuallyDrop};
 
 use crate::compiler::{
-  bytecode::{ConstantValue, OpCode},
+  bytecode::{ConstantValue},
   codegen::BytecodeBuilder,
 };
 
