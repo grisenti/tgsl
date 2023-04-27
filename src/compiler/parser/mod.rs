@@ -273,7 +273,8 @@ impl<'parsing> Parser<'parsing> {
     };
     parser.advance();
     while !parser.is_at_end() && parser.state != ParserState::UnrecoverableError {
-      parser.parse_decl();
+      let stmt = parser.parse_decl();
+      parser.ast.program_push(stmt);
       if parser.in_panic_state() {
         parser.recover_from_errors();
       }

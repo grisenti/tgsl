@@ -12,7 +12,7 @@ impl<'src> Parser<'src> {
       && !self.is_at_end()
       && self.state != ParserState::UnrecoverableError
     {
-      self.parse_decl();
+      statements.push(self.parse_decl());
       if self.in_panic_state() {
         self.recover_from_errors();
       }
@@ -29,7 +29,7 @@ impl<'src> Parser<'src> {
       && !self.is_at_end()
       && self.state != ParserState::UnrecoverableError
     {
-      self.parse_decl();
+      statements.push(self.parse_decl());
       if self.in_panic_state() {
         self.recover_from_errors();
       }
