@@ -7,15 +7,15 @@ use crate::compiler::types::TypeId;
 use super::*;
 use core::fmt::Debug;
 
-impl Into<JsonValue> for Identifier {
-  fn into(self) -> JsonValue {
-    JsonValue::String(format!("{self:?}"))
+impl From<Identifier> for JsonValue {
+  fn from(value: Identifier) -> Self {
+    JsonValue::String(format!("{value:?}"))
   }
 }
 
-impl Into<JsonValue> for TypeId {
-  fn into(self) -> JsonValue {
-    JsonValue::String(format!("{}", self.0))
+impl From<TypeId> for JsonValue {
+  fn from(value: TypeId) -> Self {
+    JsonValue::String(format!("{}", value.0))
   }
 }
 

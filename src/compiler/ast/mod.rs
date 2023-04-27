@@ -9,15 +9,12 @@ pub use expression::*;
 pub use handle::*;
 pub use statement::*;
 
-use crate::errors::SourceInfo;
-
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Default)]
 pub struct AST {
   strings: String,
   statements: Vec<Stmt>,
   expressions: Vec<Expr>,
-  source_ptrs: Vec<SourceInfo>,
   program: Vec<StmtHandle>,
 }
 
@@ -41,11 +38,6 @@ impl AST {
     self.strings.push_str(s);
     let end = self.strings.len() as u32;
     StrHandle::new(start, end)
-  }
-
-  pub fn add_source_info(&mut self, info: SourceInfo) -> SourceInfoHandle {
-    self.source_ptrs.push(info);
-    SourceInfoHandle::new((self.source_ptrs.len() - 1) as u32)
   }
 
   pub fn program_push(&mut self, stmt: StmtHandle) {

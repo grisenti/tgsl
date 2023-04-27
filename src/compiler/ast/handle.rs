@@ -1,5 +1,3 @@
-use crate::errors::SourceInfo;
-
 use super::{Expr, Stmt, AST};
 
 macro_rules! generate_ast_handle {
@@ -32,14 +30,6 @@ impl StmtHandle {
   pub fn get<'a>(&'a self, ast: &'a AST) -> &'a Stmt {
     assert!(self.index < ast.statements.len() as u32);
     &ast.statements[self.index as usize]
-  }
-}
-
-generate_ast_handle!(SourceInfoHandle);
-impl SourceInfoHandle {
-  pub fn get(&self, ast: &AST) -> SourceInfo {
-    assert!(self.index < ast.source_ptrs.len() as u32);
-    ast.source_ptrs[self.index as usize]
   }
 }
 

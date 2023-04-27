@@ -130,3 +130,30 @@ impl GlobalEnv {
     Default::default()
   }
 }
+
+#[cfg(never)]
+mod test {
+  use crate::errors::SourceInfo;
+
+  use super::GlobalEnv;
+
+  #[test]
+  fn no_declaration_for_name() {
+    let mut env = GlobalEnv::new();
+    env.get_or_add(&[], "test", Sou).expect("error adding name");
+    env
+      .finalize_current_module()
+      .expect_err("absence of declaration not detected");
+  }
+
+  #[test]
+  fn no_declaration_for_name() {
+    let mut env = GlobalEnv::new();
+    env
+      .get_or_add(&[], "test", FAKE_SOURCE_INFO)
+      .expect("error adding name");
+    env
+      .finalize_current_module()
+      .expect_err("absence of declaration not detected");
+  }
+}

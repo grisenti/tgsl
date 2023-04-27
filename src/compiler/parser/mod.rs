@@ -2,8 +2,6 @@ mod environment;
 mod expression_parser;
 mod statement_parser;
 
-
-
 use self::environment::Environment;
 
 use super::ast::*;
@@ -44,7 +42,6 @@ pub struct Parser<'parsing> {
   state: ParserState,
 }
 
-type SrcErrVec = Vec<SourceError>;
 type TokenPairOpt<'parsing> = Option<(Token<'parsing>, SourceRange)>;
 type ExprRes = CompilerResult<ExprHandle>;
 type StmtRes = CompilerResult<StmtHandle>;
@@ -128,10 +125,6 @@ impl<'parsing> Parser<'parsing> {
       self.emit_error(parser_err::expected_identifier(&self.lex, self.lookahead));
       ERROR_RESULT
     }
-  }
-
-  fn last_token_info(&mut self) -> SourceInfoHandle {
-    self.ast.add_source_info(self.lex.prev_token_info())
   }
 
   fn advance(&mut self) -> Token<'parsing> {

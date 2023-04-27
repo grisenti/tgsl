@@ -344,7 +344,7 @@ impl FunctionAnalizer<'_> {
       (op, rhs) => {
         self.emit_error(sema_err::incorrect_unary_operator(
           operator_sr,
-          operator,
+          op,
           self.type_string(rhs),
         ));
         TypeId::ERROR

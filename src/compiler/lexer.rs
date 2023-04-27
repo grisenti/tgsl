@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::CharIndices};
 
-use crate::{compiler::errors::lex_err, errors::*};
+use crate::compiler::errors::lex_err;
 
 use super::errors::CompilerResult;
 
@@ -298,14 +298,6 @@ impl<'src> Lexer<'src> {
 
   pub fn prev_token_end(&self) -> usize {
     self.total_offset
-  }
-
-  pub fn prev_token_info(&self) -> SourceInfo {
-    SourceInfo {
-      line_no: self.line_no,
-      start: self.prev_token_start,
-      end: self.total_offset,
-    }
   }
 
   pub fn previous_token_range(&self) -> SourceRange {

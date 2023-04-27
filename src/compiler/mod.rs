@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
-use crate::errors::*;
-
 use self::{
   errors::CompilerError,
   global_env::GlobalEnv,
   identifier::{GlobalId, ModuleId},
-  lexer::Lexer,
   modules::{LoadedModules, Module},
   parser::{ParseResult, Parser},
   semantic_analysis::SemanticAnalizer,
@@ -73,18 +70,4 @@ impl Compiler {
       last_module: 0,
     }
   }
-}
-
-fn error_from_lexer_state(lex: &Lexer, error_msg: String) -> SourceError {
-  SourceError::new(
-    lex.line_no(),
-    lex.prev_token_start(),
-    lex.prev_token_end(),
-    error_msg,
-    SourceErrorType::Compilation,
-  )
-}
-
-fn error_from_source_info(info: &SourceInfo, error_msg: String) -> SourceError {
-  SourceError::from_source_info(info, error_msg, SourceErrorType::Compilation)
 }

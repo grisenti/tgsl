@@ -94,7 +94,7 @@ impl FunctionAnalizer<'_> {
   fn struct_stmt(
     &mut self,
     id: Identifier,
-    name_sr: SourceRange,
+    _name_sr: SourceRange,
     member_names: &[StrHandle],
     member_types: &[TypeId],
     constructor_type: TypeId,
@@ -149,10 +149,10 @@ impl FunctionAnalizer<'_> {
     declaration_sr: SourceRange,
     body: &[StmtHandle],
   ) {
-    self.check_function(&parameters, &captures, declaration_sr, body);
+    self.check_function(parameters, captures, declaration_sr, body);
     unsafe {
       self.declare(id, fn_type);
-      self.code.maybe_create_closure(&captures);
+      self.code.maybe_create_closure(captures);
     }
   }
 
