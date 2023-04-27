@@ -10,6 +10,8 @@ macro_rules! generate_ast_handle {
     }
 
     impl $name {
+      pub const INVALID: Self = Self { index: u32::MAX };
+
       pub(super) fn new(index: u32) -> Self {
         Self { index }
       }
@@ -48,6 +50,11 @@ pub struct StrHandle {
 }
 
 impl StrHandle {
+  pub const INVALID: Self = Self {
+    start: u32::MAX,
+    end: u32::MAX,
+  };
+
   pub(super) fn new(start: u32, end: u32) -> Self {
     Self { start, end }
   }

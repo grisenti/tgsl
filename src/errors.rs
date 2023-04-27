@@ -1,3 +1,5 @@
+use std::{borrow::Cow, ops::Range};
+
 #[derive(Clone, Copy, Debug)]
 pub struct SourceInfo {
   pub line_no: u32,

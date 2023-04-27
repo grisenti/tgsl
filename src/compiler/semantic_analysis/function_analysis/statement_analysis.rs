@@ -13,10 +13,8 @@ impl FunctionAnalizer<'_> {
   fn merge_return_types(&mut self, r1: OptRet, r2: OptRet) -> OptRet {
     match (r1, r2) {
       (Some(ret1), Some(ret2)) => ret1.merge(ret2).or_else(|| {
-        self.emit_error(
-          self.declaration_info.unwrap(),
-          "inconsistent return types in function".to_string(),
-        );
+        let decl_sr = self.declaration_info.unwrap();
+        self.emit_error(sema_err::inconsistent_return_types(decl_sr));
         Some(ReturnType::Unconditional(TypeId::ERROR))
       }),
       (None, Some(ret)) | (Some(ret), None) => Some(ret),
@@ -35,14 +33,8 @@ impl FunctionAnalizer<'_> {
 
   fn check_self_assignment(&mut self, lhs_id: Identifier, expression: ExprHandle) {
     match expression.get(self.ast) {
-      &Expr::Variable {
-        id: rhs_id,
-        id_info,
-      } if rhs_id == lhs_id => {
-        self.emit_error(
-          id_info,
-          "cannot initialize identifier with itself".to_string(),
-        );
+      &Expr::Variable { id: rhs_id, id_sr } if rhs_id == lhs_id => {
+        self.emit_error(sema_err::cannot_initialize_with_itself(id_sr));
       }
       _ => {}
     }
@@ -52,7 +44,7 @@ impl FunctionAnalizer<'_> {
     &mut self,
     id: Identifier,
     var_type: TypeId,
-    id_info: SourceInfoHandle,
+    id_sr: SourceRange,
     init_expr: Option<ExprHandle>,
   ) {
     if let Identifier::Local(_) = id {
@@ -61,34 +53,31 @@ impl FunctionAnalizer<'_> {
     if let Some(expr) = init_expr {
       self.check_self_assignment(id, expr);
       let rhs = self.analyze_expr(expr);
-      self.assign(id, id_info, rhs);
+      self.assign(id, id_sr, rhs);
     } else {
       unsafe { self.code.push_constant_none() }
     }
   }
 
-  fn check_valid_condition_type(&mut self, info: SourceInfoHandle, condition_type: TypeId) {
+  fn check_valid_condition_type(&mut self, condition_sr: SourceRange, condition_type: TypeId) {
     if condition_type != TypeId::BOOL {
-      self.emit_error(
-        info,
-        format!(
-          "cannot use value of type {} in a condition",
-          self.type_string(condition_type)
-        ),
-      )
+      self.emit_error(sema_err::incorrect_conditional_type(
+        condition_sr,
+        self.type_string(condition_type),
+      ));
     }
   }
 
   fn while_stmt(
     &mut self,
-    info: SourceInfoHandle,
+    while_sr: SourceRange,
     condition: ExprHandle,
     loop_body: StmtHandle,
   ) -> OptRet {
     let label = self.code.get_next_instruction_label();
     let condition_type = self.analyze_expr(condition);
     let loop_condition = unsafe { self.code.push_jump(OpCode::JumpIfFalsePop) };
-    self.check_valid_condition_type(info, condition_type);
+    self.check_valid_condition_type(while_sr, condition_type);
     self.loop_depth += 1;
     let ret = self.analyze_stmt(loop_body);
     self.loop_depth -= 1;
@@ -105,17 +94,11 @@ impl FunctionAnalizer<'_> {
   fn struct_stmt(
     &mut self,
     id: Identifier,
-    name_info: SourceInfoHandle,
+    name_sr: SourceRange,
     member_names: &[StrHandle],
     member_types: &[TypeId],
     constructor_type: TypeId,
   ) {
-    if !self.global_scope || self.scope_depth > 0 {
-      self.emit_error(
-        name_info,
-        "cannot declare struct in local scope".to_string(),
-      )
-    }
     self.generate_constructor(id, member_types.len(), constructor_type);
     self.global_env.structs.insert(
       id,
@@ -128,13 +111,13 @@ impl FunctionAnalizer<'_> {
 
   fn if_stmt(
     &mut self,
-    if_info: SourceInfoHandle,
+    if_sr: SourceRange,
     condition: ExprHandle,
     true_branch: StmtHandle,
     else_branch: Option<StmtHandle>,
   ) -> OptRet {
     let condition_type = self.analyze_expr(condition);
-    self.check_valid_condition_type(if_info, condition_type);
+    self.check_valid_condition_type(if_sr, condition_type);
     let if_jump_point = unsafe { self.code.push_jump(OpCode::JumpIfFalsePop) };
     let ret_true = to_conditional(self.analyze_stmt(true_branch));
     let ret_false = if let Some(stmt) = else_branch {
@@ -163,32 +146,25 @@ impl FunctionAnalizer<'_> {
     parameters: &[TypeId],
     fn_type: TypeId,
     captures: &[Identifier],
-    declaration_info: SourceInfoHandle,
+    declaration_sr: SourceRange,
     body: &[StmtHandle],
   ) {
-    self.check_function(&parameters, &captures, declaration_info, body);
+    self.check_function(&parameters, &captures, declaration_sr, body);
     unsafe {
       self.declare(id, fn_type);
       self.code.maybe_create_closure(&captures);
     }
   }
 
-  fn break_stmt(&mut self, info: SourceInfoHandle) {
+  fn break_stmt(&mut self, break_sr: SourceRange) {
     if self.loop_depth == 0 {
-      self.emit_error(info, "cannot have break outside of loop body".to_string());
+      self.emit_error(sema_err::break_outside_loop(break_sr));
     }
   }
 
-  fn return_stmt(
-    &mut self,
-    return_expr: Option<ExprHandle>,
-    src_info: SourceInfoHandle,
-  ) -> ReturnType {
+  fn return_stmt(&mut self, return_expr: Option<ExprHandle>, return_sr: SourceRange) -> ReturnType {
     if self.global_scope {
-      self.emit_error(
-        src_info,
-        "cannot have return outside of function body".to_string(),
-      );
+      self.emit_error(sema_err::return_outside_function(return_sr));
       return ReturnType::Unconditional(TypeId::ERROR);
     }
     let ret = if let Some(expr) = return_expr {
@@ -219,59 +195,53 @@ impl FunctionAnalizer<'_> {
     match stmt.get(self.ast) {
       Stmt::VarDecl {
         identifier,
-        id_info,
+        id_sr,
         var_type,
         expression,
       } => {
-        self.var_decl(*identifier, *var_type, *id_info, *expression);
+        self.var_decl(*identifier, *var_type, *id_sr, *expression);
         None
       }
       Stmt::While {
-        info,
+        while_sr,
         condition,
         loop_body,
-      } => self.while_stmt(*info, *condition, *loop_body),
+      } => self.while_stmt(*while_sr, *condition, *loop_body),
       Stmt::Struct {
-        name,
-        name_info,
+        id,
+        name_sr,
         member_names,
         member_types,
         constructor_type,
         ..
       } => {
-        self.struct_stmt(
-          *name,
-          *name_info,
-          member_names,
-          member_types,
-          *constructor_type,
-        );
+        self.struct_stmt(*id, *name_sr, member_names, member_types, *constructor_type);
         None
       }
       Stmt::IfBranch {
-        if_info,
+        if_sr,
         condition,
         true_branch,
         else_branch,
-      } => self.if_stmt(*if_info, *condition, *true_branch, *else_branch),
+      } => self.if_stmt(*if_sr, *condition, *true_branch, *else_branch),
       Stmt::Block { statements, locals } => self.block_stmt(statements, *locals),
       Stmt::Function {
         id,
-        name_info,
+        name_sr,
         captures,
         fn_type,
         body,
-        parameters,
+        parameter_types,
         ..
       } => {
-        self.function_stmt(*id, parameters, *fn_type, captures, *name_info, body);
+        self.function_stmt(*id, parameter_types, *fn_type, captures, *name_sr, body);
         None
       }
       Stmt::Break(info) => {
         self.break_stmt(*info);
         None
       }
-      Stmt::Return { expr, src_info } => Some(self.return_stmt(*expr, *src_info)),
+      Stmt::Return { expr, return_sr } => Some(self.return_stmt(*expr, *return_sr)),
       Stmt::Expr(expr) => {
         self.expr_stmt(*expr);
         None

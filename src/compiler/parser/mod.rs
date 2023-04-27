@@ -2,9 +2,14 @@ mod environment;
 mod expression_parser;
 mod statement_parser;
 
+use std::ops::Index;
+
 use self::environment::Environment;
 
 use super::ast::*;
+use super::errors::parser_err;
+use super::errors::CompilerError;
+use super::errors::CompilerResult;
 use super::global_env::GlobalEnv;
 use super::identifier::GlobalId;
 use super::identifier::Identifier;
@@ -14,6 +19,13 @@ use super::types::type_map::TypeMap;
 use super::types::Type;
 use super::types::TypeId;
 use super::*;
+
+#[derive(PartialEq, Eq)]
+enum ParserState {
+  NoErrors,
+  WaitingRecovery,
+  UnrecoverableError,
+}
 
 pub struct ParseResult {
   pub ast: AST,
@@ -28,31 +40,93 @@ pub struct Parser<'parsing> {
   lookahead: Token<'parsing>,
   loaded_modules: &'parsing HashMap<String, ModuleId>,
   ast: AST,
+  errors: Vec<CompilerError>,
+  state: ParserState,
 }
 
 type SrcErrVec = Vec<SourceError>;
-type TokenPairOpt<'parsing> = Option<(Token<'parsing>, SourceInfoHandle)>;
-type ExprRes = Result<ExprHandle, SourceError>;
-type StmtRes = Result<StmtHandle, SourceError>;
+type TokenPairOpt<'parsing> = Option<(Token<'parsing>, SourceRange)>;
+type ExprRes = CompilerResult<ExprHandle>;
+type StmtRes = CompilerResult<StmtHandle>;
+
+#[macro_export]
+macro_rules! return_if_err {
+  ($s:ident, $val:expr) => {
+    if $s.in_panic_state() {
+      return $val;
+    }
+  };
+}
 
 impl<'parsing> Parser<'parsing> {
   fn is_at_end(&self) -> bool {
     self.lookahead == Token::EndOfFile
   }
 
-  fn match_id_or_err(&mut self) -> Result<(Identifier, SourceInfoHandle), SourceError> {
-    if let Token::Id(id) = self.lookahead {
-      let info = self.lex.prev_token_info();
-      self.advance()?;
-      Ok((
-        self.env.declare_name_or_err(id, info)?,
-        self.ast.add_source_info(info),
-      ))
+  fn in_panic_state(&self) -> bool {
+    self.state != ParserState::NoErrors
+  }
+
+  fn emit_error(&mut self, err: CompilerError) {
+    self.errors.push(err);
+    self.state = ParserState::WaitingRecovery;
+  }
+
+  fn recover_from_errors(&mut self) {
+    let mut stop = false;
+    while !stop && self.state != ParserState::UnrecoverableError {
+      match self.lookahead {
+        Token::Basic(';') | Token::Basic('}') => {
+          stop = true;
+        }
+        Token::EndOfFile
+        | Token::Var
+        | Token::Struct
+        | Token::Fn
+        | Token::Else
+        | Token::If
+        | Token::For
+        | Token::While => {
+          break;
+        }
+        _ => {}
+      }
+      self.advance();
+    }
+    self.state = ParserState::NoErrors;
+  }
+
+  fn declare_name(&mut self, name: &'parsing str, name_sr: SourceRange) -> Identifier {
+    match self.env.declare_name_or_err(name, name_sr) {
+      Ok(id) => id,
+      Err(err) => {
+        self.emit_error(err);
+        Identifier::Invalid
+      }
+    }
+  }
+
+  fn get_name_or_add_global(&mut self, name: &str, name_st: SourceRange) -> Identifier {
+    match self.env.get_name_or_add_global(name, name_st) {
+      Ok(id) => id,
+      Err(err) => {
+        self.emit_error(err);
+        Identifier::Invalid
+      }
+    }
+  }
+
+  fn match_id_or_err(&mut self) -> (Identifier, SourceRange) {
+    const ERROR_RESULT: (Identifier, SourceRange) = (Identifier::Invalid, SourceRange::EMPTY);
+    return_if_err!(self, ERROR_RESULT);
+    if let Token::Id(name) = self.lookahead {
+      let name_sr = self.lex.previous_token_range();
+      let name_id = self.declare_name(name, name_sr);
+      self.advance();
+      (name_id, name_sr)
     } else {
-      Err(error_from_lexer_state(
-        &self.lex,
-        format!("expected identifier, got {}", self.lookahead),
-      ))
+      self.emit_error(parser_err::expected_identifier(&self.lex, self.lookahead));
+      ERROR_RESULT
     }
   }
 
@@ -60,136 +134,125 @@ impl<'parsing> Parser<'parsing> {
     self.ast.add_source_info(self.lex.prev_token_info())
   }
 
-  fn advance(&mut self) -> Result<Token<'parsing>, SourceError> {
-    let next = self.lex.next_token()?;
-    self.lookahead = next;
-    Ok(next)
-  }
-
-  fn unexpected_token(&self, expected: Option<Token>) -> SourceError {
-    let msg = if let Some(tok) = expected {
-      format!("expected {}, got {}", tok, self.lookahead)
-    } else {
-      format!("unexpected token {}", self.lookahead)
-    };
-    error_from_lexer_state(&self.lex, msg)
-  }
-
-  fn matches_alternatives(
-    &mut self,
-    alternatives: &[Token<'static>],
-  ) -> Result<TokenPairOpt<'parsing>, SourceError> {
-    if alternatives.contains(&self.lookahead) {
-      let res = (self.lookahead, self.last_token_info());
-      self.advance()?;
-      Ok(Some(res))
-    } else {
-      Ok(None)
+  fn advance(&mut self) -> Token<'parsing> {
+    match self.lex.next_token() {
+      Ok(next) => {
+        self.lookahead = next;
+        next
+      }
+      Err(err) => {
+        self.emit_error(err);
+        self.state = ParserState::UnrecoverableError;
+        Token::EndOfFile
+      }
     }
   }
 
-  fn match_next(&mut self, tok: Token<'static>) -> Result<TokenPairOpt<'parsing>, SourceError> {
+  fn unexpected_token(&mut self, expected: Option<Token>) {
+    let err = if let Some(tok) = expected {
+      parser_err::expected_token(&self.lex, tok, self.lookahead)
+    } else {
+      parser_err::unexpected_token(&self.lex, self.lookahead)
+    };
+    self.emit_error(err);
+  }
+
+  fn matches_alternatives(&mut self, alternatives: &[Token<'static>]) -> TokenPairOpt<'parsing> {
+    return_if_err!(self, None);
+    if alternatives.contains(&self.lookahead) {
+      let res = (self.lookahead, self.lex.previous_token_range());
+      self.advance();
+      Some(res)
+    } else {
+      None
+    }
+  }
+
+  fn match_next(&mut self, tok: Token<'static>) -> TokenPairOpt<'parsing> {
     self.matches_alternatives(&[tok])
   }
 
-  fn match_or_err(&mut self, token: Token) -> Result<(), SourceError> {
+  fn match_or_err(&mut self, token: Token) {
+    return_if_err!(self, ());
     if self.lookahead == token {
-      self.advance()?;
-      Ok(())
+      self.advance();
     } else {
-      Err(self.unexpected_token(Some(token)))
+      self.unexpected_token(Some(token))
     }
   }
 
-  fn id_str_or_err(&mut self) -> Result<StrHandle, SourceError> {
+  fn id_str_or_err(&mut self) -> StrHandle {
+    return_if_err!(self, StrHandle::INVALID);
     if let Token::Id(name) = self.lookahead {
-      self.advance()?;
-      Ok(self.ast.add_str(name))
+      self.advance();
+      self.ast.add_str(name)
     } else {
-      Err(error_from_lexer_state(
-        &self.lex,
-        format!("expected identifier, got {}", self.lookahead),
-      ))
+      self.emit_error(parser_err::expected_identifier(&self.lex, self.lookahead));
+      StrHandle::INVALID
     }
   }
 
-  fn parse_function_param_types(&mut self) -> Result<Vec<TypeId>, SourceError> {
-    self.match_or_err(Token::Basic('('))?;
+  fn parse_function_param_types(&mut self) -> Vec<TypeId> {
+    return_if_err!(self, vec![]);
+    self.match_or_err(Token::Basic('('));
     let mut result = Vec::new();
     if self.lookahead != Token::Basic(')') {
       loop {
-        result.push(self.match_type_name_or_err()?);
-        if self.match_next(Token::Basic(','))?.is_none() {
+        result.push(self.match_type_name_or_err());
+        if self.match_next(Token::Basic(',')).is_none() {
           break;
         }
       }
     }
-    self.match_or_err(Token::Basic(')'))?;
-    Ok(result)
+    self.match_or_err(Token::Basic(')'));
+    result
   }
 
-  fn match_type_name_or_err(&mut self) -> Result<TypeId, SourceError> {
+  fn match_type_name_or_err(&mut self) -> TypeId {
+    return_if_err!(self, TypeId::ERROR);
     match self.lookahead {
       Token::Id(type_name) => {
-        self.advance()?;
+        self.advance();
         match type_name {
-          "any" => Ok(TypeId::ANY),
-          "str" => Ok(TypeId::STR),
-          "num" => Ok(TypeId::NUM),
-          "bool" => Ok(TypeId::BOOL),
+          "any" => TypeId::ANY,
+          "str" => TypeId::STR,
+          "num" => TypeId::NUM,
+          "bool" => TypeId::BOOL,
           other => {
-            let struct_id = self
-              .env
-              .get_name_or_add_global(other, self.lex.prev_token_info())?;
-            Ok(self.type_map.get_or_add(Type::Struct(struct_id)))
+            let struct_sr = self.lex.previous_token_range();
+            let struct_id = self.get_name_or_add_global(other, struct_sr);
+            self.type_map.get_or_add(Type::Struct(struct_id))
           }
         }
       }
       Token::Fn => {
-        self.advance()?;
-        let parameters = self.parse_function_param_types()?;
-        self.match_or_err(Token::ThinArrow)?;
-        let ret = self.match_type_name_or_err()?;
-        Ok(self.type_map.get_or_add(Type::Function { parameters, ret }))
+        self.advance();
+        let parameters = self.parse_function_param_types();
+        self.match_or_err(Token::ThinArrow);
+        let ret = self.match_type_name_or_err();
+        self.type_map.get_or_add(Type::Function { parameters, ret })
       }
-      _ => Err(error_from_lexer_state(
-        &self.lex,
-        format!("expected type name, got {}", self.lookahead),
-      )),
+      _ => {
+        let err = parser_err::expected_type_name(&self.lex, self.lookahead);
+        self.emit_error(err);
+        TypeId::ERROR
+      }
     }
   }
 
-  fn parse_type_specifier_or_err(&mut self) -> Result<TypeId, SourceError> {
-    self.match_or_err(Token::Basic(':'))?;
+  fn parse_type_specifier_or_err(&mut self) -> TypeId {
+    return_if_err!(self, TypeId::ERROR);
+    self.match_or_err(Token::Basic(':'));
     self.match_type_name_or_err()
   }
 
-  fn parse_opt_type_specifier(&mut self) -> Result<TypeId, SourceError> {
-    if self.match_next(Token::Basic(':'))?.is_some() {
+  fn parse_opt_type_specifier(&mut self) -> TypeId {
+    return_if_err!(self, TypeId::ERROR);
+    if self.match_next(Token::Basic(':')).is_some() {
       self.match_type_name_or_err()
     } else {
-      Ok(TypeId::UNKNOWN)
+      TypeId::UNKNOWN
     }
-  }
-
-  fn syncronize_or_errors(&mut self, mut errors: SrcErrVec) -> Result<SrcErrVec, SourceError> {
-    let mut stop = false;
-    while !stop {
-      match self.lookahead {
-        Token::Basic(';') | Token::Basic('}') => {
-          stop = true;
-        }
-        Token::EndOfFile => {
-          break;
-        }
-        _ => {}
-      }
-      if let Err(e) = self.advance() {
-        errors.push(e);
-        return Err(SourceError::from_err_vec(errors));
-      }
-    }
-    Ok(errors)
   }
 
   pub fn parse(
@@ -197,7 +260,7 @@ impl<'parsing> Parser<'parsing> {
     type_map: &'parsing mut TypeMap,
     global_env: &'parsing mut GlobalEnv,
     loaded_modules: &'parsing HashMap<String, ModuleId>,
-  ) -> Result<ParseResult, SourceError> {
+  ) -> Result<ParseResult, Vec<CompilerError>> {
     let mut parser = Self {
       lex: Lexer::new(source),
       type_map,
@@ -205,35 +268,31 @@ impl<'parsing> Parser<'parsing> {
       loaded_modules,
       ast: AST::new(),
       env: Environment::new(global_env),
+      errors: Vec::new(),
+      state: ParserState::NoErrors,
     };
-    let mut errors = Vec::new();
-    if let Err(e) = parser.advance() {
-      errors.push(e)
-    }
-    while !parser.is_at_end() {
-      match parser.parse_decl() {
-        Ok(stmt) => parser.ast.program_push(stmt),
-        Err(err) => {
-          errors.push(err);
-          errors = parser.syncronize_or_errors(errors)?;
-        }
+    parser.advance();
+    while !parser.is_at_end() && parser.state != ParserState::UnrecoverableError {
+      parser.parse_decl();
+      if parser.in_panic_state() {
+        parser.recover_from_errors();
       }
     }
     let extern_map = match parser.env.finalize() {
       Ok(extern_map) => extern_map,
-      Err(e) => {
-        errors.push(e);
-        return Err(SourceError::from_err_vec(errors));
+      Err(mut e) => {
+        parser.errors.append(&mut e);
+        return Err(parser.errors);
       }
     };
-    if errors.is_empty() {
+    if parser.errors.is_empty() {
       Ok(ParseResult {
         ast: parser.ast,
         module_extern_functions: extern_map,
         imports: vec![],
       })
     } else {
-      Err(SourceError::from_err_vec(errors))
+      Err(parser.errors)
     }
   }
 }

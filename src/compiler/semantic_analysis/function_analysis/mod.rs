@@ -1,13 +1,11 @@
-use crate::{
-  compiler::{
-    ast::{SourceInfoHandle, Stmt, StmtHandle, AST},
-    bytecode::{ConstantValue, OpCode},
-    codegen::BytecodeBuilder,
-    error_from_source_info,
-    identifier::Identifier,
-    types::{type_map::TypeMap, Type, TypeId},
-  },
-  errors::{SourceError, SourceInfo},
+use crate::compiler::{
+  ast::{SourceInfoHandle, Stmt, StmtHandle, AST},
+  bytecode::{ConstantValue, OpCode},
+  codegen::BytecodeBuilder,
+  errors::{sema_err, CompilerError},
+  identifier::Identifier,
+  lexer::SourceRange,
+  types::{type_map::TypeMap, Type, TypeId},
 };
 
 use super::{return_analysis::ReturnType, SemAParameters, SemAState};
@@ -19,7 +17,7 @@ mod statement_analysis;
 pub struct FunctionInfo {
   parameters: Vec<TypeId>,
   captures: Vec<TypeId>,
-  declaration_src_info: Option<SourceInfoHandle>,
+  declaration_src_info: Option<SourceRange>,
 }
 
 pub struct FunctionAnalizer<'analysis> {
@@ -35,7 +33,7 @@ pub struct FunctionAnalizer<'analysis> {
   ast: &'analysis AST,
   type_map: &'analysis TypeMap,
   global_types: &'analysis mut Vec<TypeId>,
-  declaration_info: Option<SourceInfoHandle>,
+  declaration_info: Option<SourceRange>,
 }
 
 pub struct FunctionAnalysisResult {
@@ -46,8 +44,8 @@ pub struct FunctionAnalysisResult {
 fn set_type_or_push_error(
   lhs: &mut TypeId,
   rhs: TypeId,
-  name_info: SourceInfo,
-  errors: &mut Vec<SourceError>,
+  assignment_sr: SourceRange,
+  errors: &mut Vec<CompilerError>,
   type_map: &TypeMap,
 ) {
   match *lhs {
@@ -55,13 +53,10 @@ fn set_type_or_push_error(
       *lhs = rhs;
     }
     TypeId::ERROR => {} // error already reported
-    lhs if lhs != rhs => errors.push(error_from_source_info(
-      &name_info,
-      format!(
-        "cannot assign value of type {} to identifier of type {}",
-        type_map.type_to_string(rhs),
-        type_map.type_to_string(lhs)
-      ),
+    lhs if lhs != rhs => errors.push(sema_err::assignment_of_incompatible_types(
+      assignment_sr,
+      type_map.type_to_string(rhs),
+      type_map.type_to_string(lhs),
     )),
     _ => {} // equal types, no need to set
   };
@@ -87,6 +82,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       Identifier::Global(gid) => &mut self.global_types[gid as usize],
       Identifier::Local(id) => &mut self.locals[id as usize],
       Identifier::Capture(id) => &mut self.captures[id as usize],
+      Identifier::Invalid => panic!("invalid identifier while processing AST"),
     }
   }
 
@@ -118,10 +114,11 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       }
       Identifier::Local(_) => self.locals.push(var_type),
       Identifier::Capture(_) => {}
+      Identifier::Invalid => panic!("invalid identifier while processing AST"),
     }
   }
 
-  fn assign(&mut self, id: Identifier, id_info: SourceInfoHandle, value_type: TypeId) {
+  fn assign(&mut self, id: Identifier, id_sr: SourceRange, value_type: TypeId) {
     match id {
       Identifier::Global(gid) => {
         unsafe {
@@ -131,7 +128,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
         set_type_or_push_error(
           &mut self.global_types[gid as usize],
           value_type,
-          id_info.get(self.ast),
+          id_sr,
           &mut self.global_env.errors,
           self.type_map,
         );
@@ -143,7 +140,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
         set_type_or_push_error(
           &mut self.locals[id as usize],
           value_type,
-          id_info.get(self.ast),
+          id_sr,
           &mut self.global_env.errors,
           self.type_map,
         );
@@ -155,26 +152,24 @@ impl<'analysis> FunctionAnalizer<'analysis> {
         set_type_or_push_error(
           &mut self.captures[id as usize],
           value_type,
-          id_info.get(self.ast),
+          id_sr,
           &mut self.global_env.errors,
           self.type_map,
         );
       }
+      Identifier::Invalid => panic!("invalid identifier while processing AST"),
     }
   }
 
-  fn emit_error(&mut self, info: SourceInfoHandle, msg: String) {
-    self
-      .global_env
-      .errors
-      .push(error_from_source_info(&info.get(self.ast), msg));
+  fn emit_error(&mut self, err: CompilerError) {
+    self.global_env.errors.push(err);
   }
 
   fn check_function(
     &mut self,
     param_types: &[TypeId],
     captures: &[Identifier],
-    declaration_info: SourceInfoHandle,
+    declaration_sr: SourceRange,
     body: &[StmtHandle],
   ) {
     let capture_types = captures.iter().map(|id| self.get_typeid(*id)).collect();
@@ -182,7 +177,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       FunctionInfo {
         parameters: param_types.to_vec(),
         captures: capture_types,
-        declaration_src_info: Some(declaration_info),
+        declaration_src_info: Some(declaration_sr),
       },
       body,
       SemAParameters {
@@ -231,10 +226,9 @@ impl<'analysis> FunctionAnalizer<'analysis> {
         }
       }
       Some(ReturnType::Conditional(_)) => {
-        analizer.emit_error(
+        analizer.emit_error(sema_err::no_unconditional_return(
           analizer.declaration_info.unwrap(),
-          "function has only conditional return types".to_string(),
-        );
+        ));
         FunctionAnalysisResult {
           code: BytecodeBuilder::new(),
           return_type: TypeId::ERROR,

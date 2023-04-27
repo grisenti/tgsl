@@ -7,6 +7,7 @@ pub enum Identifier {
   Global(GlobalId),
   Capture(CaptureId),
   Local(LocalId),
+  Invalid,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]

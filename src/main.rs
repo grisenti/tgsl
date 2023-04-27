@@ -25,9 +25,7 @@ fn sum(values: Vec<TaggedValue>) -> TaggedValue {
 fn test() -> Result<(), String> {
   let mut vm = VM::new();
   let p1 = fs::read_to_string("program.pr").unwrap();
-  let p2 = fs::read_to_string("prog2.pr").unwrap();
   vm.load_module("hello".to_string(), &p1, vec![])?;
-  vm.load_module("test".to_string(), &p2, vec![])?;
   Ok(())
 }
 
@@ -70,7 +68,7 @@ mod test {
       test_file,
       vec![("assert", Box::new(assert))],
     ) {
-      println!("{}", msg);
+      panic!("{}", msg);
     }
   }
 

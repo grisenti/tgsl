@@ -1,6 +1,8 @@
 use std::{fmt::Display, str::CharIndices};
 
-use crate::{compiler::error_from_lexer_state, errors::*};
+use crate::{compiler::errors::lex_err, errors::*};
+
+use super::errors::CompilerResult;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Token<'src> {
@@ -27,7 +29,6 @@ pub enum Token<'src> {
   Null,
   Return,
   Var,
-  Print,
   While,
   For,
   Break,
@@ -36,6 +37,24 @@ pub enum Token<'src> {
   Import,
 
   EndOfFile,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct SourceRange {
+  pub start: usize,
+  pub end: usize,
+}
+
+impl SourceRange {
+  pub const EMPTY: Self = Self { start: 0, end: 0 };
+
+  pub fn new(start: usize, end: usize) -> Self {
+    Self { start, end }
+  }
+
+  pub fn combine(r1: Self, r2: Self) -> Self {
+    Self::new(r1.start.min(r2.start), r1.end.max(r2.end))
+  }
 }
 
 fn indentifier_token(input: &str) -> Token {
@@ -127,7 +146,7 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  fn try_skip_comment(&mut self) -> Result<bool, SourceError> {
+  fn try_skip_comment(&mut self) -> CompilerResult<bool> {
     if let Some((_, next_ch)) = self.current.clone().next() {
       match next_ch {
         '/' => {
@@ -140,7 +159,7 @@ impl<'src> Lexer<'src> {
     Ok(false)
   }
 
-  fn skip_unused(&mut self) -> Result<(), SourceError> {
+  fn skip_unused(&mut self) -> CompilerResult<()> {
     while !self.is_at_end() {
       match self.lookahead {
         '\n' => {
@@ -197,7 +216,7 @@ impl<'src> Lexer<'src> {
     Token::Number(self.source[tok_start..self.total_offset].parse().unwrap()) // number already checked
   }
 
-  fn process_string(&mut self) -> Result<Token<'src>, SourceError> {
+  fn process_string(&mut self) -> CompilerResult<Token<'src>> {
     assert!(self.lookahead == '"');
     let tok_start = self.total_offset;
     let mut escaped = false;
@@ -223,10 +242,7 @@ impl<'src> Lexer<'src> {
         &self.source[tok_start + 1..self.total_offset - 1],
       ))
     } else {
-      Err(error_from_lexer_state(
-        self,
-        "incomplete string".to_string(),
-      ))
+      Err(lex_err::incomplete_string(&*self))
     }
   }
 
@@ -253,7 +269,7 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  pub fn next_token(&mut self) -> Result<Token<'src>, SourceError> {
+  pub fn next_token(&mut self) -> CompilerResult<Token<'src>> {
     self.skip_unused()?;
     self.prev_token_start = self.total_offset;
     if self.is_at_end() {
@@ -290,6 +306,10 @@ impl<'src> Lexer<'src> {
       start: self.prev_token_start,
       end: self.total_offset,
     }
+  }
+
+  pub fn previous_token_range(&self) -> SourceRange {
+    SourceRange::new(self.prev_token_start, self.total_offset)
   }
 }
 

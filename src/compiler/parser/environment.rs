@@ -85,8 +85,8 @@ impl<'compilation> Environment<'compilation> {
   pub fn get_name_or_add_global(
     &mut self,
     name: &str,
-    source_info: SourceInfo,
-  ) -> Result<Identifier, SourceError> {
+    source_info: SourceRange,
+  ) -> CompilerResult<Identifier> {
     if let Some(id) = self.find_local(name) {
       Ok(self.capture(id))
     } else {
@@ -103,8 +103,8 @@ impl<'compilation> Environment<'compilation> {
   pub fn declare_name_or_err(
     &mut self,
     name: &'compilation str,
-    name_src_info: SourceInfo,
-  ) -> Result<Identifier, SourceError> {
+    name_sr: SourceRange,
+  ) -> CompilerResult<Identifier> {
     if self
       .locals
       .iter()
@@ -112,18 +112,12 @@ impl<'compilation> Environment<'compilation> {
       .take_while(|(_, LocalId { scope_depth, .. })| self.scope_depth == *scope_depth)
       .any(|(local_name, _)| *local_name == name)
     {
-      Err(error_from_source_info(
-        &name_src_info,
-        format!("cannot redeclare name '{name}' in the same scope"),
-      ))
+      Err(parser_err::same_scope_name_redeclaration(name_sr, name))
     } else if self.in_global_scope() {
-      self.global.declare_name(name, name_src_info)
+      self.global.declare_name(name, name_sr)
     } else {
       if self.last_local_id == u8::MAX {
-        return Err(error_from_source_info(
-          &name_src_info,
-          "too many local names ".to_string(),
-        ));
+        return Err(parser_err::too_many_local_names(name_sr));
       }
       let id = LocalId {
         scope_depth: self.scope_depth,
@@ -210,7 +204,7 @@ impl<'compilation> Environment<'compilation> {
     }
   }
 
-  pub fn finalize(self) -> Result<Vec<GlobalId>, SourceError> {
+  pub fn finalize(self) -> Result<Vec<GlobalId>, Vec<CompilerError>> {
     if let Err(err) = self.global.finalize_current_module() {
       Err(err)
     } else {
@@ -223,17 +217,11 @@ impl<'compilation> Environment<'compilation> {
 mod test {
 
   use crate::{
-    compiler::{global_env::GlobalEnv, identifier::Identifier},
+    compiler::{global_env::GlobalEnv, identifier::Identifier, lexer::SourceRange},
     errors::SourceInfo,
   };
 
   use super::Environment;
-
-  const FAKE_SOURCE_INFO: SourceInfo = SourceInfo {
-    line_no: 0,
-    end: 0,
-    start: 0,
-  };
 
   #[test]
   fn capture_once() {
@@ -241,19 +229,19 @@ mod test {
     let mut env = Environment::new(&mut global_env);
     env.push_function();
     env
-      .declare_name_or_err("x", FAKE_SOURCE_INFO)
+      .declare_name_or_err("x", SourceRange::EMPTY)
       .expect("could not declare name");
     env.push_function();
     assert_eq!(
-      env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
+      env.get_name_or_add_global("x", SourceRange::EMPTY),
       Ok(Identifier::Capture(0))
     );
     assert_eq!(
-      env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
+      env.get_name_or_add_global("x", SourceRange::EMPTY),
       Ok(Identifier::Capture(0))
     );
     assert_eq!(
-      env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
+      env.get_name_or_add_global("x", SourceRange::EMPTY),
       Ok(Identifier::Capture(0))
     );
     let captures = env.pop_function();
@@ -266,12 +254,12 @@ mod test {
     let mut env = Environment::new(&mut global_env);
     env.push_function();
     env
-      .declare_name_or_err("x", FAKE_SOURCE_INFO)
+      .declare_name_or_err("x", SourceRange::EMPTY)
       .expect("could not declare name");
     env.push_function();
     env.push_function();
     assert_eq!(
-      env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
+      env.get_name_or_add_global("x", SourceRange::EMPTY),
       Ok(Identifier::Capture(0))
     );
     let captures = env.pop_function();
@@ -285,7 +273,7 @@ mod test {
     let mut global_env = GlobalEnv::new();
     let mut env = Environment::new(&mut global_env);
     env
-      .declare_name_or_err("x", FAKE_SOURCE_INFO)
+      .declare_name_or_err("x", SourceRange::EMPTY)
       .expect("could not declare name");
     env.push_function();
     assert_eq!(env.pop_function(), vec![]);
@@ -296,12 +284,12 @@ mod test {
     let mut global_env = GlobalEnv::new();
     let mut env = Environment::new(&mut global_env);
     env
-      .declare_name_or_err("x", FAKE_SOURCE_INFO)
+      .declare_name_or_err("x", SourceRange::EMPTY)
       .expect("could not declare name");
     env.push_function();
     env.push_scope();
     assert_eq!(
-      env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
+      env.get_name_or_add_global("x", SourceRange::EMPTY),
       Ok(Identifier::Global(0))
     );
   }
@@ -312,11 +300,11 @@ mod test {
     let mut env = Environment::new(&mut global_env);
     env.push_function();
     env
-      .declare_name_or_err("x", FAKE_SOURCE_INFO)
+      .declare_name_or_err("x", SourceRange::EMPTY)
       .expect("could not declare name");
     env.push_scope();
     assert_eq!(
-      env.get_name_or_add_global("x", FAKE_SOURCE_INFO),
+      env.get_name_or_add_global("x", SourceRange::EMPTY),
       Ok(Identifier::Local(0))
     );
   }

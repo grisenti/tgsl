@@ -5,10 +5,10 @@ use self::function_analysis::{FunctionAnalizer, FunctionAnalysisResult, Function
 use super::{
   ast::*,
   codegen::BytecodeBuilder,
+  errors::CompilerError,
   identifier::Identifier,
   types::{type_map::TypeMap, TypeId},
 };
-use crate::errors::SourceError;
 
 mod function_analysis;
 mod return_analysis;
@@ -23,7 +23,7 @@ type StructMap = HashMap<Identifier, Struct>;
 
 struct SemAState {
   structs: StructMap,
-  errors: Vec<SourceError>,
+  errors: Vec<CompilerError>,
 }
 
 struct SemAParameters<'a> {
@@ -38,7 +38,7 @@ impl SemanticAnalizer {
     ast: AST,
     global_types: &mut Vec<TypeId>,
     type_map: &TypeMap,
-  ) -> Result<BytecodeBuilder, SourceError> {
+  ) -> Result<BytecodeBuilder, Vec<CompilerError>> {
     let program = ast.get_program();
     let mut global_env = SemAState {
       structs: HashMap::new(),
@@ -57,7 +57,7 @@ impl SemanticAnalizer {
     if global_env.errors.is_empty() {
       Ok(code)
     } else {
-      Err(SourceError::from_err_vec(global_env.errors))
+      Err(global_env.errors)
     }
   }
 }

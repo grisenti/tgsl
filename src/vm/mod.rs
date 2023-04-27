@@ -3,6 +3,7 @@ use std::{collections::HashMap, mem::ManuallyDrop};
 use crate::{
   compiler::{
     bytecode::OpCode,
+    errors::ErrorPrinter,
     identifier::ModuleId,
     modules::{LoadedModules, Module},
     Compiler,
@@ -441,7 +442,7 @@ impl VM {
       code,
       global_identifiers,
     } = match self.compiler.compile(source, &self.state) {
-      Err(err) => return Err(err.print_long(source, &name)),
+      Err(errs) => return Err(ErrorPrinter::to_string(&errs, source)),
       Ok(module) => module,
     };
     self

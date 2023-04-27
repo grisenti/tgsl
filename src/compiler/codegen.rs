@@ -107,6 +107,7 @@ impl BytecodeBuilder {
       Identifier::Capture(id) => {
         self.push_op2(OpCode::GetCapture, id);
       }
+      Identifier::Invalid => panic!("codegen with invalid ast"),
     }
   }
 

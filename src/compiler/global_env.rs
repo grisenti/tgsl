@@ -1,11 +1,8 @@
-use std::collections::{HashMap, HashSet};
-use std::slice::SliceIndex;
+use std::collections::HashMap;
 
-use crate::errors::{SourceError, SourceInfo};
-
-use super::error_from_source_info;
+use super::errors::{ge_err, CompilerError, CompilerResult};
 use super::identifier::{GlobalId, Identifier, ModuleId};
-use super::modules::Module;
+use super::lexer::SourceRange;
 use super::types::TypeId;
 
 pub type NameQueryResult = Result<Option<Identifier>, ()>;
@@ -19,17 +16,17 @@ pub struct GlobalEnv {
 
   current_module_declarations: Vec<bool>,
   current_module_names: ModuleGlobalNames,
-  current_module_first_uses: Vec<SourceInfo>,
+  current_module_first_uses: Vec<SourceRange>,
 }
 
 impl GlobalEnv {
-  fn add_name(&mut self, name: String, source_info: SourceInfo) -> Identifier {
+  fn add_name(&mut self, name: String, name_sr: SourceRange) -> Identifier {
     debug_assert!(!self.current_module_names.contains_key(&name));
     let id = self.last_global_id;
     self.current_module_names.insert(name, id);
     self.last_global_id += 1;
     self.types.push(TypeId::NOTHING);
-    self.current_module_first_uses.push(source_info);
+    self.current_module_first_uses.push(name_sr);
     self.current_module_declarations.push(false);
     Identifier::Global(id)
   }
@@ -37,13 +34,13 @@ impl GlobalEnv {
   /// returns:
   /// - `Ok(Some(id))` if the name exists in one of the provided modules or in the current module
   /// - `Ok(None)` if it doesn't exist
-  /// - `Err(())` if there are multiple
+  /// - `Err(...)` if there are multiple
   pub fn get_name(
     &self,
     modules: &[ModuleId],
     name: &str,
-    source_info: SourceInfo,
-  ) -> Result<Option<Identifier>, SourceError> {
+    name_sr: SourceRange,
+  ) -> CompilerResult<Option<Identifier>> {
     let in_current_module = self
       .current_module_names
       .get(name)
@@ -54,9 +51,8 @@ impl GlobalEnv {
       .filter_map(|id| self.names[id.0 as usize].get(name))
       .try_fold(in_current_module, |acc, id| match acc {
         None => Ok(Some(Identifier::Global(*id))),
-        Some(_) => Err(error_from_source_info(
-          &source_info,
-          format!("identifier '{name}' declared in multiple imported modules"),
+        Some(_) => Err(ge_err::identifier_declare_in_multiple_modules(
+          name_sr, name,
         )),
       })
   }
@@ -73,33 +69,26 @@ impl GlobalEnv {
     &mut self,
     imported_modules: &[ModuleId],
     name: &str,
-    source_info: SourceInfo,
-  ) -> Result<Identifier, SourceError> {
+    name_sr: SourceRange,
+  ) -> CompilerResult<Identifier> {
     self
-      .get_name(imported_modules, name, source_info)
-      .and_then(|id| Ok(id.unwrap_or_else(|| self.add_name(name.to_owned(), source_info))))
+      .get_name(imported_modules, name, name_sr)
+      .map(|id| id.unwrap_or_else(|| self.add_name(name.to_owned(), name_sr)))
   }
 
-  pub fn declare_name(
-    &mut self,
-    name: &str,
-    source_info: SourceInfo,
-  ) -> Result<Identifier, SourceError> {
+  pub fn declare_name(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<Identifier> {
     // FIXME: copy paste from finalize_current_module
     let first_module_id = self.last_global_id as usize - self.current_module_names.len();
     if let Some(&id) = self.current_module_names.get(name) {
       let module_relative_id = id as usize - first_module_id;
       if self.current_module_declarations[module_relative_id] {
-        Err(error_from_source_info(
-          &source_info,
-          format!("redeclaration of global identifier '{name}'"),
-        ))
+        Err(ge_err::identifier_redeclaration(name_sr, name))
       } else {
         self.current_module_declarations[module_relative_id] = true;
         Ok(Identifier::Global(id))
       }
     } else {
-      let id = self.add_name(name.to_string(), source_info);
+      let id = self.add_name(name.to_string(), name_sr);
       *self.current_module_declarations.last_mut().unwrap() = true;
       Ok(id)
     }
@@ -113,21 +102,19 @@ impl GlobalEnv {
     self.names.push(t);
   }
 
-  pub fn finalize_current_module(&mut self) -> Result<(), SourceError> {
+  pub fn finalize_current_module(&mut self) -> Result<(), Vec<CompilerError>> {
     let mut errs = Vec::new();
     let first_module_id = self.last_global_id as usize - self.current_module_names.len();
-    for (_, id) in &self.current_module_names {
+    for id in self.current_module_names.values() {
       let module_relative_id = *id as usize - first_module_id;
       if !self.current_module_declarations[module_relative_id] {
-        errs.push(error_from_source_info(
-          &self.current_module_first_uses[module_relative_id],
-          "identifier was not declared in the current module".to_string(),
-        ));
+        let first_use_sr = self.current_module_first_uses[module_relative_id as usize];
+        errs.push(ge_err::undeclared_global(first_use_sr));
       }
     }
     self.clear_current_module();
-    if errs.len() > 0 {
-      Err(SourceError::from_err_vec(errs))
+    if !errs.is_empty() {
+      Err(errs)
     } else {
       Ok(())
     }

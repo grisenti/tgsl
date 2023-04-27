@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::errors::*;
 
 use self::{
+  errors::CompilerError,
   global_env::GlobalEnv,
   identifier::{GlobalId, ModuleId},
   lexer::Lexer,
@@ -15,6 +16,7 @@ use self::{
 pub mod ast;
 pub mod bytecode;
 pub mod codegen;
+pub mod errors;
 mod global_env;
 pub mod identifier;
 mod lexer;
@@ -23,8 +25,6 @@ mod parser;
 mod semantic_analysis;
 mod types;
 
-type CompilerResult<T> = Result<T, SourceError>;
-
 pub struct Compiler {
   type_map: TypeMap,
   global_env: GlobalEnv,
@@ -32,7 +32,11 @@ pub struct Compiler {
 }
 
 impl Compiler {
-  pub fn compile(&mut self, source: &str, loaded: &LoadedModules) -> CompilerResult<Module> {
+  pub fn compile(
+    &mut self,
+    source: &str,
+    loaded: &LoadedModules,
+  ) -> Result<Module, Vec<CompilerError>> {
     let ParseResult {
       ast,
       module_extern_functions,

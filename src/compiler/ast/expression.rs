@@ -1,6 +1,10 @@
 use std::fmt::Display;
 
-use crate::compiler::{identifier::Identifier, lexer::Token, types::TypeId};
+use crate::compiler::{
+  identifier::Identifier,
+  lexer::{SourceRange, Token},
+  types::TypeId,
+};
 
 use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle, AST};
 
@@ -74,49 +78,40 @@ pub fn literal_from_token(token: Token, ast: &mut AST) -> Literal {
   }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct OperatorPair {
-  pub op: Operator,
-  pub src_info: SourceInfoHandle,
-}
-
-impl OperatorPair {
-  pub fn new(op: Operator, src_info: SourceInfoHandle) -> Self {
-    Self { op, src_info }
-  }
-}
-
 #[derive(Debug, Clone)]
 pub enum Expr {
   Binary {
     left: ExprHandle,
-    operator: OperatorPair,
+    operator: Operator,
+    operator_sr: SourceRange,
     right: ExprHandle,
   },
   Logical {
     left: ExprHandle,
-    operator: OperatorPair,
+    operator: Operator,
+    operator_sr: SourceRange,
     right: ExprHandle,
   },
   Unary {
-    operator: OperatorPair,
+    operator: Operator,
+    operator_sr: SourceRange,
     right: ExprHandle,
   },
   Literal {
     value: Literal,
-    info: SourceInfoHandle,
+    value_sr: SourceRange,
   },
   Variable {
     id: Identifier,
-    id_info: SourceInfoHandle,
+    id_sr: SourceRange,
   },
   Assignment {
     id: Identifier,
-    id_info: SourceInfoHandle,
+    id_sr: SourceRange,
     value: ExprHandle,
   },
   Lambda {
-    info: SourceInfoHandle,
+    parameters_sr: SourceRange,
     captures: Vec<Identifier>,
     parameter_types: Vec<TypeId>,
     return_type: TypeId,
@@ -125,19 +120,19 @@ pub enum Expr {
   },
   FnCall {
     func: ExprHandle,
-    call_info: SourceInfoHandle,
+    call_sr: SourceRange,
     arguments: Vec<ExprHandle>,
   },
   Dot {
     lhs: ExprHandle,
     rhs_name: StrHandle,
     rhs_id: Identifier,
-    rhs_info: SourceInfoHandle,
+    rhs_sr: SourceRange,
   },
   Set {
     object: ExprHandle,
     member_name: StrHandle,
-    member_name_info: SourceInfoHandle,
+    member_name_sr: SourceRange,
     value: ExprHandle,
   },
 }

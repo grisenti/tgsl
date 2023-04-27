@@ -139,7 +139,7 @@ impl StmtHandle {
         }
       }
       Stmt::Struct {
-        name,
+        id,
         member_names,
         member_types,
         ..
@@ -150,7 +150,7 @@ impl StmtHandle {
           .collect::<Vec<String>>();
         object! {
           "Struct": {
-            "id": *name,
+            "id": *id,
             "member_names": member_names,
             "member_types": member_types.as_slice()
           }
@@ -174,10 +174,11 @@ impl ExprHandle {
         left,
         operator,
         right,
+        ..
       } => {
         object! {
           "Binary": {
-            "operator": format!("{}", operator.op),
+            "operator": format!("{}", operator),
             "left": left.to_json(ast),
             "right": right.to_json(ast),
           }
@@ -187,19 +188,22 @@ impl ExprHandle {
         left,
         operator,
         right,
+        ..
       } => {
         object! {
           "Logical": {
-            "operator": format!("{}", operator.op),
+            "operator": format!("{}", operator),
             "left": left.to_json(ast),
             "right": right.to_json(ast),
           }
         }
       }
-      Expr::Unary { operator, right } => {
+      Expr::Unary {
+        operator, right, ..
+      } => {
         object! {
           "Unary": {
-            "operator": format!("{}", operator.op),
+            "operator": format!("{}", operator),
             "right": right.to_json(ast),
           }
         }

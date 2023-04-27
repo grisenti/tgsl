@@ -1,22 +1,16 @@
 use crate::compiler::{
   identifier::{ExternId, Identifier, ModuleId},
+  lexer::SourceRange,
   types::TypeId,
 };
 
-use super::{ExprHandle, SourceInfoHandle, StmtHandle, StrHandle};
-
-#[derive(Debug, Clone)]
-pub struct Method {
-  pub name_info: SourceInfoHandle,
-  pub parameters: Vec<Identifier>,
-  pub body: Vec<StmtHandle>,
-}
+use super::{ExprHandle, StmtHandle, StrHandle};
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
   VarDecl {
     identifier: Identifier,
-    id_info: SourceInfoHandle,
+    id_sr: SourceRange,
     var_type: TypeId,
     expression: Option<ExprHandle>,
   },
@@ -26,21 +20,21 @@ pub enum Stmt {
     locals: u8,
   },
   IfBranch {
-    if_info: SourceInfoHandle,
+    if_sr: SourceRange,
     condition: ExprHandle,
     true_branch: StmtHandle,
     else_branch: Option<StmtHandle>,
   },
   While {
-    info: SourceInfoHandle,
+    while_sr: SourceRange,
     condition: ExprHandle,
     loop_body: StmtHandle,
   },
   Function {
     id: Identifier,
-    name_info: SourceInfoHandle,
+    name_sr: SourceRange,
     captures: Vec<Identifier>,
-    parameters: Vec<TypeId>,
+    parameter_types: Vec<TypeId>,
     return_type: TypeId,
     fn_type: TypeId,
     body: Vec<StmtHandle>,
@@ -48,17 +42,17 @@ pub enum Stmt {
   ExternFunction {
     name_id: Identifier,
     extern_id: ExternId,
-    name_info: SourceInfoHandle,
+    name_sr: SourceRange,
     fn_type: TypeId,
   },
-  Break(SourceInfoHandle),
+  Break(SourceRange),
   Return {
     expr: Option<ExprHandle>,
-    src_info: SourceInfoHandle,
+    return_sr: SourceRange,
   },
   Struct {
-    name: Identifier,
-    name_info: SourceInfoHandle,
+    id: Identifier,
+    name_sr: SourceRange,
     constructor_type: TypeId,
     struct_type: TypeId,
     member_names: Vec<StrHandle>,
