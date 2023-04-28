@@ -73,6 +73,7 @@ mod test {
 
   test_files!(closures, capture_single_one_level, capture_copy);
   test_files!(ufc, primitive_types, aggregates, nested);
+  test_files!(structs, construction, member_access, nesting);
   test_files!(
     misc,
     function_declaration,
@@ -81,9 +82,7 @@ mod test {
     recursive_function,
     struct_declaration,
     struct_construction,
-    struct_member_access,
     mutually_recursive_functions,
-    nested_structs,
     conditional_return_types,
     if_condition
   );

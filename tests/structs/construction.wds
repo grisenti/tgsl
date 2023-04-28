@@ -1,0 +1,7 @@
+struct A {
+	n: num,
+	s: str,
+	b: bool,
+}
+
+var a = A(1, "test", true);

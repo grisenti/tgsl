@@ -1,0 +1,16 @@
+extern fn assert(bool)
+
+struct A {
+	a: num,
+	b: str,
+	c: bool,
+}
+
+var a = A(1, "test", false);
+a.a = 2.0;
+a.b = "new";
+a.c = true;
+
+assert(a.a == 2.0);
+assert(a.b == "new");
+assert(a.c == true);
