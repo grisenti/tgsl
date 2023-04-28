@@ -1,4 +1,4 @@
-use std::{mem::ManuallyDrop};
+use std::mem::ManuallyDrop;
 
 use crate::{
   compiler::{
@@ -71,6 +71,7 @@ impl CallFrame {
   }
 
   fn overflowed_stack(&self) -> bool {
+    debug_assert!((self.bp as usize) <= (self.sp as usize));
     self.sp as usize - self.bp as usize > MAX_LOCALS
   }
 
@@ -350,9 +351,10 @@ impl VM {
         }
         OpCode::SetMember => {
           let id = frame.read_byte();
+          let val = frame.pop();
           let aggregate = unsafe { &mut (*frame.pop().value.object).value.aggregate };
-          let val = frame.top();
           aggregate.members[id as usize] = val;
+          frame.push(val);
         }
         OpCode::Pop => {
           frame.pop();
