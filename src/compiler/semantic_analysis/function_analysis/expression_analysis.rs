@@ -37,9 +37,9 @@ enum CallType {
 
 enum DotKind {
   MaybeCall {
-    rhs_id: Identifier,
+    rhs_id: Option<Identifier>,
     rhs_name: StrHandle,
-    rhs_name_info: SourceRange,
+    rhs_sr: SourceRange,
     lhs_type: TypeId,
   },
   MemberAccess(TypeId),
@@ -92,8 +92,8 @@ impl FunctionAnalizer<'_> {
 
   fn try_dot_call(&mut self, expr: ExprHandle) -> CallType {
     let call_start = self.code.get_next_instruction_address();
-    match expr.get(self.ast) {
-      &Expr::Variable { id, .. } => {
+    match *expr.get(self.ast) {
+      Expr::Variable { id, .. } => {
         let typeid = self.get_typeid(id);
         unsafe { self.code.get_id(id) }
         if let Type::Function { .. } = self.get_type(typeid) {
@@ -102,18 +102,19 @@ impl FunctionAnalizer<'_> {
           CallType::Other(typeid)
         }
       }
-      &Expr::Dot {
+      Expr::Dot {
         lhs,
         rhs_name,
         rhs_id,
         rhs_sr,
       } => match self.dot_kind(lhs, rhs_name, rhs_id, rhs_sr) {
         DotKind::MaybeCall {
-          rhs_id,
+          rhs_id: Some(rhs_id),
           rhs_name,
-          rhs_name_info,
+          rhs_sr,
           lhs_type,
-        } => self.dot_call(rhs_id, lhs_type, call_start, rhs_name_info, rhs_name),
+        } => self.dot_call(rhs_id, lhs_type, call_start, rhs_sr, rhs_name),
+        DotKind::MaybeCall { lhs_type, .. } => CallType::Other(lhs_type),
         DotKind::MemberAccess(member_type) => CallType::Other(member_type),
       },
       _ => CallType::Other(self.analyze_expr(expr)),
@@ -356,8 +357,8 @@ impl FunctionAnalizer<'_> {
     &mut self,
     left_expr: ExprHandle,
     rhs_name: StrHandle,
-    rhs_id: Identifier,
-    name_info: SourceRange,
+    rhs_id: Option<Identifier>,
+    rhs_sr: SourceRange,
   ) -> DotKind {
     let left = self.analyze_expr(left_expr);
     if let Type::Struct(id) = self.type_map.get_type(left) {
@@ -368,7 +369,7 @@ impl FunctionAnalizer<'_> {
         DotKind::MaybeCall {
           rhs_id,
           rhs_name,
-          rhs_name_info: name_info,
+          rhs_sr,
           lhs_type: left,
         }
       }
@@ -376,7 +377,7 @@ impl FunctionAnalizer<'_> {
       DotKind::MaybeCall {
         rhs_id,
         rhs_name,
-        rhs_name_info: name_info,
+        rhs_sr,
         lhs_type: left,
       }
     }
@@ -386,13 +387,13 @@ impl FunctionAnalizer<'_> {
     &mut self,
     left_expr: ExprHandle,
     rhs_name: StrHandle,
-    rhs_id: Identifier,
-    name_sr: SourceRange,
+    rhs_id: Option<Identifier>,
+    rhs_sr: SourceRange,
   ) -> TypeId {
-    if let DotKind::MemberAccess(typeid) = self.dot_kind(left_expr, rhs_name, rhs_id, name_sr) {
+    if let DotKind::MemberAccess(typeid) = self.dot_kind(left_expr, rhs_name, rhs_id, rhs_sr) {
       typeid
     } else {
-      self.emit_error(sema_err::incorrect_dot(name_sr, rhs_name.get(self.ast)));
+      self.emit_error(sema_err::incorrect_dot(rhs_sr, rhs_name.get(self.ast)));
       TypeId::ERROR
     }
   }

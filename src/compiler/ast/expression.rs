@@ -126,7 +126,7 @@ pub enum Expr {
   Dot {
     lhs: ExprHandle,
     rhs_name: StrHandle,
-    rhs_id: Identifier,
+    rhs_id: Option<Identifier>,
     rhs_sr: SourceRange,
   },
   Set {

@@ -88,16 +88,16 @@ impl<'src> Parser<'src> {
         }
         Token::Basic('.') => {
           self.advance();
-          if let Token::Id(name) = self.lookahead {
-            let name_sr = self.lex.previous_token_range();
-            let id = self.get_name_or_add_global(name, name_sr);
+          if let Token::Id(rhs_name) = self.lookahead {
+            let rhs_sr = self.lex.previous_token_range();
+            let rhs_id = self.get_name(rhs_name, rhs_sr);
             self.advance();
-            let name = self.ast.add_str(name);
+            let rhs_name = self.ast.add_str(rhs_name);
             expr = self.ast.add_expression(Expr::Dot {
               lhs: expr,
-              rhs_id: id,
-              rhs_name: name,
-              rhs_sr: name_sr,
+              rhs_id,
+              rhs_name,
+              rhs_sr,
             });
           }
         }
@@ -307,7 +307,7 @@ mod test {
   fn parse_dot() {
     let dot_expr = parse_expression("object.member").expect("parsing error");
     assert_eq!(dot_expr["Dot"]["lhs"]["Variable"]["id"], "Global(0)");
-    assert_eq!(dot_expr["Dot"]["rhs_id"], "Global(1)");
+    assert_eq!(dot_expr["Dot"]["rhs_id"], JsonValue::Null);
   }
 
   #[test]

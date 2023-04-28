@@ -96,6 +96,18 @@ impl<'compilation> Environment<'compilation> {
     }
   }
 
+  pub fn get_name(
+    &mut self,
+    name: &str,
+    name_sr: SourceRange,
+  ) -> CompilerResult<Option<Identifier>> {
+    if let Some(id) = self.find_local(name) {
+      Ok(Some(self.capture(id)))
+    } else {
+      self.global.get_name(&self.imported_modules, name, name_sr)
+    }
+  }
+
   pub fn set_type_if_global(&mut self, id: Identifier, type_id: TypeId) {
     self.global.set_type_if_global(id, type_id);
   }
@@ -216,9 +228,7 @@ impl<'compilation> Environment<'compilation> {
 #[cfg(test)]
 mod test {
 
-  use crate::{
-    compiler::{global_env::GlobalEnv, identifier::Identifier, lexer::SourceRange},
-  };
+  use crate::compiler::{global_env::GlobalEnv, identifier::Identifier, lexer::SourceRange};
 
   use super::Environment;
 

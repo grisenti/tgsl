@@ -103,12 +103,22 @@ impl<'parsing> Parser<'parsing> {
     }
   }
 
-  fn get_name_or_add_global(&mut self, name: &str, name_st: SourceRange) -> Identifier {
-    match self.env.get_name_or_add_global(name, name_st) {
+  fn get_name_or_add_global(&mut self, name: &str, name_sr: SourceRange) -> Identifier {
+    match self.env.get_name_or_add_global(name, name_sr) {
       Ok(id) => id,
       Err(err) => {
         self.emit_error(err);
         Identifier::Invalid
+      }
+    }
+  }
+
+  fn get_name(&mut self, name: &str, name_sr: SourceRange) -> Option<Identifier> {
+    match self.env.get_name(name, name_sr) {
+      Ok(id) => id,
+      Err(err) => {
+        self.emit_error(err);
+        Some(Identifier::Invalid)
       }
     }
   }
