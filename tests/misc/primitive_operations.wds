@@ -1,4 +1,4 @@
-extern fn assert(bool)
+import "test"
 
 assert(1 + 2 == 3);
 assert(1 - 2 == -1);

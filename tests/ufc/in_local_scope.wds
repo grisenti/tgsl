@@ -1,4 +1,4 @@
-extern fn assert(bool)
+import "test"
 
 fn test() -> num {
 	fn add(a: num, b: num) -> num {

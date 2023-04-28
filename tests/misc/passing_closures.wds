@@ -1,4 +1,4 @@
-extern fn assert(bool)
+import "test"
 
 fn transform(a: str, op: fn(str) -> str) -> str {
 	return op(a);

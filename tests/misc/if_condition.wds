@@ -1,4 +1,4 @@
-extern fn assert(bool)
+import "test"
 
 var x;
 if (2 < 3)

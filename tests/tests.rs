@@ -24,17 +24,26 @@ fn assert(args: Vec<TaggedValue>) -> TaggedValue {
 
 fn compile_and_run(test_file: &str) {
   let mut vm = VM::new();
-  if let Err(msg) = vm.load_module(
+  vm.load_module(
     "test".to_string(),
-    test_file,
+    include_str!("../tests/test_utils.wds"),
     vec![("assert", Box::new(assert))],
-  ) {
+  )
+  .expect("error in utils file");
+  if let Err(msg) = vm.load_module("test_file".to_string(), test_file, vec![]) {
     panic!("{}", msg);
   }
 }
 
 test_files!(closures, capture_single_one_level, capture_copy);
-test_files!(ufc, primitive_types, aggregates, repeated, in_local_scope);
+test_files!(
+  ufc,
+  primitive_types,
+  aggregates,
+  repeated,
+  in_local_scope,
+  call_with_same_name_as_member
+);
 test_files!(structs, construction, member_access, nesting);
 test_files!(
   misc,
