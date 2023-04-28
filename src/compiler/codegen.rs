@@ -154,7 +154,7 @@ impl Debug for BytecodeBuilder {
       let code = unsafe { std::mem::transmute::<u8, OpCode>(self.code[index]) };
       result += &format!("{index}: ");
       match code {
-        OpCode::Constant => {
+        OpCode::Constant | OpCode::ConstantStr => {
           index += 1;
           result += &format!(
             "Constant: {:?}\n",
