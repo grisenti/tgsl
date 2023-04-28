@@ -333,7 +333,7 @@ mod test {
       .first()
       .unwrap()
       .clone();
-    assert_eq!(err.code, "P009");
+    assert_eq!(err.code(), "P009");
   }
 
   #[test]

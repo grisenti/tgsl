@@ -15,6 +15,10 @@ impl CompilerError {
   fn new(range: SourceRange, code: &'static str, msg: ErrorMessage) -> Self {
     Self { code, msg, range }
   }
+
+  pub fn code(&self) -> &'static str {
+    self.code
+  }
 }
 
 pub type CompilerResult<T> = Result<T, CompilerError>;
