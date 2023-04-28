@@ -34,7 +34,7 @@ fn compile_and_run(test_file: &str) {
 }
 
 test_files!(closures, capture_single_one_level, capture_copy);
-test_files!(ufc, primitive_types, aggregates, nested, in_local_scope);
+test_files!(ufc, primitive_types, aggregates, repeated, in_local_scope);
 test_files!(structs, construction, member_access, nesting);
 test_files!(
   misc,
