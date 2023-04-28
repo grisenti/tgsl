@@ -247,7 +247,7 @@ impl ExprHandle {
             "captures": captures.as_slice(),
             "function_type_id": *function_type_id,
             "return_type": *return_type,
-            "parameters": parameter_types.as_slice(),
+            "parameter_types": parameter_types.as_slice(),
             "body": body
           }
         }
