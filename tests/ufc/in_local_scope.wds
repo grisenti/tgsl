@@ -1,0 +1,11 @@
+extern fn assert(bool)
+
+fn test() -> num {
+	fn add(a: num, b: num) -> num {
+		return a + b;
+	}
+
+	return 1.add(2);
+}
+
+assert(test() == 3);
