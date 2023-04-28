@@ -235,7 +235,7 @@ impl<'src> Parser<'src> {
 
 #[cfg(test)]
 mod test {
-  use json::JsonValue;
+  use json::{array, JsonValue};
 
   use crate::compiler::{
     ast::AST,
@@ -243,7 +243,7 @@ mod test {
     global_env::GlobalEnv,
     lexer::{Lexer, Token},
     parser::{environment::Environment, Parser, ParserState},
-    types::type_map::TypeMap,
+    types::{type_map::TypeMap, TypeId},
   };
 
   use std::collections::HashMap;
@@ -328,7 +328,12 @@ mod test {
 
   #[test]
   fn assign_to_lvalue_error() {
-    parse_expression("1 = 2").expect_err("can assign to lvalue");
+    let err = parse_expression("1 = 2")
+      .expect_err("can assign to lvalue")
+      .first()
+      .unwrap()
+      .clone();
+    assert_eq!(err.code, "P009");
   }
 
   #[test]
@@ -346,8 +351,22 @@ mod test {
 
   #[test]
   fn operator_precedece() {
-    let expr_no_parens = parse_expression("1 * 1 + 1 < 1 == 1").expect("parsing error");
-    let expr_parens = parse_expression("(((1 * 1) + 1) < 1) == 1").expect("parsing error");
+    let expr_no_parens = parse_expression("1 * -1 + 1 < 1 == 1").expect("parsing error");
+    let expr_parens = parse_expression("(((1 * -1) + 1) < 1) == 1").expect("parsing error");
     assert_eq!(expr_no_parens, expr_parens);
+  }
+
+  #[test]
+  fn parse_lambda_no_captures() {
+    let lambda = parse_expression("fn (n: num, s: str) -> num {}").expect("parsing error");
+    assert_eq!(lambda["Lambda"]["captures"], JsonValue::Array(vec![]));
+    assert_eq!(
+      lambda["Lambda"]["return_type"],
+      format!("{}", TypeId::NUM.0)
+    );
+    assert_eq!(
+      lambda["Lambda"]["parameter_types"],
+      array![TypeId::NUM, TypeId::STR]
+    );
   }
 }
