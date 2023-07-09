@@ -89,7 +89,7 @@ impl StmtHandle {
           }
         }
       }
-      Stmt::Function {
+      Stmt::FunctionDefinition {
         id,
         captures,
         fn_type,

@@ -30,7 +30,7 @@ pub enum Stmt {
     condition: ExprHandle,
     loop_body: StmtHandle,
   },
-  Function {
+  FunctionDefinition {
     id: Identifier,
     name_sr: SourceRange,
     captures: Vec<Identifier>,

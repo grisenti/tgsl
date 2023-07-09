@@ -225,7 +225,7 @@ impl FunctionAnalizer<'_> {
         else_branch,
       } => self.if_stmt(*if_sr, *condition, *true_branch, *else_branch),
       Stmt::Block { statements, locals } => self.block_stmt(statements, *locals),
-      Stmt::Function {
+      Stmt::FunctionDefinition {
         id,
         name_sr,
         captures,

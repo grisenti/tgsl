@@ -221,7 +221,7 @@ impl<'src> Parser<'src> {
       ret: return_type,
     });
     self.env.set_type_if_global(name_id, fn_type);
-    self.ast.add_statement(Stmt::Function {
+    self.ast.add_statement(Stmt::FunctionDefinition {
       id: name_id,
       name_sr,
       fn_type,
