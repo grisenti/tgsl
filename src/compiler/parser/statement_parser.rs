@@ -214,12 +214,23 @@ impl<'src> Parser<'src> {
     };
     self.match_or_err(Token::Basic(')'));
     let return_type = self.parse_function_return_type();
-    let body = self.parse_unscoped_block();
-    let captures = self.env.pop_function();
     let fn_type = self.type_map.get_or_add(Type::Function {
       parameters: parameter_types.clone(),
       ret: return_type,
     });
+    if self.lookahead == Token::Basic(';') {
+      self.advance();
+      return self.ast.add_statement(Stmt::FunctionDeclaration {
+        id: name_id,
+        name_sr,
+        parameter_types,
+        return_type,
+        fn_type,
+      });
+    }
+    let body = self.parse_unscoped_block();
+    let captures = self.env.pop_function();
+
     self.env.set_type_if_global(name_id, fn_type);
     self.ast.add_statement(Stmt::FunctionDefinition {
       id: name_id,

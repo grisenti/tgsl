@@ -256,6 +256,7 @@ impl FunctionAnalizer<'_> {
         None
       }
       Stmt::Import { .. } => None,
+      Stmt::FunctionDeclaration { .. } => None,
     }
   }
 }

@@ -95,6 +95,7 @@ impl StmtHandle {
         fn_type,
         body,
         return_type,
+        parameter_types,
         ..
       } => {
         let body = body
@@ -102,12 +103,29 @@ impl StmtHandle {
           .map(|stmt| stmt.to_json(ast))
           .collect::<Vec<_>>();
         object! {
-          "Function": {
+          "FunctionDefinition": {
             "id": *id,
             "captures": captures.as_slice(),
+            "parameter types": parameter_types.as_slice(),
             "function type": *fn_type,
             "return type": *return_type,
             "body": body
+          }
+        }
+      }
+      Stmt::FunctionDeclaration {
+        id,
+        parameter_types,
+        return_type,
+        fn_type,
+        ..
+      } => {
+        object! {
+          "FunctionDeclaration": {
+            "id": *id,
+            "function type": *fn_type,
+            "parameter types": parameter_types.as_slice(),
+            "return type": *return_type,
           }
         }
       }

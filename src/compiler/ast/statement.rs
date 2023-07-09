@@ -39,6 +39,13 @@ pub enum Stmt {
     fn_type: TypeId,
     body: Vec<StmtHandle>,
   },
+  FunctionDeclaration {
+    id: Identifier,
+    name_sr: SourceRange,
+    parameter_types: Vec<TypeId>,
+    return_type: TypeId,
+    fn_type: TypeId,
+  },
   ExternFunction {
     name_id: Identifier,
     extern_id: ExternId,
