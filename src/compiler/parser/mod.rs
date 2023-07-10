@@ -94,7 +94,7 @@ impl<'parsing> Parser<'parsing> {
   }
 
   fn declare_name(&mut self, name: &'parsing str, name_sr: SourceRange) -> Identifier {
-    match self.env.declare_name_or_err(name, name_sr) {
+    match self.env.declare_name(name, name_sr) {
       Ok(id) => id,
       Err(err) => {
         self.emit_error(err);
@@ -103,24 +103,18 @@ impl<'parsing> Parser<'parsing> {
     }
   }
 
-  fn get_name_or_add_global(&mut self, name: &str, name_sr: SourceRange) -> Identifier {
-    match self.env.get_name_or_add_global(name, name_sr) {
-      Ok(id) => id,
-      Err(err) => {
-        self.emit_error(err);
-        Identifier::Invalid
-      }
-    }
-  }
-
-  fn get_name(&mut self, name: &str, name_sr: SourceRange) -> Option<Identifier> {
+  fn get_name(&mut self, name: &str, name_sr: SourceRange) -> Identifier {
     match self.env.get_name(name, name_sr) {
       Ok(id) => id,
       Err(err) => {
         self.emit_error(err);
-        Some(Identifier::Invalid)
+        Identifier::Invalid
       }
     }
+  }
+
+  fn get_opt_name(&mut self, name: &str, name_sr: SourceRange) -> Option<Identifier> {
+    self.env.get_name(name, name_sr).ok()
   }
 
   fn match_id_or_err(&mut self) -> (Identifier, SourceRange) {
@@ -223,7 +217,7 @@ impl<'parsing> Parser<'parsing> {
           "bool" => TypeId::BOOL,
           other => {
             let struct_sr = self.lex.previous_token_range();
-            let struct_id = self.get_name_or_add_global(other, struct_sr);
+            let struct_id = self.get_name(other, struct_sr);
             self.type_map.get_or_add(Type::Struct(struct_id))
           }
         }
@@ -282,13 +276,7 @@ impl<'parsing> Parser<'parsing> {
         parser.recover_from_errors();
       }
     }
-    let extern_map = match parser.env.finalize() {
-      Ok(extern_map) => extern_map,
-      Err(mut e) => {
-        parser.errors.append(&mut e);
-        return Err(parser.errors);
-      }
-    };
+    let extern_map = parser.env.extern_ids;
     if parser.errors.is_empty() {
       Ok(ParseResult {
         ast: parser.ast,

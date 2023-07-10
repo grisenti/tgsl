@@ -13,7 +13,6 @@ pub struct Module {
   pub extern_functions: Vec<GlobalId>,
   pub imports: Vec<ModuleId>,
   pub code: BytecodeBuilder,
-  pub global_identifiers: usize,
 }
 
 #[derive(Default)]

@@ -47,13 +47,11 @@ impl Compiler {
     let generated_code =
       SemanticAnalizer::analyze(ast, &mut self.global_env.types, &self.type_map)?;
     let id = ModuleId(self.last_module);
-    let global_identifiers = self.global_env.get_globals_count(id);
     let ret = Ok(Module {
       id,
       extern_functions: module_extern_functions,
       imports,
       code: generated_code,
-      global_identifiers,
     });
     self.last_module += 1;
     ret

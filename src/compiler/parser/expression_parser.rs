@@ -28,7 +28,7 @@ impl<'src> Parser<'src> {
       }
       Token::Id(id) => {
         let id_sr = self.lex.previous_token_range();
-        let id = self.get_name_or_add_global(id, id_sr);
+        let id = self.get_name(id, id_sr);
         self.advance();
         self.ast.add_expression(Expr::Variable { id, id_sr })
       }
@@ -90,7 +90,7 @@ impl<'src> Parser<'src> {
           self.advance();
           if let Token::Id(rhs_name) = self.lookahead {
             let rhs_sr = self.lex.previous_token_range();
-            let rhs_id = self.get_name(rhs_name, rhs_sr);
+            let rhs_id = self.get_opt_name(rhs_name, rhs_sr);
             self.advance();
             let rhs_name = self.ast.add_str(rhs_name);
             expr = self.ast.add_expression(Expr::Dot {
@@ -241,34 +241,47 @@ mod test {
     ast::AST,
     errors::CompilerError,
     global_env::GlobalEnv,
-    lexer::{Lexer, Token},
+    lexer::{Lexer, SourceRange, Token},
     parser::{environment::Environment, Parser, ParserState},
     types::{type_map::TypeMap, TypeId},
   };
 
   use std::collections::HashMap;
 
-  fn parse_expression(expr: &str) -> Result<JsonValue, Vec<CompilerError>> {
+  fn parse_expression_with_declared_names(
+    expr: &str,
+    names: &[&str],
+  ) -> Result<JsonValue, Vec<CompilerError>> {
     let mut empty_type_map = TypeMap::new();
     let empty_loaded_modules = HashMap::new();
     let mut empty_global_env = GlobalEnv::new();
+    let mut env = Environment::new(&mut empty_global_env);
+    for name in names {
+      env
+        .declare_name(name, SourceRange::EMPTY)
+        .expect("name redeclarations");
+    }
     let mut parser = Parser {
       lex: Lexer::new(expr),
       type_map: &mut empty_type_map,
       lookahead: Token::EndOfFile,
       loaded_modules: &empty_loaded_modules,
       ast: AST::new(),
-      env: Environment::new(&mut empty_global_env),
+      env,
       errors: Vec::new(),
       state: ParserState::NoErrors,
     };
     parser.advance();
     let handle = parser.parse_expression();
-    if parser.errors.len() > 0 {
+    if !parser.errors.is_empty() {
       Err(parser.errors)
     } else {
       Ok(handle.to_json(&parser.ast))
     }
+  }
+
+  fn parse_expression(expr: &str) -> Result<JsonValue, Vec<CompilerError>> {
+    parse_expression_with_declared_names(expr, &[])
   }
 
   #[test]
@@ -291,21 +304,23 @@ mod test {
 
   #[test]
   fn parse_empty_function_call() {
-    let call = parse_expression("main()").expect("parsing error");
+    let call = parse_expression_with_declared_names("main()", &["main"]).expect("parsing error");
     assert_eq!(call["FnCall"]["function"]["Variable"]["id"], "Global(0)");
     assert_eq!(call["FnCall"]["arguments"], JsonValue::Array(vec![]));
   }
 
   #[test]
   fn parse_function_call_with_arguments() {
-    let call = parse_expression("main(1, 1 + 1, \"hello\")").expect("parsing error");
+    let call = parse_expression_with_declared_names("main(1, 1 + 1, \"hello\")", &["main"])
+      .expect("parsing error");
     assert_eq!(call["FnCall"]["function"]["Variable"]["id"], "Global(0)");
     assert_eq!(call["FnCall"]["arguments"].len(), 3);
   }
 
   #[test]
   fn parse_dot() {
-    let dot_expr = parse_expression("object.member").expect("parsing error");
+    let dot_expr =
+      parse_expression_with_declared_names("object.member", &["object"]).expect("parsing error");
     assert_eq!(dot_expr["Dot"]["lhs"]["Variable"]["id"], "Global(0)");
     assert_eq!(dot_expr["Dot"]["rhs_id"], JsonValue::Null);
   }
@@ -338,14 +353,16 @@ mod test {
 
   #[test]
   fn assign_to_rvalue() {
-    let assignment = parse_expression("id = 2").expect("parsing error");
+    let assignment =
+      parse_expression_with_declared_names("id = 2", &["id"]).expect("parsing error");
     assert_eq!(assignment["Assignment"]["id"], "Global(0)");
     assert_eq!(assignment["Assignment"]["value"]["Literal"]["value"], "2");
   }
 
   #[test]
   fn parse_identifier() {
-    let identifier = parse_expression("identifier").expect("parsing error");
+    let identifier =
+      parse_expression_with_declared_names("identifier", &["identifier"]).expect("parsing error");
     assert_eq!(identifier["Variable"]["id"], "Global(0)");
   }
 

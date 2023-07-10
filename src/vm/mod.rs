@@ -441,14 +441,14 @@ impl VM {
       imports: _,
       id,
       code,
-      global_identifiers,
     } = match self.compiler.compile(source, &self.state) {
       Err(errs) => return Err(ErrorPrinter::to_string(&errs, source)),
       Ok(module) => module,
     };
+    // FIXME: replace 100 with actual count
     self
       .globals
-      .resize(self.globals.len() + global_identifiers, TaggedValue::none());
+      .resize(self.globals.len() + 100, TaggedValue::none());
     self.bind_functions(&ext_ids, id, extern_functions)?;
     self.state.extern_functions.extend(ext_ids);
     let mod_id = self.state.module_ids.len() as u16;
