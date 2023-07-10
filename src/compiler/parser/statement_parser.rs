@@ -330,3 +330,58 @@ impl<'src> Parser<'src> {
     }
   }
 }
+
+#[cfg(test)]
+mod test {
+  use json::{array, JsonValue};
+
+  use crate::compiler::{
+    ast::AST,
+    errors::CompilerError,
+    global_env::GlobalEnv,
+    identifier::Identifier,
+    lexer::{Lexer, Token},
+    parser::{environment::Environment, Parser, ParserState},
+    types::{type_map::TypeMap, TypeId},
+  };
+
+  use std::{array, collections::HashMap};
+
+  fn parse_statement(expr: &str) -> Result<JsonValue, Vec<CompilerError>> {
+    let mut empty_type_map = TypeMap::new();
+    let empty_loaded_modules = HashMap::new();
+    let mut empty_global_env = GlobalEnv::new();
+    let mut parser = Parser {
+      lex: Lexer::new(expr),
+      type_map: &mut empty_type_map,
+      lookahead: Token::EndOfFile,
+      loaded_modules: &empty_loaded_modules,
+      ast: AST::new(),
+      env: Environment::new(&mut empty_global_env),
+      errors: Vec::new(),
+      state: ParserState::NoErrors,
+    };
+    parser.advance();
+    let handle = parser.parse_decl();
+    if !parser.errors.is_empty() {
+      Err(parser.errors)
+    } else {
+      Ok(handle.to_json(&parser.ast))
+    }
+  }
+
+  #[test]
+  fn parse_function_declaration_with_parameter_names() {
+    let function_decl =
+      parse_statement("fn fwd_decl(a: num, b: str) -> num;").expect("parsing error");
+    assert_eq!(function_decl["FunctionDeclaration"]["id"], "Global(0)");
+    assert_eq!(
+      function_decl["FunctionDeclaration"]["parameter types"],
+      array![TypeId::NUM, TypeId::STR]
+    );
+    assert_eq!(
+      function_decl["FunctionDeclaration"]["return type"],
+      format!("{}", TypeId::NUM.0)
+    )
+  }
+}
