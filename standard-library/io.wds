@@ -1,2 +1,4 @@
+module std_io;
+
 extern fn println(any)
 extern fn print(any)

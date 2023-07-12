@@ -1,4 +1,4 @@
-use crate::return_if_err;
+use crate::{compiler::errors::SourceRangeProvider, return_if_err};
 
 use super::*;
 
@@ -298,20 +298,20 @@ impl<'src> Parser<'src> {
       self.emit_error(err);
       return StmtHandle::INVALID;
     }
-    if let Token::String(module) = self.lookahead {
+    if let Token::Id(module_name) = self.lookahead {
+      let module_name_sr = self.lex.current_range();
       self.advance();
-      if let Some(&module_id) = self.loaded_modules.get(module) {
-        self.env.import_module(module_id);
-        self.ast.add_statement(Stmt::Import { module_id })
-      } else {
-        let err = parser_err::not_a_loaded_module(&self.lex, module);
-        self.emit_error(err);
-        return StmtHandle::INVALID;
+      match self.env.import_module(module_name, module_name_sr) {
+        Ok(module_id) => self.ast.add_statement(Stmt::Import { module_id }),
+        Err(error) => {
+          self.emit_error(error);
+          StmtHandle::INVALID
+        }
       }
     } else {
-      let err = parser_err::expected_module_string(&self.lex, self.lookahead);
+      let err = parser_err::expected_module_identifier(&self.lex, self.lookahead);
       self.emit_error(err);
-      return StmtHandle::INVALID;
+      StmtHandle::INVALID
     }
   }
 
@@ -335,23 +335,18 @@ mod test {
     ast::AST,
     errors::CompilerError,
     global_env::GlobalEnv,
-    identifier::Identifier,
     lexer::{Lexer, Token},
     parser::{environment::Environment, Parser, ParserState},
     types::{type_map::TypeMap, TypeId},
   };
 
-  use std::{array, collections::HashMap};
-
   fn parse_statement(expr: &str) -> Result<JsonValue, Vec<CompilerError>> {
     let mut empty_type_map = TypeMap::new();
-    let empty_loaded_modules = HashMap::new();
     let mut empty_global_env = GlobalEnv::new();
     let mut parser = Parser {
       lex: Lexer::new(expr),
       type_map: &mut empty_type_map,
       lookahead: Token::EndOfFile,
-      loaded_modules: &empty_loaded_modules,
       ast: AST::new(),
       env: Environment::new(&mut empty_global_env),
       errors: Vec::new(),

@@ -246,14 +246,11 @@ mod test {
     types::{type_map::TypeMap, TypeId},
   };
 
-  use std::collections::HashMap;
-
   fn parse_expression_with_declared_names(
     expr: &str,
     names: &[&str],
   ) -> Result<JsonValue, Vec<CompilerError>> {
     let mut empty_type_map = TypeMap::new();
-    let empty_loaded_modules = HashMap::new();
     let mut empty_global_env = GlobalEnv::new();
     let mut env = Environment::new(&mut empty_global_env);
     for name in names {
@@ -265,7 +262,6 @@ mod test {
       lex: Lexer::new(expr),
       type_map: &mut empty_type_map,
       lookahead: Token::EndOfFile,
-      loaded_modules: &empty_loaded_modules,
       ast: AST::new(),
       env,
       errors: Vec::new(),

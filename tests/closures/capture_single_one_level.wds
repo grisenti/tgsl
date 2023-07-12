@@ -1,4 +1,4 @@
-import "test"
+import assert
 
 fn f() -> fn() -> num {
   var y = 1;

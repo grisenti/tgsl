@@ -1,4 +1,4 @@
-import "test"
+import assert
 
 fn id(x: num) -> num {
 	return x;

@@ -432,7 +432,6 @@ impl VM {
 
   pub fn load_module(
     &mut self,
-    name: String,
     source: &str,
     extern_functions: Vec<(&str, ExternFunction)>,
   ) -> Result<(), String> {
@@ -441,7 +440,7 @@ impl VM {
       imports: _,
       id,
       code,
-    } = match self.compiler.compile(source, &self.state) {
+    } = match self.compiler.compile(source) {
       Err(errs) => return Err(ErrorPrinter::to_string(&errs, source)),
       Ok(module) => module,
     };
@@ -451,8 +450,6 @@ impl VM {
       .resize(self.globals.len() + 100, TaggedValue::none());
     self.bind_functions(&ext_ids, id, extern_functions)?;
     self.state.extern_functions.extend(ext_ids);
-    let mod_id = self.state.module_ids.len() as u16;
-    self.state.module_ids.insert(name, ModuleId(mod_id));
     self.interpret(Chunk::new(code));
     Ok(())
   }

@@ -1,3 +1,5 @@
+fn g(n: num) -> num;
+
 fn f(n: num) -> num {
 	return g(n - 1);
 }

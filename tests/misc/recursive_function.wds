@@ -1,4 +1,4 @@
-import "test"
+import assert
 
 fn factorial(n: num) -> num {
 	if (n < 1) return 1;

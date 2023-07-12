@@ -25,12 +25,11 @@ fn assert(args: Vec<TaggedValue>) -> TaggedValue {
 fn compile_and_run(test_file: &str) {
   let mut vm = VM::new();
   vm.load_module(
-    "test".to_string(),
     include_str!("../tests/test_utils.wds"),
     vec![("assert", Box::new(assert))],
   )
   .expect("error in utils file");
-  if let Err(msg) = vm.load_module("test_file".to_string(), test_file, vec![]) {
+  if let Err(msg) = vm.load_module(test_file, vec![]) {
     panic!("{}", msg);
   }
 }

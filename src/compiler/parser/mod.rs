@@ -36,7 +36,6 @@ pub struct Parser<'parsing> {
   type_map: &'parsing mut TypeMap,
   lex: Lexer<'parsing>,
   lookahead: Token<'parsing>,
-  loaded_modules: &'parsing HashMap<String, ModuleId>,
   ast: AST,
   errors: Vec<CompilerError>,
   state: ParserState,
@@ -252,23 +251,40 @@ impl<'parsing> Parser<'parsing> {
     }
   }
 
+  fn parse_module_name(&mut self) {
+    if self.match_next(Token::Module).is_some() {
+      if let Token::Id(module_name) = self.lookahead {
+        self.advance();
+        self.match_next(Token::Basic(';'));
+        let id_sr = self.lex.previous_token_range();
+        if let Err(err) = self.env.set_module(module_name, id_sr) {
+          self.emit_error(err);
+        }
+      } else {
+        self.emit_error(parser_err::expected_module_identifier(
+          &self.lex,
+          self.lookahead,
+        ));
+      }
+    }
+  }
+
   pub fn parse(
     source: &'parsing str,
     type_map: &'parsing mut TypeMap,
     global_env: &'parsing mut GlobalEnv,
-    loaded_modules: &'parsing HashMap<String, ModuleId>,
   ) -> Result<ParseResult, Vec<CompilerError>> {
     let mut parser = Self {
       lex: Lexer::new(source),
       type_map,
       lookahead: Token::EndOfFile,
-      loaded_modules,
       ast: AST::new(),
       env: Environment::new(global_env),
       errors: Vec::new(),
       state: ParserState::NoErrors,
     };
     parser.advance();
+    parser.parse_module_name();
     while !parser.is_at_end() && parser.state != ParserState::UnrecoverableError {
       let stmt = parser.parse_decl();
       parser.ast.program_push(stmt);

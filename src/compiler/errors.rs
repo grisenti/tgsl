@@ -136,16 +136,9 @@ pub mod parser_err {
   );
 
   def_err!(
-    not_a_loaded_module,
-    "P011",
-    "'{}' is not a loaded module",
-    module: &str
-  );
-
-  def_err!(
-    expected_module_string,
+    expected_module_identifier,
     "P012",
-    "expected module string, got {}",
+    "expected module identifier, got {}",
     got: Token
   );
 
@@ -177,6 +170,20 @@ pub mod ge_err {
     undeclared_global,
     "GE003",
     "identifier was not declared in the current module"
+  );
+
+  def_err!(
+    not_a_loaded_module,
+    "GE004",
+    "'{}' is not a loaded module",
+    module: &str
+  );
+
+  def_err!(
+    trying_to_redeclare_a_module,
+    "GE005",
+    "module '{}' was already declared",
+    module: &str
   );
 }
 

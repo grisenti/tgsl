@@ -1,7 +1,8 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use super::errors::{ge_err, CompilerError, CompilerResult};
-use super::identifier::{GlobalId, Identifier, ModuleId};
+use super::errors::{ge_err, parser_err, CompilerResult};
+use super::identifier::{GlobalId, ModuleId};
 use super::lexer::SourceRange;
 use super::types::TypeId;
 
@@ -11,14 +12,16 @@ type GlobalName = Vec<(GlobalId, ModuleId)>;
 pub struct GlobalEnv {
   names: HashMap<String, GlobalName>,
   pub types: Vec<TypeId>,
+  modules: HashMap<String, ModuleId>,
   last_global_id: GlobalId,
   last_module_id: u16,
 }
 
 impl GlobalEnv {
-  fn new_global_id(&mut self) -> GlobalId {
+  pub fn new_global_id(&mut self) -> GlobalId {
     let id = self.last_global_id;
     self.last_global_id += 1;
+    self.types.push(TypeId::UNKNOWN);
     id
   }
 
@@ -27,7 +30,7 @@ impl GlobalEnv {
     modules: &[ModuleId],
     name: &str,
     name_sr: SourceRange,
-  ) -> CompilerResult<GlobalId> {
+  ) -> CompilerResult<Option<GlobalId>> {
     if let Some(global_name) = self.names.get(name) {
       let candidates = global_name
         .iter()
@@ -40,10 +43,10 @@ impl GlobalEnv {
           name_sr, name,
         ))
       } else {
-        Ok(candidates[0].0)
+        Ok(Some(candidates[0].0))
       }
     } else {
-      Err(ge_err::undeclared_global(name_sr))
+      Ok(None)
     }
   }
 
@@ -54,7 +57,6 @@ impl GlobalEnv {
     name_sr: SourceRange,
   ) -> CompilerResult<GlobalId> {
     let id = self.new_global_id();
-    self.types.push(TypeId::UNKNOWN);
     if let Some(global_name) = self.names.get_mut(name) {
       let count = global_name
         .iter()
@@ -72,10 +74,32 @@ impl GlobalEnv {
     }
   }
 
-  pub fn new_module(&mut self) -> ModuleId {
-    let id = self.last_module_id;
-    self.last_module_id += 1;
-    ModuleId(id)
+  pub fn new_module(
+    &mut self,
+    module_name: &str,
+    name_sr: SourceRange,
+  ) -> CompilerResult<ModuleId> {
+    match self.modules.entry(module_name.to_string()) {
+      Entry::Vacant(e) => {
+        let id = ModuleId(self.last_module_id);
+        self.last_module_id += 1;
+        e.insert(id);
+        Ok(id)
+      }
+      Entry::Occupied(_) => Err(ge_err::trying_to_redeclare_a_module(name_sr, module_name)),
+    }
+  }
+
+  pub fn get_module(
+    &mut self,
+    module_name: &str,
+    name_sr: SourceRange,
+  ) -> CompilerResult<ModuleId> {
+    if let Some(module_id) = self.modules.get(module_name) {
+      Ok(*module_id)
+    } else {
+      Err(ge_err::not_a_loaded_module(name_sr, module_name))
+    }
   }
 
   pub fn get_id(&self, module_id: ModuleId, name: &str) -> Option<GlobalId> {
@@ -90,126 +114,6 @@ impl GlobalEnv {
   pub fn new() -> Self {
     Default::default()
   }
-
-  /*
-
-    pub fn get_global_function(&self, name: &str, arguments: &[TypeId]) {}
-
-    pub fn create_new_global_variable() -> CompilerResult<GlobalId> {}
-
-    pub fn get_type(&self, id: GlobalId) -> TypeId {}
-
-    pub fn new_module(name: &str) -> ModuleId {}
-
-    pub fn get_current_module_id(&self) -> ModuleId {}
-
-    fn add_name(&mut self, name: String, type_id: TypeId, name_sr: SourceRange) -> Identifier {
-      debug_assert!(!self.current_module_names.contains_key(&name));
-
-      let id = self.last_global_id;
-      self.current_module_names.insert(name, (id, type_id));
-      self.last_global_id += 1;
-      self.types.push(TypeId::NONE);
-      self.current_module_first_uses.push(name_sr);
-      self.current_module_declarations.push(false);
-      Identifier::Global(id)
-    }
-
-    /// returns:
-    /// - `Ok(Some(id))` if the name exists in one of the provided modules or in the current module
-    /// - `Ok(None)` if it doesn't exist
-    /// - `Err(...)` if there are multiple
-    pub fn get_name(
-      &self,
-      modules: &[ModuleId],
-      name: &str,
-      name_sr: SourceRange,
-    ) -> CompilerResult<(Identifier, TypeId)> {
-      let in_current_module = self
-        .current_module_names
-        .get(name)
-        .copied()
-        .map(Identifier::Global);
-      modules
-        .iter()
-        .filter_map(|id| self.names[id.0 as usize].get(name))
-        .try_fold(in_current_module, |acc, id| match acc {
-          None => Ok(Some(Identifier::Global(*id))),
-          Some(_) => Err(ge_err::identifier_declare_in_multiple_modules(
-            name_sr, name,
-          )),
-        })
-    }
-
-
-
-    pub fn get_globals_count(&self, module_id: ModuleId) -> usize {
-      self.names[module_id.0 as usize].len()
-    }
-
-    pub fn get_or_add(
-      &mut self,
-      imported_modules: &[ModuleId],
-      name: &str,
-      name_sr: SourceRange,
-    ) -> CompilerResult<Identifier> {
-      self
-        .get_name(imported_modules, name, name_sr)
-        .map(|id| id.unwrap_or_else(|| self.add_name(name.to_owned(), name_sr)))
-    }
-
-    pub fn declare_name(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<Identifier> {
-      // FIXME: copy paste from finalize_current_module
-      let first_module_id = self.last_global_id as usize - self.current_module_names.len();
-      if let Some(&id) = self.current_module_names.get(name) {
-        let module_relative_id = id as usize - first_module_id;
-        if self.current_module_declarations[module_relative_id] {
-          Err(ge_err::identifier_redeclaration(name_sr, name))
-        } else {
-          self.current_module_declarations[module_relative_id] = true;
-          Ok(Identifier::Global(id))
-        }
-      } else {
-        let id = self.add_name(name.to_string(), name_sr);
-        *self.current_module_declarations.last_mut().unwrap() = true;
-        Ok(id)
-      }
-    }
-
-    fn clear_current_module(&mut self) {
-      self.current_module_first_uses.clear();
-      self.current_module_declarations.clear();
-      let mut t = HashMap::with_capacity(self.current_module_names.len());
-      std::mem::swap(&mut t, &mut self.current_module_names);
-      self.names.push(t);
-    }
-
-    pub fn finalize_current_module(&mut self) -> Result<(), Vec<CompilerError>> {
-      let mut errs = Vec::new();
-      let first_module_id = self.last_global_id as usize - self.current_module_names.len();
-      for id in self.current_module_names.values() {
-        let module_relative_id = *id as usize - first_module_id;
-        if !self.current_module_declarations[module_relative_id] {
-          let first_use_sr = self.current_module_first_uses[module_relative_id as usize];
-          errs.push(ge_err::undeclared_global(first_use_sr));
-        }
-      }
-      self.clear_current_module();
-      if !errs.is_empty() {
-        Err(errs)
-      } else {
-        Ok(())
-      }
-    }
-
-    pub fn set_type_if_global(&mut self, id: Identifier, type_id: TypeId) {
-      if let Identifier::Global(id) = id {
-        self.types[id as usize] = type_id;
-      }
-    }
-
-
-  */
 }
 
 #[cfg(never)]

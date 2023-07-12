@@ -12,7 +12,6 @@ fn print(args: Vec<TaggedValue>) -> TaggedValue {
 
 pub fn load_standard_library(vm: &mut VM) {
   vm.load_module(
-    "std-io".to_string(),
     include_str!("../../standard-library/io.wds"),
     vec![("println", Box::new(println)), ("print", Box::new(print))],
   )

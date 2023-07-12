@@ -29,21 +29,12 @@ pub struct Compiler {
 }
 
 impl Compiler {
-  pub fn compile(
-    &mut self,
-    source: &str,
-    loaded: &LoadedModules,
-  ) -> Result<Module, Vec<CompilerError>> {
+  pub fn compile(&mut self, source: &str) -> Result<Module, Vec<CompilerError>> {
     let ParseResult {
       ast,
       module_extern_functions,
       imports,
-    } = Parser::parse(
-      source,
-      &mut self.type_map,
-      &mut self.global_env,
-      &loaded.module_ids,
-    )?;
+    } = Parser::parse(source, &mut self.type_map, &mut self.global_env)?;
     let generated_code =
       SemanticAnalizer::analyze(ast, &mut self.global_env.types, &self.type_map)?;
     let id = ModuleId(self.last_module);
