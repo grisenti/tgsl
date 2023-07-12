@@ -315,6 +315,13 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn module_err(&mut self) -> StmtHandle {
+    self.emit_error(parser_err::module_declarations_is_not_first_statement(
+      &self.lex,
+    ));
+    StmtHandle::INVALID
+  }
+
   pub(super) fn parse_decl(&mut self) -> StmtHandle {
     match self.lookahead {
       Token::Var => self.parse_var_decl(),
@@ -322,6 +329,7 @@ impl<'src> Parser<'src> {
       Token::Struct => self.parse_struct_decl(),
       Token::Extern => self.parse_extern_function(),
       Token::Import => self.parse_import(),
+      Token::Module => self.module_err(),
       _ => self.parse_statement(),
     }
   }

@@ -147,6 +147,12 @@ pub mod parser_err {
     "P013",
     "extern functions can only be declared in the global scope"
   );
+
+  def_err!(
+    module_declarations_is_not_first_statement,
+    "P014",
+    "module declarations need to be at the top of the file"
+  );
 }
 
 pub mod ge_err {
