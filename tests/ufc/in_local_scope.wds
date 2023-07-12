@@ -1,4 +1,4 @@
-import assert
+import assert;
 
 fn test() -> num {
 	fn add(a: num, b: num) -> num {

@@ -1,4 +1,4 @@
-import assert
+import assert;
 
 var x;
 if (2 < 3)

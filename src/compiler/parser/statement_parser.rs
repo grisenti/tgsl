@@ -301,6 +301,7 @@ impl<'src> Parser<'src> {
     if let Token::Id(module_name) = self.lookahead {
       let module_name_sr = self.lex.current_range();
       self.advance();
+      self.match_or_err(Token::Basic(';'));
       match self.env.import_module(module_name, module_name_sr) {
         Ok(module_id) => self.ast.add_statement(Stmt::Import { module_id }),
         Err(error) => {

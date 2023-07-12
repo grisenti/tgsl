@@ -1,4 +1,4 @@
-import assert
+import assert;
 
 struct A {
 	a: num,
