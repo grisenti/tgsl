@@ -151,7 +151,7 @@ pub mod parser_err {
   def_err!(
     module_declarations_is_not_first_statement,
     "P014",
-    "module declarations need to be at the top of the file"
+    "module declaration needs to be the first statement"
   );
 }
 
