@@ -3,7 +3,7 @@ import assert;
 fn f() -> fn() -> num {
   var y = 1;
   return fn () -> fn () -> num {
-	return fn () -> () {
+	return fn () {
 		y = y + 1;
 		return y;
 	};

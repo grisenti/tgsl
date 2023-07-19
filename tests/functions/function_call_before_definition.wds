@@ -1,0 +1,10 @@
+import assert;
+
+fn g(n: num) -> num;
+
+assert(g(2) == 6);
+
+fn g(n: num) -> num {
+  return 3 * n;
+}
+

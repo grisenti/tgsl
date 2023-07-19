@@ -34,18 +34,42 @@ fn compile_and_run(test_file: &str) {
   }
 }
 
-test_files!(closures, capture_single_one_level, capture_copy);
-test_files!(ufc, primitive_types, aggregates, repeated, in_local_scope);
-test_files!(structs, construction, member_access, nesting);
-test_files!(
-  misc,
-  function_declaration,
+#[rustfmt::skip]
+test_files!(closures,
+  capture_copy,
+  capture_single_multi_level,
+  capture_single_one_level
+);
+
+#[rustfmt::skip]
+test_files!(functions,
+  conditional_return_types,
+  function_call_before_definition,
+  function_call,
+  mutually_recursive_functions,
+  self_recursive_function
+);
+
+#[rustfmt::skip]
+test_files!(misc,
   passing_closures,
   primitive_operations,
-  recursive_function,
-  struct_declaration,
-  struct_construction,
-  mutually_recursive_functions,
-  conditional_return_types,
   if_condition
+);
+
+#[rustfmt::skip]
+test_files!(structs,
+  construction,
+  definition,
+  member_access,
+  member_set,
+  nesting
+);
+
+#[rustfmt::skip]
+test_files!(ufc,
+  primitive_types,
+  aggregates,
+  repeated,
+  in_local_scope
 );
