@@ -256,7 +256,10 @@ impl FunctionAnalizer<'_> {
         None
       }
       Stmt::Import { .. } => None,
-      Stmt::FunctionDeclaration { .. } => None,
+      Stmt::FunctionDeclaration { id, fn_type, .. } => {
+        self.declare(*id, *fn_type);
+        None
+      }
     }
   }
 }

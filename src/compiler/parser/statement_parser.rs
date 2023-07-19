@@ -1,4 +1,4 @@
-use crate::{compiler::errors::SourceRangeProvider, return_if_err};
+use crate::{check_error, compiler::errors::SourceRangeProvider, return_if_err};
 
 use super::*;
 
@@ -149,7 +149,12 @@ impl<'src> Parser<'src> {
     assert!(self.lookahead == Token::Var);
     return_if_err!(self, StmtHandle::INVALID);
     self.advance();
-    let (identifier, id_sr) = self.match_id_or_err();
+    let (name, id_sr) = self.match_id_or_err();
+    let identifier = check_error!(
+      self,
+      self.env.define_variable(name, id_sr),
+      Identifier::Invalid
+    );
     let var_type = self.parse_opt_type_specifier();
     let ret = if self.lookahead == Token::Basic('=') {
       self.advance(); // consume '='
@@ -175,7 +180,12 @@ impl<'src> Parser<'src> {
     return_if_err!(self, vec![]);
     let mut parameter_types = Vec::new();
     loop {
-      self.match_id_or_err();
+      let (name, name_sr) = self.match_id_or_err();
+      check_error!(
+        self,
+        self.env.define_variable(name, name_sr),
+        Identifier::Invalid
+      );
       let param_type = self.parse_type_specifier_or_err();
       parameter_types.push(param_type);
       if self.match_next(Token::Basic(',')).is_none() {
@@ -202,7 +212,7 @@ impl<'src> Parser<'src> {
   fn parse_function_decl(&mut self) -> StmtHandle {
     assert_eq!(self.lookahead, Token::Fn);
     self.advance(); // consume fun
-    let (name_id, name_sr) = self.match_id_or_err();
+    let (name, name_sr) = self.match_id_or_err();
     let call_start = self.lex.previous_token_range();
     self.env.push_function();
     self.match_or_err(Token::Basic('('));
@@ -218,9 +228,15 @@ impl<'src> Parser<'src> {
       ret: return_type,
     });
     if self.lookahead == Token::Basic(';') {
+      self.env.pop_function();
       self.advance();
+      let id = check_error!(
+        self,
+        self.env.declare_function(name, name_sr),
+        Identifier::Invalid
+      );
       return self.ast.add_statement(Stmt::FunctionDeclaration {
-        id: name_id,
+        id,
         name_sr,
         parameter_types,
         return_type,
@@ -230,8 +246,13 @@ impl<'src> Parser<'src> {
     let body = self.parse_unscoped_block();
     let captures = self.env.pop_function();
 
+    let id = check_error!(
+      self,
+      self.env.define_function(name, name_sr),
+      Identifier::Invalid
+    );
     self.ast.add_statement(Stmt::FunctionDefinition {
-      id: name_id,
+      id,
       name_sr,
       fn_type,
       parameter_types,
@@ -244,7 +265,12 @@ impl<'src> Parser<'src> {
   fn parse_struct_decl(&mut self) -> StmtHandle {
     assert_eq!(self.lookahead, Token::Struct);
     self.advance();
-    let (name_id, name_sr) = self.match_id_or_err();
+    let (name, name_sr) = self.match_id_or_err();
+    let name_id = check_error!(
+      self,
+      self.env.define_function(name, name_sr),
+      Identifier::Invalid
+    );
     self.match_or_err(Token::Basic('{'));
     let mut member_names = Vec::new();
     let mut member_types = Vec::new();
@@ -277,7 +303,12 @@ impl<'src> Parser<'src> {
     }
     self.advance();
     self.match_or_err(Token::Fn);
-    let (name_id, name_sr) = self.match_id_or_err();
+    let (name, name_sr) = self.match_id_or_err();
+    let name_id = check_error!(
+      self,
+      self.env.define_function(name, name_sr),
+      Identifier::Invalid
+    );
     let extern_id = self.env.create_extern_id(name_id);
     let parameters = self.parse_function_param_types();
     let ret = self.parse_function_return_type();

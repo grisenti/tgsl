@@ -54,6 +54,19 @@ macro_rules! return_if_err {
   };
 }
 
+#[macro_export]
+macro_rules! check_error {
+  ($s:ident, $result:expr, $invalid_value:expr) => {
+    match $result {
+      Ok(value) => value,
+      Err(err) => {
+        $s.emit_error(err);
+        $invalid_value
+      }
+    }
+  };
+}
+
 impl<'parsing> Parser<'parsing> {
   fn is_at_end(&self) -> bool {
     self.lookahead == Token::EndOfFile
@@ -92,16 +105,6 @@ impl<'parsing> Parser<'parsing> {
     self.state = ParserState::NoErrors;
   }
 
-  fn declare_name(&mut self, name: &'parsing str, name_sr: SourceRange) -> Identifier {
-    match self.env.declare_name(name, name_sr) {
-      Ok(id) => id,
-      Err(err) => {
-        self.emit_error(err);
-        Identifier::Invalid
-      }
-    }
-  }
-
   fn get_name(&mut self, name: &str, name_sr: SourceRange) -> Identifier {
     match self.env.get_name(name, name_sr) {
       Ok(id) => id,
@@ -116,14 +119,14 @@ impl<'parsing> Parser<'parsing> {
     self.env.get_name(name, name_sr).ok()
   }
 
-  fn match_id_or_err(&mut self) -> (Identifier, SourceRange) {
-    const ERROR_RESULT: (Identifier, SourceRange) = (Identifier::Invalid, SourceRange::EMPTY);
+  fn match_id_or_err(&mut self) -> (&'parsing str, SourceRange) {
+    const ERROR_RESULT: (&'static str, SourceRange) = ("<ERROR>", SourceRange::EMPTY);
     return_if_err!(self, ERROR_RESULT);
+
     if let Token::Id(name) = self.lookahead {
       let name_sr = self.lex.previous_token_range();
-      let name_id = self.declare_name(name, name_sr);
       self.advance();
-      (name_id, name_sr)
+      (name, name_sr)
     } else {
       self.emit_error(parser_err::expected_identifier(&self.lex, self.lookahead));
       ERROR_RESULT
@@ -292,7 +295,8 @@ impl<'parsing> Parser<'parsing> {
         parser.recover_from_errors();
       }
     }
-    let extern_map = parser.env.extern_ids;
+    let extern_map = parser.env.extern_ids.clone();
+    parser.env.finalize().expect("");
     if parser.errors.is_empty() {
       Ok(ParseResult {
         ast: parser.ast,

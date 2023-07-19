@@ -255,7 +255,7 @@ mod test {
     let mut env = Environment::new(&mut empty_global_env);
     for name in names {
       env
-        .declare_name(name, SourceRange::EMPTY)
+        .define_variable(name, SourceRange::EMPTY)
         .expect("name redeclarations");
     }
     let mut parser = Parser {

@@ -17,6 +17,13 @@ struct Local<'src> {
 }
 
 #[derive(Debug, Clone, Copy)]
+struct Global {
+  id: GlobalId,
+  private: bool,
+  declaration: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
 struct CaptureId {
   id: Identifier,
   local_id: u8,
@@ -27,10 +34,9 @@ struct Function {
 }
 
 pub struct Environment<'src> {
-  imported_modules: Vec<ModuleId>,
   module_id: Option<ModuleId>,
-  public_globals: &'src mut GlobalEnv,
-  private_module_globals: HashMap<String, GlobalId>,
+  global_env: &'src mut GlobalEnv,
+  globals: HashMap<String, Global>,
 
   locals: Vec<Local<'src>>,
   scope_depth: u8,
@@ -96,30 +102,30 @@ impl<'src> Environment<'src> {
   }
 
   fn get_global(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<GlobalId> {
-    let public_global_candidate =
-      self
-        .public_globals
-        .get_name(&self.imported_modules, name, name_sr)?;
-    let private_module_candidate = self.private_module_globals.get(name).copied();
-    match (public_global_candidate, private_module_candidate) {
-      (Some(_), Some(_)) => Err(ge_err::identifier_redeclaration(name_sr, name)),
-      (None, Some(id)) | (Some(id), None) => Ok(id),
-      (None, None) => Err(ge_err::undeclared_global(name_sr)),
+    if let Some(global) = self.globals.get(name) {
+      Ok(global.id)
+    } else {
+      Err(ge_err::undeclared_global(name_sr))
     }
   }
 
-  fn declare_global(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<GlobalId> {
-    if let Some(module_id) = self.module_id {
-      self.public_globals.declare_name(module_id, name, name_sr)
-    } else {
-      match self.private_module_globals.entry(name.to_string()) {
-        Entry::Vacant(e) => {
-          let id = self.public_globals.new_global_id();
-          e.insert(id);
-          Ok(id)
-        }
-        Entry::Occupied(_) => Err(ge_err::identifier_redeclaration(name_sr, name)),
+  fn declare_global(
+    &mut self,
+    name: &str,
+    name_sr: SourceRange,
+    declaration: bool,
+  ) -> CompilerResult<GlobalId> {
+    match self.globals.entry(name.to_string()) {
+      Entry::Vacant(e) => {
+        let id = self.global_env.new_global_id();
+        e.insert(Global {
+          id,
+          private: true,
+          declaration: true,
+        });
+        Ok(id)
       }
+      Entry::Occupied(_) => Err(ge_err::identifier_redeclaration(name_sr, name)),
     }
   }
 
@@ -131,7 +137,57 @@ impl<'src> Environment<'src> {
     }
   }
 
-  pub fn declare_name(
+  pub fn define_function(
+    &mut self,
+    name: &str,
+    name_sr: SourceRange,
+  ) -> CompilerResult<Identifier> {
+    if !self.in_global_scope() {
+      panic!()
+    }
+    match self.globals.entry(name.to_string()) {
+      Entry::Vacant(e) => {
+        let id = self.global_env.new_global_id();
+        e.insert(Global {
+          id,
+          private: true,
+          declaration: false,
+        });
+        Ok(Identifier::Global(id))
+      }
+      Entry::Occupied(mut e) => {
+        let global = e.get_mut();
+        if global.declaration {
+          global.declaration = false;
+          Ok(Identifier::Global(global.id))
+        } else {
+          panic!();
+        }
+      }
+    }
+  }
+
+  pub fn declare_function(
+    &mut self,
+    name: &str,
+    name_sr: SourceRange,
+  ) -> CompilerResult<Identifier> {
+    if !self.in_global_scope() {
+      panic!()
+    }
+    let id = self.global_env.new_global_id();
+    self.globals.insert(
+      name.to_string(),
+      Global {
+        id,
+        private: true,
+        declaration: true,
+      },
+    );
+    Ok(Identifier::Global(id))
+  }
+
+  pub fn define_variable(
     &mut self,
     name: &'src str,
     name_sr: SourceRange,
@@ -139,7 +195,9 @@ impl<'src> Environment<'src> {
     if self.is_local_in_current_scope(name) {
       Err(parser_err::same_scope_name_redeclaration(name_sr, name))
     } else if self.in_global_scope() {
-      self.declare_global(name, name_sr).map(Identifier::Global)
+      self
+        .declare_global(name, name_sr, false)
+        .map(Identifier::Global)
     } else {
       if self.last_local_id == u8::MAX {
         return Err(parser_err::too_many_local_names(name_sr));
@@ -221,24 +279,36 @@ impl<'src> Environment<'src> {
   pub fn set_module(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<ModuleId> {
     assert!(self.module_id.is_none(), "I don't need this case for now");
 
-    let module_id = self.public_globals.new_module(name, name_sr)?;
-    self.imported_modules.push(module_id);
+    let module_id = self.global_env.new_module(name, name_sr)?;
     self.module_id = Some(module_id);
     Ok(module_id)
   }
 
   pub fn import_module(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<ModuleId> {
-    let module_id = self.public_globals.get_module(name, name_sr)?;
-    self.imported_modules.push(module_id);
+    let module_id = self.global_env.get_module_id(name, name_sr)?;
+    let module = self.global_env.get_module(module_id);
+    // FIXME: does not check for double declarations
+    self
+      .globals
+      .extend(module.public_names.iter().map(|(name, id)| {
+        (
+          name.to_owned(),
+          Global {
+            id: *id,
+            private: true,
+            declaration: false,
+          },
+        )
+      }));
+
     Ok(module_id)
   }
 
   pub fn new(global_env: &'src mut GlobalEnv) -> Self {
     Self {
-      public_globals: global_env,
+      globals: HashMap::new(),
+      global_env,
       module_id: None,
-      imported_modules: Vec::new(),
-      private_module_globals: HashMap::new(),
 
       names_in_current_scope: 0,
       last_local_id: 0,
@@ -250,20 +320,44 @@ impl<'src> Environment<'src> {
       functions_declaration_stack: Vec::new(),
     }
   }
+
+  pub fn finalize(self) -> CompilerResult<()> {
+    let module_public_globals = self
+      .globals
+      .into_iter()
+      .filter(|(_, global)| global.private)
+      .map(|(name, global)| (name, global.id))
+      .collect::<HashMap<_, _>>();
+    if let Some(module_id) = self.module_id {
+      self.global_env.export_module(
+        module_id,
+        global_env::Module {
+          public_names: module_public_globals,
+        },
+      );
+    }
+    Ok(())
+  }
 }
 
 #[cfg(test)]
 mod test {
 
-  use crate::compiler::{global_env::GlobalEnv, identifier::Identifier, lexer::SourceRange};
+  use std::collections::HashMap;
+
+  use crate::compiler::{
+    global_env::{GlobalEnv, Module},
+    identifier::Identifier,
+    lexer::SourceRange,
+  };
 
   use super::Environment;
 
   #[test]
-  fn access_global_from_global_scope() {
+  fn access_global_variable_from_global_scope() {
     let mut global_env = GlobalEnv::new();
     let mut env = Environment::new(&mut global_env);
-    env.declare_name("x", SourceRange::EMPTY);
+    env.define_variable("x", SourceRange::EMPTY);
     assert_eq!(
       env.get_name("x", SourceRange::EMPTY),
       Ok(Identifier::Global(0))
@@ -271,10 +365,10 @@ mod test {
   }
 
   #[test]
-  fn access_global_from_local_scope() {
+  fn access_global_variable_from_local_scope() {
     let mut global_env = GlobalEnv::new();
     let mut env = Environment::new(&mut global_env);
-    env.declare_name("x", SourceRange::EMPTY);
+    env.define_variable("x", SourceRange::EMPTY);
     env.push_scope();
     assert_eq!(
       env.get_name("x", SourceRange::EMPTY),
@@ -288,7 +382,7 @@ mod test {
     let mut env = Environment::new(&mut global_env);
     env.push_function();
     env
-      .declare_name("x", SourceRange::EMPTY)
+      .define_variable("x", SourceRange::EMPTY)
       .expect("could not declare name");
     env.push_function();
     assert_eq!(
@@ -313,7 +407,7 @@ mod test {
     let mut env = Environment::new(&mut global_env);
     env.push_function();
     env
-      .declare_name("x", SourceRange::EMPTY)
+      .define_variable("x", SourceRange::EMPTY)
       .expect("could not declare name");
     env.push_function();
     env.push_function();
@@ -332,7 +426,7 @@ mod test {
     let mut global_env = GlobalEnv::new();
     let mut env = Environment::new(&mut global_env);
     env
-      .declare_name("x", SourceRange::EMPTY)
+      .define_variable("x", SourceRange::EMPTY)
       .expect("could not declare name");
     env.push_function();
     assert_eq!(env.pop_function(), vec![]);
@@ -343,7 +437,7 @@ mod test {
     let mut global_env = GlobalEnv::new();
     let mut env = Environment::new(&mut global_env);
     env
-      .declare_name("x", SourceRange::EMPTY)
+      .define_variable("x", SourceRange::EMPTY)
       .expect("could not declare name");
     env.push_function();
     env.push_scope();
@@ -359,7 +453,7 @@ mod test {
     let mut env = Environment::new(&mut global_env);
     env.push_function();
     env
-      .declare_name("x", SourceRange::EMPTY)
+      .define_variable("x", SourceRange::EMPTY)
       .expect("could not declare name");
     env.push_scope();
     assert_eq!(
@@ -371,12 +465,16 @@ mod test {
   #[test]
   fn can_use_imported_names_in_anonymous_module() {
     let mut global_env = GlobalEnv::new();
-    let id = global_env
+    let module_id = global_env
       .new_module("test", SourceRange::EMPTY)
       .expect("could not create test module");
-    global_env
-      .declare_name(id, "x", SourceRange::EMPTY)
-      .expect("count not declare test id");
+    let name_id = global_env.new_global_id();
+    global_env.export_module(
+      module_id,
+      Module {
+        public_names: HashMap::from([("x".to_string(), name_id)]),
+      },
+    );
     let mut env = Environment::new(&mut global_env);
     env
       .import_module("test", SourceRange::EMPTY)
