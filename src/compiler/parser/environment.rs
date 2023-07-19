@@ -137,14 +137,11 @@ impl<'src> Environment<'src> {
     }
   }
 
-  pub fn define_function(
+  pub fn define_global_function(
     &mut self,
     name: &str,
     name_sr: SourceRange,
   ) -> CompilerResult<Identifier> {
-    if !self.in_global_scope() {
-      panic!()
-    }
     match self.globals.entry(name.to_string()) {
       Entry::Vacant(e) => {
         let id = self.global_env.new_global_id();
@@ -167,14 +164,11 @@ impl<'src> Environment<'src> {
     }
   }
 
-  pub fn declare_function(
+  pub fn declare_global_function(
     &mut self,
     name: &str,
     name_sr: SourceRange,
   ) -> CompilerResult<Identifier> {
-    if !self.in_global_scope() {
-      panic!()
-    }
     let id = self.global_env.new_global_id();
     self.globals.insert(
       name.to_string(),

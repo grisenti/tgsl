@@ -232,7 +232,7 @@ impl<'src> Parser<'src> {
       self.advance();
       let id = check_error!(
         self,
-        self.env.declare_function(name, name_sr),
+        self.env.declare_global_function(name, name_sr),
         Identifier::Invalid
       );
       return self.ast.add_statement(Stmt::FunctionDeclaration {
@@ -243,14 +243,14 @@ impl<'src> Parser<'src> {
         fn_type,
       });
     }
+    let id = check_error!(
+      self,
+      self.env.define_global_function(name, name_sr),
+      Identifier::Invalid
+    );
     let body = self.parse_unscoped_block();
     let captures = self.env.pop_function();
 
-    let id = check_error!(
-      self,
-      self.env.define_function(name, name_sr),
-      Identifier::Invalid
-    );
     self.ast.add_statement(Stmt::FunctionDefinition {
       id,
       name_sr,
@@ -268,7 +268,7 @@ impl<'src> Parser<'src> {
     let (name, name_sr) = self.match_id_or_err();
     let name_id = check_error!(
       self,
-      self.env.define_function(name, name_sr),
+      self.env.define_global_function(name, name_sr),
       Identifier::Invalid
     );
     self.match_or_err(Token::Basic('{'));
@@ -306,7 +306,7 @@ impl<'src> Parser<'src> {
     let (name, name_sr) = self.match_id_or_err();
     let name_id = check_error!(
       self,
-      self.env.define_function(name, name_sr),
+      self.env.define_global_function(name, name_sr),
       Identifier::Invalid
     );
     let extern_id = self.env.create_extern_id(name_id);
