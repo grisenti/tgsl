@@ -183,7 +183,7 @@ impl VM {
           let id = unsafe { frame.pop().value.id };
           let value = unsafe { self.globals.get_unchecked(id as usize) };
           if value.kind == ValueType::None {
-            eprint!("trying to access undefined global variable");
+            panic!("trying to access undefined global variable");
             return;
           }
           frame.push(*value);
