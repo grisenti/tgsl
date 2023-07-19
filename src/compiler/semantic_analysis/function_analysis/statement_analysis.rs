@@ -149,6 +149,7 @@ impl FunctionAnalizer<'_> {
     declaration_sr: SourceRange,
     body: &[StmtHandle],
   ) {
+    self.set_type(id, fn_type);
     self.check_function(parameters, captures, declaration_sr, body);
     unsafe {
       self.declare(id, fn_type);
