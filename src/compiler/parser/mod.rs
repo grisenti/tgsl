@@ -5,6 +5,7 @@ mod statement_parser;
 use self::environment::Environment;
 
 use super::ast::*;
+use super::errors::ge_err;
 use super::errors::parser_err;
 use super::errors::CompilerError;
 use super::errors::CompilerResult;
@@ -25,10 +26,13 @@ enum ParserState {
   UnrecoverableError,
 }
 
-pub struct ParseResult {
+pub struct ParsedModule {
+  pub module_name: Option<String>,
   pub ast: AST,
+  pub globals: HashMap<String, GlobalId>,
+  pub module_global_types: Vec<TypeId>,
   pub module_extern_functions: Vec<GlobalId>,
-  pub imports: Vec<ModuleId>,
+  pub globals_count: u16,
 }
 
 pub struct Parser<'parsing> {
@@ -254,14 +258,16 @@ impl<'parsing> Parser<'parsing> {
     }
   }
 
-  fn parse_module_name(&mut self) {
+  fn parse_module_name(&mut self, global_env: &GlobalEnv) -> Option<String> {
     if self.match_next(Token::Module).is_some() {
       if let Token::Id(module_name) = self.lookahead {
+        let id_sr = self.lex.previous_token_range();
         self.advance();
         self.match_next(Token::Basic(';'));
-        let id_sr = self.lex.previous_token_range();
-        if let Err(err) = self.env.set_module(module_name, id_sr) {
-          self.emit_error(err);
+        if global_env.is_module_name_available(module_name) {
+          return Some(module_name.to_string());
+        } else {
+          self.emit_error(ge_err::trying_to_redeclare_a_module(id_sr, module_name));
         }
       } else {
         self.emit_error(parser_err::expected_module_identifier(
@@ -270,13 +276,14 @@ impl<'parsing> Parser<'parsing> {
         ));
       }
     }
+    None
   }
 
   pub fn parse(
     source: &'parsing str,
     type_map: &'parsing mut TypeMap,
-    global_env: &'parsing mut GlobalEnv,
-  ) -> Result<ParseResult, Vec<CompilerError>> {
+    global_env: &'parsing GlobalEnv,
+  ) -> Result<ParsedModule, Vec<CompilerError>> {
     let mut parser = Self {
       lex: Lexer::new(source),
       type_map,
@@ -287,7 +294,7 @@ impl<'parsing> Parser<'parsing> {
       state: ParserState::NoErrors,
     };
     parser.advance();
-    parser.parse_module_name();
+    let module_name = parser.parse_module_name(global_env);
     while !parser.is_at_end() && parser.state != ParserState::UnrecoverableError {
       let stmt = parser.parse_decl();
       parser.ast.program_push(stmt);
@@ -295,13 +302,14 @@ impl<'parsing> Parser<'parsing> {
         parser.recover_from_errors();
       }
     }
-    let extern_map = parser.env.extern_ids.clone();
-    parser.env.finalize().expect("");
     if parser.errors.is_empty() {
-      Ok(ParseResult {
+      Ok(ParsedModule {
+        module_name,
         ast: parser.ast,
-        module_extern_functions: extern_map,
-        imports: vec![],
+        globals: parser.env.globals,
+        module_extern_functions: parser.env.extern_ids,
+        module_global_types: parser.env.module_global_types,
+        globals_count: parser.env.module_globals_count,
       })
     } else {
       Err(parser.errors)

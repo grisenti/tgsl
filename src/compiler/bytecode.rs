@@ -1,4 +1,4 @@
-use super::{ast::Operator};
+use super::{ast::Operator, identifier::GlobalId};
 use core::fmt::Debug;
 
 #[repr(u8)]
@@ -99,7 +99,7 @@ impl OpCode {
 #[derive(Clone, Debug)]
 pub enum ConstantValue {
   Number(f64),
-  GlobalId(u16),
+  GlobalId(GlobalId),
   ExternId(u16),
   Bool(bool),
   Str(String),

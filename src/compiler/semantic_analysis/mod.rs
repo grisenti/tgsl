@@ -6,6 +6,7 @@ use super::{
   ast::*,
   codegen::BytecodeBuilder,
   errors::CompilerError,
+  global_env::GlobalTypes,
   identifier::Identifier,
   types::{type_map::TypeMap, TypeId},
 };
@@ -29,14 +30,16 @@ struct SemAState {
 struct SemAParameters<'a> {
   ast: &'a AST,
   type_map: &'a TypeMap,
+  global_types: GlobalTypes<'a>,
 }
 
 pub struct SemanticAnalizer;
 
 impl SemanticAnalizer {
   pub fn analyze(
-    ast: AST,
-    global_types: &mut Vec<TypeId>,
+    ast: &AST,
+    global_types: GlobalTypes,
+    module_global_types: &mut [TypeId],
     type_map: &TypeMap,
   ) -> Result<BytecodeBuilder, Vec<CompilerError>> {
     let program = ast.get_program();
@@ -50,9 +53,10 @@ impl SemanticAnalizer {
       SemAParameters {
         ast: &ast,
         type_map,
+        global_types,
       },
       &mut global_env,
-      global_types,
+      module_global_types,
     );
     if global_env.errors.is_empty() {
       Ok(code)

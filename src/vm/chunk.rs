@@ -1,9 +1,6 @@
-use std::{mem::ManuallyDrop};
+use std::mem::ManuallyDrop;
 
-use crate::compiler::{
-  bytecode::{ConstantValue},
-  codegen::BytecodeBuilder,
-};
+use crate::compiler::{bytecode::ConstantValue, codegen::BytecodeBuilder};
 
 use super::value::{TaggedValue, Value, ValueType};
 
@@ -38,35 +35,6 @@ impl From<String> for TaggedConstant {
         string: ManuallyDrop::new(value),
       },
       tag: ConstantType::String,
-    }
-  }
-}
-
-impl From<ConstantValue> for TaggedConstant {
-  fn from(value: ConstantValue) -> Self {
-    match value {
-      ConstantValue::Bool(boolean) => TaggedValue {
-        kind: ValueType::Bool,
-        value: Value { boolean },
-      }
-      .into(),
-      ConstantValue::Number(number) => TaggedValue {
-        kind: ValueType::Number,
-        value: Value { number },
-      }
-      .into(),
-      ConstantValue::GlobalId(id) => TaggedValue {
-        kind: ValueType::GlobalId,
-        value: Value { id },
-      }
-      .into(),
-      ConstantValue::ExternId(id) => TaggedValue {
-        kind: ValueType::ExternFunctionId,
-        value: Value { id },
-      }
-      .into(),
-      ConstantValue::Str(s) => s.into(),
-      ConstantValue::None => TaggedValue::none().into(),
     }
   }
 }
@@ -123,6 +91,52 @@ impl Default for Chunk {
   }
 }
 
+fn convert_constant(
+  value: ConstantValue,
+  start_address: u16,
+  module_addresses: &[u16],
+) -> TaggedConstant {
+  match value {
+    ConstantValue::Bool(boolean) => TaggedValue {
+      kind: ValueType::Bool,
+      value: Value { boolean },
+    }
+    .into(),
+    ConstantValue::Number(number) => TaggedValue {
+      kind: ValueType::Number,
+      value: Value { number },
+    }
+    .into(),
+    ConstantValue::GlobalId(id) => {
+      if id.is_relative() {
+        TaggedValue {
+          kind: ValueType::GlobalId,
+          value: Value {
+            id: (id.get_relative() + start_address) as u32,
+          },
+        }
+      } else {
+        let (id, module) = id.split_absolute();
+        let module_start_address = module_addresses[module as usize];
+        TaggedValue {
+          kind: ValueType::GlobalId,
+          value: Value {
+            id: (id + module_start_address) as u32,
+          },
+        }
+      }
+    }
+    .into(),
+    ConstantValue::ExternId(id) => TaggedValue {
+      kind: ValueType::ExternFunctionId,
+      value: Value { id: id as u32 },
+    }
+    .into(),
+    ConstantValue::Str(s) => s.into(),
+    ConstantValue::None => TaggedValue::none().into(),
+  }
+}
+
 impl Chunk {
   pub unsafe fn get_constant(&self, index: usize) -> TaggedValue {
     self.constants[index].value.stack_val
@@ -140,17 +154,17 @@ impl Chunk {
     Default::default()
   }
 
-  pub fn new(builder: BytecodeBuilder) -> Self {
+  pub fn new(builder: BytecodeBuilder, start_address: u16, module_addresses: &[u16]) -> Self {
     let (code, function, constants) = builder.into_parts();
     let functions = function
       .into_iter()
       .map(|func_code| Function {
-        code: Self::new(func_code),
+        code: Self::new(func_code, start_address, module_addresses),
       })
       .collect::<Vec<_>>();
     let constants = constants
       .into_iter()
-      .map(|c| c.into())
+      .map(|c| convert_constant(c, start_address, module_addresses))
       .collect::<Vec<TaggedConstant>>();
     Self {
       code,

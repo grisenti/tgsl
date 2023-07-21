@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use self::{
   errors::CompilerError,
-  global_env::GlobalEnv,
+  global_env::{GlobalEnv, GlobalTypes},
   identifier::{GlobalId, ModuleId},
-  modules::{LoadedModules, Module},
-  parser::{ParseResult, Parser},
+  modules::Module,
+  parser::Parser,
   semantic_analysis::SemanticAnalizer,
   types::type_map::TypeMap,
 };
@@ -30,21 +30,24 @@ pub struct Compiler {
 
 impl Compiler {
   pub fn compile(&mut self, source: &str) -> Result<Module, Vec<CompilerError>> {
-    let ParseResult {
-      ast,
-      module_extern_functions,
-      imports,
-    } = Parser::parse(source, &mut self.type_map, &mut self.global_env)?;
-    let generated_code =
-      SemanticAnalizer::analyze(ast, &mut self.global_env.types, &self.type_map)?;
+    let mut parsed_module = Parser::parse(source, &mut self.type_map, &self.global_env)?;
+    let generated_code = SemanticAnalizer::analyze(
+      &parsed_module.ast,
+      GlobalTypes::new(&self.global_env),
+      &mut parsed_module.module_global_types,
+      &self.type_map,
+    )?;
     let id = ModuleId(self.last_module);
+    let globals_count = parsed_module.globals_count;
+    let extern_functions = parsed_module.module_extern_functions.clone();
+    self.global_env.export_module(parsed_module);
     let ret = Ok(Module {
       id,
-      extern_functions: module_extern_functions,
-      imports,
+      extern_functions,
+      imports: vec![],
       code: generated_code,
+      globals_count,
     });
-    self.last_module += 1;
     ret
   }
 

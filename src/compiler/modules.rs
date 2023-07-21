@@ -9,6 +9,7 @@ pub type GlobalNames = HashMap<String, GlobalId>;
 
 #[derive(Default, Clone)]
 pub struct Module {
+  pub globals_count: u16,
   pub id: ModuleId,
   pub extern_functions: Vec<GlobalId>,
   pub imports: Vec<ModuleId>,

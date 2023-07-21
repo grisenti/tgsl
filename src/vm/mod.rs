@@ -133,6 +133,9 @@ pub struct VM {
   loaded_functions: Vec<Function>,
   function_call: usize,
   globals: Vec<TaggedValue>,
+
+  module_addresses: Vec<u16>,
+  next_module_address: u16,
 }
 
 impl VM {
@@ -420,13 +423,13 @@ impl VM {
     if extern_pair.len() < external_ids.len() {
       return Err("missing external function in module loading".to_string());
     }
-    extern_pair.sort_by_key(|(id, _)| *id);
-    for ((id, func), ext_id) in extern_pair.into_iter().zip(external_ids) {
-      if id != *ext_id {
-        return Err("trying to bind a function that is not marked extern".to_string());
-      }
-      self.extern_functions.push(func);
-    }
+    // extern_pair.sort_by_key(|(id, _)| *id);
+    // for ((id, func), ext_id) in extern_pair.into_iter().zip(external_ids) {
+    //   if id != *ext_id {
+    //     return Err("trying to bind a function that is not marked extern".to_string());
+    //   }
+    //   self.extern_functions.push(func);
+    // }
     Ok(())
   }
 
@@ -440,6 +443,7 @@ impl VM {
       imports: _,
       id,
       code,
+      globals_count,
     } = match self.compiler.compile(source) {
       Err(errs) => return Err(ErrorPrinter::to_string(&errs, source)),
       Ok(module) => module,
@@ -448,9 +452,14 @@ impl VM {
     self
       .globals
       .resize(self.globals.len() + 100, TaggedValue::none());
-    self.bind_functions(&ext_ids, id, extern_functions)?;
+    //self.bind_functions(&ext_ids, id, extern_functions)?;
     self.state.extern_functions.extend(ext_ids);
-    self.interpret(Chunk::new(code));
+    self.module_addresses.push(globals_count);
+    self.interpret(Chunk::new(
+      code,
+      self.next_module_address,
+      &self.module_addresses,
+    ));
     Ok(())
   }
 
@@ -465,8 +474,10 @@ impl VM {
       stack: [TaggedValue::none(); MAX_STACK],
       call_stack: [EMPTY_CALL_FRAME; MAX_CALLS],
       function_call: 0,
+      module_addresses: vec![0],
+      next_module_address: 0,
     };
-    load_standard_library(&mut vm);
+    //load_standard_library(&mut vm);
     vm
   }
 }

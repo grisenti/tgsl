@@ -71,7 +71,7 @@ pub enum ValueType {
 #[derive(Clone, Copy)]
 pub union Value {
   pub number: f64,
-  pub id: u16,
+  pub id: u32,
   pub boolean: bool,
   pub function: *const Function,
   pub object: *mut Object,
@@ -85,29 +85,6 @@ pub struct TaggedValue {
 }
 
 impl TaggedValue {
-  pub fn from_constant(constant: &ConstantValue, gc: &mut GC) -> Self {
-    match constant {
-      &ConstantValue::Bool(boolean) => TaggedValue {
-        kind: ValueType::Bool,
-        value: Value { boolean },
-      },
-      &ConstantValue::Number(number) => TaggedValue {
-        kind: ValueType::Number,
-        value: Value { number },
-      },
-      &ConstantValue::GlobalId(id) => TaggedValue {
-        kind: ValueType::GlobalId,
-        value: Value { id },
-      },
-      &ConstantValue::ExternId(id) => TaggedValue {
-        kind: ValueType::ExternFunctionId,
-        value: Value { id },
-      },
-      ConstantValue::Str(s) => TaggedValue::object(gc.alloc_string(s.clone())),
-      ConstantValue::None => TaggedValue::none(),
-    }
-  }
-
   pub fn object(object: *mut Object) -> Self {
     Self {
       kind: ValueType::Object,

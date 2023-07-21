@@ -2,7 +2,8 @@ use crate::compiler::{
   ast::{Stmt, StmtHandle, AST},
   bytecode::{ConstantValue, OpCode},
   codegen::BytecodeBuilder,
-  errors::{sema_err, CompilerError},
+  errors::{ge_err, sema_err, CompilerError},
+  global_env::GlobalTypes,
   identifier::Identifier,
   lexer::SourceRange,
   types::{type_map::TypeMap, Type, TypeId},
@@ -32,7 +33,8 @@ pub struct FunctionAnalizer<'analysis> {
   global_env: &'analysis mut SemAState,
   ast: &'analysis AST,
   type_map: &'analysis TypeMap,
-  global_types: &'analysis mut Vec<TypeId>,
+  global_types: GlobalTypes<'analysis>,
+  module_types: &'analysis mut [TypeId],
   declaration_info: Option<SourceRange>,
 }
 
@@ -77,25 +79,38 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     self.scope_depth += 1;
   }
 
-  fn get_type_mut_ref(&mut self, id: Identifier) -> &mut TypeId {
-    match id {
-      Identifier::Global(gid) => &mut self.global_types[gid as usize],
-      Identifier::Local(id) => &mut self.locals[id as usize],
-      Identifier::Capture(id) => &mut self.captures[id as usize],
-      Identifier::Invalid => panic!("invalid identifier while processing AST"),
-    }
-  }
-
   fn get_type(&self, id: TypeId) -> &Type {
     self.type_map.get_type(id)
   }
 
   fn get_typeid(&mut self, id: Identifier) -> TypeId {
-    *self.get_type_mut_ref(id)
+    match id {
+      Identifier::Global(gid) => {
+        if gid.is_relative() {
+          self.module_types[gid.get_relative() as usize]
+        } else {
+          self.global_types.get_type(gid)
+        }
+      }
+      Identifier::Local(id) => self.locals[id as usize],
+      Identifier::Capture(id) => self.captures[id as usize],
+      Identifier::Invalid => panic!("invalid identifier while processing AST"),
+    }
   }
 
   fn set_type(&mut self, id: Identifier, ty: TypeId) {
-    *self.get_type_mut_ref(id) = ty;
+    match id {
+      Identifier::Global(gid) => {
+        assert!(
+          gid.is_relative(),
+          "cannot change the type of a variable not in the current module"
+        );
+        self.module_types[gid.get_relative() as usize] = ty;
+      }
+      Identifier::Local(id) => self.locals[id as usize] = ty,
+      Identifier::Capture(id) => self.captures[id as usize] = ty,
+      Identifier::Invalid => panic!("invalid identifier while processing AST"),
+    }
   }
 
   fn type_string(&self, id: TypeId) -> String {
@@ -125,13 +140,24 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           self.code.push_constant(ConstantValue::GlobalId(gid));
           self.code.push_op(OpCode::SetGlobal);
         }
-        set_type_or_push_error(
-          &mut self.global_types[gid as usize],
-          value_type,
-          id_sr,
-          &mut self.global_env.errors,
-          self.type_map,
-        );
+        if gid.is_relative() {
+          set_type_or_push_error(
+            &mut self.module_types[gid.get_relative() as usize],
+            value_type,
+            id_sr,
+            &mut self.global_env.errors,
+            self.type_map,
+          );
+        } else {
+          let id_type = self.global_types.get_type(gid);
+          if id_type != value_type {
+            self.emit_error(sema_err::assignment_of_incompatible_types(
+              id_sr,
+              self.type_map.type_to_string(id_type),
+              self.type_map.type_to_string(value_type),
+            ))
+          }
+        }
       }
       Identifier::Local(id) => {
         unsafe {
@@ -183,9 +209,10 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       SemAParameters {
         ast: self.ast,
         type_map: self.type_map,
+        global_types: self.global_types,
       },
       self.global_env,
-      self.global_types,
+      self.module_types,
     );
     unsafe {
       self.code.push_function(result.code);
@@ -197,7 +224,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     body: &[StmtHandle],
     analysis_parameters: SemAParameters<'analysis>,
     global_env: &'analysis mut SemAState,
-    global_types: &'analysis mut Vec<TypeId>,
+    module_types: &'analysis mut [TypeId],
   ) -> FunctionAnalysisResult {
     let mut analizer = Self {
       captures: function_info.captures,
@@ -210,7 +237,8 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       global_env,
       declaration_info: function_info.declaration_src_info,
       type_map: analysis_parameters.type_map,
-      global_types,
+      global_types: analysis_parameters.global_types,
+      module_types,
       ast: analysis_parameters.ast,
     };
     let ret = analizer.process_statements(body);
