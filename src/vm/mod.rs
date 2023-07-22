@@ -1,22 +1,19 @@
 use std::mem::ManuallyDrop;
 
 use crate::{
-  compiler::{
-    bytecode::OpCode,
-    errors::ErrorPrinter,
-    identifier::ModuleId,
-    modules::{LoadedModules, Module},
-    Compiler,
-  },
+  compiler::{bytecode::OpCode, errors::ErrorPrinter, identifier::ModuleId, Compiler},
   standard_library::load_standard_library,
 };
 
+mod address_table;
 mod chunk;
 mod gc;
 pub mod value;
 use chunk::*;
 use gc::GC;
 use value::*;
+
+use self::address_table::AddressTable;
 
 const MAX_CALLS: usize = 64;
 const MAX_LOCALS: usize = u8::MAX as usize;
@@ -124,7 +121,6 @@ impl CallFrame {
 type ExternFunction = Box<dyn Fn(Vec<TaggedValue>) -> TaggedValue>;
 
 pub struct VM {
-  state: LoadedModules,
   compiler: Compiler,
   extern_functions: Vec<ExternFunction>,
   stack: [TaggedValue; MAX_STACK],
@@ -134,8 +130,7 @@ pub struct VM {
   function_call: usize,
   globals: Vec<TaggedValue>,
 
-  module_addresses: Vec<u16>,
-  next_module_address: u16,
+  address_table: AddressTable,
 }
 
 impl VM {
@@ -438,13 +433,7 @@ impl VM {
     source: &str,
     extern_functions: Vec<(&str, ExternFunction)>,
   ) -> Result<(), String> {
-    let Module {
-      extern_functions: ext_ids,
-      imports: _,
-      id,
-      code,
-      globals_count,
-    } = match self.compiler.compile(source) {
+    let compiled_module = match self.compiler.compile(source) {
       Err(errs) => return Err(ErrorPrinter::to_string(&errs, source)),
       Ok(module) => module,
     };
@@ -453,13 +442,8 @@ impl VM {
       .globals
       .resize(self.globals.len() + 100, TaggedValue::none());
     //self.bind_functions(&ext_ids, id, extern_functions)?;
-    self.state.extern_functions.extend(ext_ids);
-    self.module_addresses.push(globals_count);
-    self.interpret(Chunk::new(
-      code,
-      self.next_module_address,
-      &self.module_addresses,
-    ));
+    self.address_table.update_table(&compiled_module);
+    self.interpret(Chunk::new(compiled_module.code, &self.address_table));
     Ok(())
   }
 
@@ -467,15 +451,13 @@ impl VM {
     let mut vm = Self {
       gc: GC::new(),
       compiler: Compiler::new(),
-      state: Default::default(),
       extern_functions: Vec::new(),
       globals: Vec::new(),
       loaded_functions: Vec::new(),
       stack: [TaggedValue::none(); MAX_STACK],
       call_stack: [EMPTY_CALL_FRAME; MAX_CALLS],
       function_call: 0,
-      module_addresses: vec![0],
-      next_module_address: 0,
+      address_table: AddressTable::new(),
     };
     //load_standard_library(&mut vm);
     vm

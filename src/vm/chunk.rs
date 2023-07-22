@@ -2,7 +2,10 @@ use std::mem::ManuallyDrop;
 
 use crate::compiler::{bytecode::ConstantValue, codegen::BytecodeBuilder};
 
-use super::value::{TaggedValue, Value, ValueType};
+use super::{
+  address_table::{self, AddressTable},
+  value::{TaggedValue, Value, ValueType},
+};
 
 union Constant {
   stack_val: TaggedValue,
@@ -91,11 +94,7 @@ impl Default for Chunk {
   }
 }
 
-fn convert_constant(
-  value: ConstantValue,
-  start_address: u16,
-  module_addresses: &[u16],
-) -> TaggedConstant {
+fn convert_constant(value: ConstantValue, address_table: &AddressTable) -> TaggedConstant {
   match value {
     ConstantValue::Bool(boolean) => TaggedValue {
       kind: ValueType::Bool,
@@ -108,22 +107,10 @@ fn convert_constant(
     }
     .into(),
     ConstantValue::GlobalId(id) => {
-      if id.is_relative() {
-        TaggedValue {
-          kind: ValueType::GlobalId,
-          value: Value {
-            id: (id.get_relative() + start_address) as u32,
-          },
-        }
-      } else {
-        let (id, module) = id.split_absolute();
-        let module_start_address = module_addresses[module as usize];
-        TaggedValue {
-          kind: ValueType::GlobalId,
-          value: Value {
-            id: (id + module_start_address) as u32,
-          },
-        }
+      let id = address_table.resolve_variable(id);
+      TaggedValue {
+        kind: ValueType::GlobalId,
+        value: Value { id },
       }
     }
     .into(),
@@ -154,17 +141,17 @@ impl Chunk {
     Default::default()
   }
 
-  pub fn new(builder: BytecodeBuilder, start_address: u16, module_addresses: &[u16]) -> Self {
+  pub fn new(builder: BytecodeBuilder, address_table: &AddressTable) -> Self {
     let (code, function, constants) = builder.into_parts();
     let functions = function
       .into_iter()
       .map(|func_code| Function {
-        code: Self::new(func_code, start_address, module_addresses),
+        code: Self::new(func_code, address_table),
       })
       .collect::<Vec<_>>();
     let constants = constants
       .into_iter()
-      .map(|c| convert_constant(c, start_address, module_addresses))
+      .map(|c| convert_constant(c, address_table))
       .collect::<Vec<TaggedConstant>>();
     Self {
       code,
