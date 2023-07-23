@@ -1,6 +1,6 @@
 import assert;
 
-fn f() -> fn() -> num {
+fn f() -> fn() -> fn() -> num {
   var y = 1;
   return fn () -> fn () -> num {
 	return fn () {
