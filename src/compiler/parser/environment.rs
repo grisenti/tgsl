@@ -35,8 +35,8 @@ pub struct Environment<'src> {
   names_in_current_scope: u8,
   functions_declaration_stack: Vec<Function>,
 
-  pub globals: HashMap<String, GlobalVarId>,
-  pub module_global_types: Vec<TypeId>,
+  pub global_variables: HashMap<String, GlobalVarId>,
+  pub module_global_variables_types: Vec<TypeId>,
   pub module_globals_count: u16,
   pub extern_functions: HashMap<String, ExternId>,
   pub extern_function_types: Vec<TypeId>,
@@ -51,7 +51,7 @@ impl<'src> Environment<'src> {
   fn new_global_id(&mut self) -> GlobalVarId {
     let id = GlobalVarId::relative(self.module_globals_count as u32);
     self.module_globals_count += 1;
-    self.module_global_types.push(TypeId::UNKNOWN);
+    self.module_global_variables_types.push(TypeId::UNKNOWN);
     id
   }
 
@@ -103,7 +103,7 @@ impl<'src> Environment<'src> {
   }
 
   fn get_global(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<Identifier> {
-    if let Some(&global_variable) = self.globals.get(name) {
+    if let Some(&global_variable) = self.global_variables.get(name) {
       Ok(global_variable.into())
     } else if let Some(&extern_function) = self.extern_functions.get(name) {
       Ok(extern_function.into())
@@ -119,7 +119,7 @@ impl<'src> Environment<'src> {
     declaration: bool,
   ) -> CompilerResult<GlobalVarId> {
     let id = self.new_global_id().into_public();
-    match self.globals.entry(name.to_string()) {
+    match self.global_variables.entry(name.to_string()) {
       Entry::Vacant(e) => {
         e.insert(id);
         Ok(id)
@@ -145,7 +145,7 @@ impl<'src> Environment<'src> {
       Ok(self.capture(local))
     } else {
       self
-        .globals
+        .global_variables
         .get(name)
         .copied()
         .map(VariableIdentifier::Global)
@@ -167,7 +167,7 @@ impl<'src> Environment<'src> {
     name_sr: SourceRange,
   ) -> CompilerResult<VariableIdentifier> {
     let id = self.new_global_id();
-    self.globals.insert(name.to_string(), id);
+    self.global_variables.insert(name.to_string(), id);
     Ok(VariableIdentifier::Global(id))
   }
 
@@ -272,7 +272,7 @@ impl<'src> Environment<'src> {
     let module_id = self.global_env.get_module_id(name, name_sr)?;
     let module = self.global_env.get_module(module_id);
     // FIXME: does not check for double declarations
-    self.globals.extend(
+    self.global_variables.extend(
       module
         .public_global_variables
         .iter()
@@ -291,11 +291,11 @@ impl<'src> Environment<'src> {
 
   pub fn new(global_env: &'src GlobalEnv) -> Self {
     Self {
-      globals: HashMap::new(),
+      global_variables: HashMap::new(),
       global_env,
       module_globals_count: 0,
 
-      module_global_types: Vec::new(),
+      module_global_variables_types: Vec::new(),
 
       names_in_current_scope: 0,
       last_local_id: 0,

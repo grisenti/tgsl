@@ -319,8 +319,8 @@ impl<'parsing> Parser<'parsing> {
       Ok(ParsedModule {
         module_name,
         ast: parser.ast,
-        globals: parser.env.globals,
-        module_global_types: parser.env.module_global_types,
+        globals: parser.env.global_variables,
+        module_global_types: parser.env.module_global_variables_types,
         globals_count: parser.env.module_globals_count,
         extern_functions: parser.env.extern_functions,
         module_extern_functions_types: parser.env.extern_function_types,
