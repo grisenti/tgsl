@@ -193,7 +193,7 @@ impl FunctionAnalizer<'_> {
 
   fn extern_function(&mut self, name_id: ExternId, fn_type: TypeId) {
     assert!(name_id.is_relative());
-    self.extern_function_types[name_id.get_relative() as usize] = fn_type;
+    self.extern_function_types[name_id.get_id() as usize] = fn_type;
   }
 
   pub(super) fn analyze_stmt(&mut self, stmt: StmtHandle) -> OptRet {

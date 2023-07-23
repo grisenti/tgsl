@@ -418,7 +418,7 @@ impl VM {
         return Err("invalid extern function".to_string());
       }
     }
-    vec.sort_by_key(|(id, _)| id.get_relative());
+    vec.sort_by_key(|(id, _)| id.get_id());
     for (_, func) in vec {
       self.extern_functions.push(func);
     }
@@ -434,13 +434,17 @@ impl VM {
       Err(errs) => return Err(ErrorPrinter::to_string(&errs, source)),
       Ok(module) => module,
     };
-    // FIXME: replace 100 with actual count
-    self.address_table.update_table(&compiled_module);
-    self
-      .globals
-      .resize(self.globals.len() + 100, TaggedValue::none());
+    let globals_count = compiled_module.globals_count;
+    self.globals.resize(
+      self.globals.len() + globals_count as usize,
+      TaggedValue::none(),
+    );
     self.bind_functions(&compiled_module.extern_functions, extern_functions)?;
     self.interpret(Chunk::new(compiled_module.code, &self.address_table));
+    self.address_table.update_table(
+      globals_count as u32,
+      compiled_module.extern_functions.len() as u32,
+    );
     Ok(())
   }
 

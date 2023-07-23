@@ -49,7 +49,7 @@ impl<'src> Environment<'src> {
   }
 
   fn new_global_id(&mut self) -> GlobalVarId {
-    let id = GlobalVarId::relative(self.module_globals_count);
+    let id = GlobalVarId::relative(self.module_globals_count as u32);
     self.module_globals_count += 1;
     self.module_global_types.push(TypeId::UNKNOWN);
     id
@@ -261,7 +261,7 @@ impl<'src> Environment<'src> {
     name_sr: SourceRange,
   ) -> CompilerResult<ExternId> {
     self.ensure_name_available(name, name_sr)?;
-    let id = ExternId::relative(self.module_extern_functions_count).into_public();
+    let id = ExternId::relative(self.module_extern_functions_count as u32).into_public();
     self.module_extern_functions_count += 1;
     self.extern_functions.insert(name.to_string(), id);
     self.extern_function_types.push(TypeId::UNKNOWN);

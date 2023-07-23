@@ -93,7 +93,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       Identifier::ExternFunction(ext_id) => {
         unsafe { self.code.push_constant(ConstantValue::ExternId(ext_id)) };
         if ext_id.is_relative() {
-          todo!()
+          self.extern_function_types[ext_id.get_id() as usize]
         } else {
           self.global_types.get_type(id)
         }
@@ -106,7 +106,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     match id {
       VariableIdentifier::Global(gid) => {
         if gid.is_relative() {
-          self.global_variables_types[gid.get_relative() as usize]
+          self.global_variables_types[gid.get_id() as usize]
         } else {
           self.global_types.get_type(id.into())
         }
@@ -124,7 +124,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           gid.is_relative(),
           "cannot change the type of a variable not in the current module"
         );
-        self.global_variables_types[gid.get_relative() as usize] = ty;
+        self.global_variables_types[gid.get_id() as usize] = ty;
       }
       VariableIdentifier::Local(id) => self.locals[id as usize] = ty,
       VariableIdentifier::Capture(id) => self.captures[id as usize] = ty,
@@ -161,7 +161,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
         }
         if gid.is_relative() {
           set_type_or_push_error(
-            &mut self.global_variables_types[gid.get_relative() as usize],
+            &mut self.global_variables_types[gid.get_id() as usize],
             value_type,
             id_sr,
             &mut self.global_env.errors,

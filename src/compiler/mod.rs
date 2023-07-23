@@ -22,6 +22,7 @@ mod semantic_analysis;
 mod types;
 
 pub struct CompiledModule {
+  pub module_id: Option<ModuleId>,
   pub globals_count: u16,
   pub extern_functions: HashMap<String, ExternId>,
   pub code: BytecodeBuilder,
@@ -50,8 +51,9 @@ impl Compiler {
       .filter(|(_, id)| id.is_relative())
       .map(|(name, id)| (name.clone(), *id))
       .collect::<HashMap<_, _>>();
-    self.global_env.export_module(parsed_module);
+    let module_id = self.global_env.export_module(parsed_module);
     Ok(CompiledModule {
+      module_id,
       globals_count,
       code: generated_code,
       extern_functions,

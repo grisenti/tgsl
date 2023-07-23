@@ -30,10 +30,13 @@ impl<'a> GlobalTypes<'a> {
   }
 }
 
+#[derive(Default)]
 pub struct GlobalEnv {
   types: HashMap<Identifier, TypeId>,
   module_names: HashMap<String, ModuleId>,
   modules: Vec<Module>,
+  global_variables_count: u32,
+  extern_functions_count: u32,
 }
 
 impl GlobalEnv {
@@ -59,12 +62,12 @@ impl GlobalEnv {
       let module_id = self.modules.len() as u16;
       self.module_names.insert(module_name, ModuleId(module_id));
 
-      // TODO: CLEANUP THIS!!!!!
       for id in parsed_module.globals.values() {
         if id.is_relative() && id.is_public() {
-          let type_id = parsed_module.module_global_types[id.get_relative() as usize];
+          let relative_id = id.get_id();
+          let type_id = parsed_module.module_global_types[relative_id as usize];
           self.types.insert(
-            GlobalVarId::absolute(module_id, id.get_relative()).into(),
+            GlobalVarId::absolute(self.global_variables_count + relative_id).into(),
             type_id,
           );
         }
@@ -72,9 +75,10 @@ impl GlobalEnv {
 
       for id in parsed_module.extern_functions.values() {
         if id.is_relative() && id.is_public() {
-          let type_id = parsed_module.module_extern_functions_types[id.get_relative() as usize];
+          let relative_id = id.get_id();
+          let type_id = parsed_module.module_extern_functions_types[relative_id as usize];
           self.types.insert(
-            ExternId::absolute(module_id, id.get_relative()).into(),
+            ExternId::absolute(self.extern_functions_count + relative_id).into(),
             type_id,
           );
         }
@@ -86,8 +90,11 @@ impl GlobalEnv {
         .filter(|(_, gid)| gid.is_public())
         .filter_map(|(name, gid)| {
           if gid.is_relative() {
-            let relative_id = gid.get_relative();
-            Some((name, GlobalVarId::absolute(module_id, relative_id)))
+            let relative_id = gid.get_id();
+            Some((
+              name,
+              GlobalVarId::absolute(self.global_variables_count + relative_id),
+            ))
           } else {
             None
           }
@@ -100,8 +107,11 @@ impl GlobalEnv {
         .filter(|(_, gid)| gid.is_public())
         .filter_map(|(name, gid)| {
           if gid.is_relative() {
-            let relative_id = gid.get_relative();
-            Some((name, ExternId::absolute(module_id, relative_id)))
+            let relative_id = gid.get_id();
+            Some((
+              name,
+              ExternId::absolute(self.extern_functions_count + relative_id),
+            ))
           } else {
             None
           }
@@ -130,11 +140,7 @@ impl GlobalEnv {
   }
 
   pub fn new() -> Self {
-    Self {
-      types: HashMap::new(),
-      module_names: HashMap::new(),
-      modules: Vec::new(),
-    }
+    Default::default()
   }
 }
 

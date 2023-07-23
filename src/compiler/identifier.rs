@@ -4,57 +4,40 @@ pub type LocalId = u8;
 macro_rules! define_identifier {
   ($name:ident) => {
     #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
-    pub struct $name {
-      relative_id: u16,
-      modifiers: u16,
-    }
+    pub struct $name(u32);
 
     impl $name {
-      const IS_PUBLIC_ID_BIT: u16 = 0x8000;
-      const ABSOLUTE_ID_MODULE_MASK: u16 = 0x7fff;
-      const RELATIVE_ID_MASK: u32 = 0x000fffff;
+      const MODIFIERS_MASK: u32 = 0xf0000000;
+      const IS_RELATIVE_BIT: u32 = 0x80000000;
+      const IS_PUBLIC_ID_BIT: u32 = 0x40000000;
 
-      pub fn relative(id: u16) -> Self {
-        Self {
-          relative_id: id,
-          modifiers: 0,
-        }
+      pub fn relative(id: u32) -> Self {
+        assert!(id < Self::MODIFIERS_MASK);
+        Self(id | Self::IS_RELATIVE_BIT)
       }
 
-      pub fn absolute(module: u16, id: u16) -> Self {
-        assert!(
-          module <= Self::ABSOLUTE_ID_MODULE_MASK,
-          "module id not in range"
-        );
+      pub fn absolute(id: u32) -> Self {
+        assert!(id <= Self::MODIFIERS_MASK, "module id not in range");
 
-        Self {
-          relative_id: id,
-          modifiers: module + 1,
-        }
+        Self(id)
       }
 
       pub fn into_public(self) -> Self {
-        assert!((self.modifiers & Self::ABSOLUTE_ID_MODULE_MASK) == 0);
-        Self {
-          relative_id: self.relative_id,
-          modifiers: self.modifiers | Self::IS_PUBLIC_ID_BIT,
-        }
+        assert!(self.is_relative(), "absolute ids are implicitely public");
+
+        Self(self.0 | Self::IS_PUBLIC_ID_BIT)
       }
 
-      pub fn get_relative(self) -> u16 {
-        self.relative_id
-      }
-
-      pub fn split_absolute(self) -> (u16, u16) {
-        (self.relative_id, self.modifiers - 1)
+      pub fn get_id(self) -> u32 {
+        self.0 & !Self::MODIFIERS_MASK
       }
 
       pub fn is_relative(self) -> bool {
-        (self.modifiers & Self::ABSOLUTE_ID_MODULE_MASK) == 0
+        (self.0 & Self::IS_RELATIVE_BIT) != 0
       }
 
       pub fn is_public(self) -> bool {
-        (self.modifiers & Self::IS_PUBLIC_ID_BIT) != 0
+        (self.0 & Self::IS_PUBLIC_ID_BIT) != 0
       }
     }
   };
