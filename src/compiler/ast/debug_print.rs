@@ -2,6 +2,7 @@ use json::object;
 use json::JsonValue;
 
 use crate::compiler::identifier::Identifier;
+use crate::compiler::identifier::VariableIdentifier;
 use crate::compiler::types::TypeId;
 
 use super::*;
@@ -9,6 +10,12 @@ use core::fmt::Debug;
 
 impl From<Identifier> for JsonValue {
   fn from(value: Identifier) -> Self {
+    JsonValue::String(format!("{value:?}"))
+  }
+}
+
+impl From<VariableIdentifier> for JsonValue {
+  fn from(value: VariableIdentifier) -> Self {
     JsonValue::String(format!("{value:?}"))
   }
 }
@@ -130,16 +137,14 @@ impl StmtHandle {
         }
       }
       Stmt::ExternFunction {
-        name_id: id,
+        identifier,
         fn_type,
-        extern_id,
         ..
       } => {
         object! {
           "ExternalFunction": {
-            "id": *id,
+            "identifier": format!("{:?}", *identifier),
             "function type": *fn_type,
-            "extern id": format!("{extern_id:?}")
           }
         }
       }
@@ -233,7 +238,7 @@ impl ExprHandle {
           }
         }
       }
-      Expr::Variable { id, .. } => {
+      Expr::Identifier { id, .. } => {
         object! {
           "Variable": {
             id: *id

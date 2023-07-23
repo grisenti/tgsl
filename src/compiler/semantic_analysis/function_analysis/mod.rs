@@ -2,9 +2,9 @@ use crate::compiler::{
   ast::{Stmt, StmtHandle, AST},
   bytecode::{ConstantValue, OpCode},
   codegen::BytecodeBuilder,
-  errors::{ge_err, sema_err, CompilerError},
+  errors::{sema_err, CompilerError},
   global_env::GlobalTypes,
-  identifier::Identifier,
+  identifier::{Identifier, VariableIdentifier},
   lexer::SourceRange,
   types::{type_map::TypeMap, Type, TypeId},
 };
@@ -34,7 +34,8 @@ pub struct FunctionAnalizer<'analysis> {
   ast: &'analysis AST,
   type_map: &'analysis TypeMap,
   global_types: GlobalTypes<'analysis>,
-  module_types: &'analysis mut [TypeId],
+  global_variables_types: &'analysis mut [TypeId],
+  extern_function_types: &'analysis mut [TypeId],
   declaration_info: Option<SourceRange>,
 }
 
@@ -83,33 +84,51 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     self.type_map.get_type(id)
   }
 
-  fn get_typeid(&mut self, id: Identifier) -> TypeId {
+  fn get_identifier(&mut self, id: Identifier) -> TypeId {
     match id {
-      Identifier::Global(gid) => {
-        if gid.is_relative() {
-          self.module_types[gid.get_relative() as usize]
+      Identifier::Variable(id) => {
+        unsafe { self.code.get_variable(id) };
+        self.get_variable_typeid(id)
+      }
+      Identifier::ExternFunction(ext_id) => {
+        unsafe { self.code.push_constant(ConstantValue::ExternId(ext_id)) };
+        if ext_id.is_relative() {
+          todo!()
         } else {
-          self.global_types.get_type(gid)
+          self.global_types.get_type(id)
         }
       }
-      Identifier::Local(id) => self.locals[id as usize],
-      Identifier::Capture(id) => self.captures[id as usize],
-      Identifier::Invalid => panic!("invalid identifier while processing AST"),
+      Identifier::Invalid => panic!("invalid identifier as variable"),
     }
   }
 
-  fn set_type(&mut self, id: Identifier, ty: TypeId) {
+  fn get_variable_typeid(&mut self, id: VariableIdentifier) -> TypeId {
     match id {
-      Identifier::Global(gid) => {
+      VariableIdentifier::Global(gid) => {
+        if gid.is_relative() {
+          self.global_variables_types[gid.get_relative() as usize]
+        } else {
+          self.global_types.get_type(id.into())
+        }
+      }
+      VariableIdentifier::Local(id) => self.locals[id as usize],
+      VariableIdentifier::Capture(id) => self.captures[id as usize],
+      VariableIdentifier::Invalid => panic!("invalid identifier while processing AST"),
+    }
+  }
+
+  fn set_variable_type(&mut self, id: VariableIdentifier, ty: TypeId) {
+    match id {
+      VariableIdentifier::Global(gid) => {
         assert!(
           gid.is_relative(),
           "cannot change the type of a variable not in the current module"
         );
-        self.module_types[gid.get_relative() as usize] = ty;
+        self.global_variables_types[gid.get_relative() as usize] = ty;
       }
-      Identifier::Local(id) => self.locals[id as usize] = ty,
-      Identifier::Capture(id) => self.captures[id as usize] = ty,
-      Identifier::Invalid => panic!("invalid identifier while processing AST"),
+      VariableIdentifier::Local(id) => self.locals[id as usize] = ty,
+      VariableIdentifier::Capture(id) => self.captures[id as usize] = ty,
+      VariableIdentifier::Invalid => panic!("invalid identifier while processing AST"),
     }
   }
 
@@ -117,39 +136,39 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     self.type_map.type_to_string(id)
   }
 
-  fn declare(&mut self, id: Identifier, var_type: TypeId) {
+  fn declare_variable(&mut self, id: VariableIdentifier, var_type: TypeId) {
     match id {
-      Identifier::Global(gid) => {
+      VariableIdentifier::Global(gid) => {
         unsafe {
           self.code.push_constant(ConstantValue::GlobalId(gid));
           self.code.push_op(OpCode::SetGlobal);
           self.code.push_op(OpCode::Pop);
         }
-        self.set_type(id, var_type); // multiple declarations already checked during parsing
+        self.set_variable_type(id, var_type); // multiple declarations already checked during parsing
       }
-      Identifier::Local(_) => self.locals.push(var_type),
-      Identifier::Capture(_) => {}
-      Identifier::Invalid => panic!("invalid identifier while processing AST"),
+      VariableIdentifier::Local(_) => self.locals.push(var_type),
+      VariableIdentifier::Capture(_) => {}
+      VariableIdentifier::Invalid => panic!("invalid identifier while processing AST"),
     }
   }
 
-  fn assign(&mut self, id: Identifier, id_sr: SourceRange, value_type: TypeId) {
+  fn assign(&mut self, id: VariableIdentifier, id_sr: SourceRange, value_type: TypeId) {
     match id {
-      Identifier::Global(gid) => {
+      VariableIdentifier::Global(gid) => {
         unsafe {
           self.code.push_constant(ConstantValue::GlobalId(gid));
           self.code.push_op(OpCode::SetGlobal);
         }
         if gid.is_relative() {
           set_type_or_push_error(
-            &mut self.module_types[gid.get_relative() as usize],
+            &mut self.global_variables_types[gid.get_relative() as usize],
             value_type,
             id_sr,
             &mut self.global_env.errors,
             self.type_map,
           );
         } else {
-          let id_type = self.global_types.get_type(gid);
+          let id_type = self.global_types.get_type(id.into());
           if id_type != value_type {
             self.emit_error(sema_err::assignment_of_incompatible_types(
               id_sr,
@@ -159,7 +178,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           }
         }
       }
-      Identifier::Local(id) => {
+      VariableIdentifier::Local(id) => {
         unsafe {
           self.code.push_op2(OpCode::SetLocal, id);
         }
@@ -171,7 +190,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           self.type_map,
         );
       }
-      Identifier::Capture(id) => {
+      VariableIdentifier::Capture(id) => {
         unsafe {
           self.code.push_op2(OpCode::SetCapture, id);
         }
@@ -183,7 +202,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
           self.type_map,
         );
       }
-      Identifier::Invalid => panic!("invalid identifier while processing AST"),
+      VariableIdentifier::Invalid => panic!("invalid identifier while processing AST"),
     }
   }
 
@@ -194,11 +213,14 @@ impl<'analysis> FunctionAnalizer<'analysis> {
   fn check_function(
     &mut self,
     param_types: &[TypeId],
-    captures: &[Identifier],
+    captures: &[VariableIdentifier],
     declaration_sr: SourceRange,
     body: &[StmtHandle],
   ) {
-    let capture_types = captures.iter().map(|id| self.get_typeid(*id)).collect();
+    let capture_types = captures
+      .iter()
+      .map(|id| self.get_variable_typeid(*id))
+      .collect();
     let result = FunctionAnalizer::analyze(
       FunctionInfo {
         parameters: param_types.to_vec(),
@@ -212,7 +234,8 @@ impl<'analysis> FunctionAnalizer<'analysis> {
         global_types: self.global_types,
       },
       self.global_env,
-      self.module_types,
+      self.global_variables_types,
+      self.extern_function_types,
     );
     unsafe {
       self.code.push_function(result.code);
@@ -224,7 +247,8 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     body: &[StmtHandle],
     analysis_parameters: SemAParameters<'analysis>,
     global_env: &'analysis mut SemAState,
-    module_types: &'analysis mut [TypeId],
+    variable_types: &'analysis mut [TypeId],
+    extern_function_types: &'analysis mut [TypeId],
   ) -> FunctionAnalysisResult {
     let mut analizer = Self {
       captures: function_info.captures,
@@ -238,7 +262,8 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       declaration_info: function_info.declaration_src_info,
       type_map: analysis_parameters.type_map,
       global_types: analysis_parameters.global_types,
-      module_types,
+      global_variables_types: variable_types,
+      extern_function_types,
       ast: analysis_parameters.ast,
     };
     let ret = analizer.process_statements(body);

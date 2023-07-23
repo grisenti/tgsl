@@ -28,9 +28,9 @@ impl<'src> Parser<'src> {
       }
       Token::Id(id) => {
         let id_sr = self.lex.previous_token_range();
-        let id = self.get_name(id, id_sr);
+        let id = self.get_id(id, id_sr);
         self.advance();
-        self.ast.add_expression(Expr::Variable { id, id_sr })
+        self.ast.add_expression(Expr::Identifier { id, id_sr })
       }
       Token::Basic(c) if c == '(' => {
         self.advance();
@@ -165,11 +165,18 @@ impl<'src> Parser<'src> {
     if let Some((_, eq_src_rc)) = self.match_next(Token::Basic('=')) {
       let rhs = self.parse_logical_operation(0);
       match lhs.get(&self.ast) {
-        &Expr::Variable { id, id_sr } => self.ast.add_expression(Expr::Assignment {
-          id,
-          id_sr,
-          value: rhs,
-        }),
+        &Expr::Identifier { id, id_sr } => {
+          if let Identifier::Variable(id) = id {
+            self.ast.add_expression(Expr::Assignment {
+              id,
+              id_sr,
+              value: rhs,
+            })
+          } else {
+            // FIXME: make this into a proper error
+            panic!("cannot assing to non-variable")
+          }
+        }
         &Expr::Dot {
           lhs: object,
           rhs_name: name,

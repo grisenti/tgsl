@@ -114,11 +114,14 @@ fn convert_constant(value: ConstantValue, address_table: &AddressTable) -> Tagge
       }
     }
     .into(),
-    ConstantValue::ExternId(id) => TaggedValue {
-      kind: ValueType::ExternFunctionId,
-      value: Value { id: id as u32 },
+    ConstantValue::ExternId(id) => {
+      let id = address_table.resolve_extern_function(id);
+      TaggedValue {
+        kind: ValueType::ExternFunctionId,
+        value: Value { id: id as u32 },
+      }
+      .into()
     }
-    .into(),
     ConstantValue::Str(s) => s.into(),
     ConstantValue::None => TaggedValue::none().into(),
   }

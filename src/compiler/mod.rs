@@ -4,7 +4,7 @@ use self::{
   codegen::BytecodeBuilder,
   errors::CompilerError,
   global_env::{GlobalEnv, GlobalTypes},
-  identifier::{GlobalId, ModuleId},
+  identifier::{ExternId, GlobalId, ModuleId},
   parser::Parser,
   semantic_analysis::SemanticAnalizer,
   types::type_map::TypeMap,
@@ -23,13 +23,13 @@ mod types;
 
 pub struct CompiledModule {
   pub globals_count: u16,
+  pub extern_functions: HashMap<String, ExternId>,
   pub code: BytecodeBuilder,
 }
 
 pub struct Compiler {
   type_map: TypeMap,
   global_env: GlobalEnv,
-  last_module: u16,
 }
 
 impl Compiler {
@@ -39,15 +39,22 @@ impl Compiler {
       &parsed_module.ast,
       GlobalTypes::new(&self.global_env),
       &mut parsed_module.module_global_types,
+      &mut parsed_module.module_extern_functions_types,
       &self.type_map,
     )?;
-    let id = ModuleId(self.last_module);
+    println!("{:?}", parsed_module.ast);
     let globals_count = parsed_module.globals_count;
-    let extern_functions = parsed_module.module_extern_functions.clone();
+    let extern_functions = parsed_module
+      .extern_functions
+      .iter()
+      .filter(|(_, id)| id.is_relative())
+      .map(|(name, id)| (name.clone(), *id))
+      .collect::<HashMap<_, _>>();
     self.global_env.export_module(parsed_module);
     Ok(CompiledModule {
       globals_count,
       code: generated_code,
+      extern_functions,
     })
   }
 
@@ -59,7 +66,6 @@ impl Compiler {
     Self {
       type_map: TypeMap::new(),
       global_env: GlobalEnv::new(),
-      last_module: 0,
     }
   }
 }

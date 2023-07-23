@@ -1,4 +1,7 @@
-use super::{ast::Literal, identifier::Identifier};
+use super::{
+  ast::Literal,
+  identifier::{Identifier, VariableIdentifier},
+};
 
 pub mod type_map;
 
@@ -8,7 +11,7 @@ pub enum Type {
   Str,
   Num,
   Bool,
-  Struct(Identifier),
+  Struct(VariableIdentifier),
   Function {
     parameters: Vec<TypeId>,
     ret: TypeId,

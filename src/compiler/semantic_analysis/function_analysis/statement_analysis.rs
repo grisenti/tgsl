@@ -1,7 +1,7 @@
 use crate::compiler::{
   ast::{Expr, ExprHandle, StrHandle},
   bytecode::ConstantValue,
-  identifier::ExternId,
+  identifier::{ExternId, VariableIdentifier},
   semantic_analysis::{return_analysis::to_conditional, Struct},
 };
 
@@ -31,9 +31,12 @@ impl FunctionAnalizer<'_> {
     return_type
   }
 
-  fn check_self_assignment(&mut self, lhs_id: Identifier, expression: ExprHandle) {
+  fn check_self_assignment(&mut self, lhs_id: VariableIdentifier, expression: ExprHandle) {
     match expression.get(self.ast) {
-      &Expr::Variable { id: rhs_id, id_sr } if rhs_id == lhs_id => {
+      &Expr::Identifier {
+        id: Identifier::Variable(rhs),
+        id_sr,
+      } if rhs == lhs_id => {
         self.emit_error(sema_err::cannot_initialize_with_itself(id_sr));
       }
       _ => {}
@@ -42,12 +45,12 @@ impl FunctionAnalizer<'_> {
 
   fn var_decl(
     &mut self,
-    id: Identifier,
+    id: VariableIdentifier,
     var_type: TypeId,
     id_sr: SourceRange,
     init_expr: Option<ExprHandle>,
   ) {
-    if let Identifier::Local(_) = id {
+    if let VariableIdentifier::Local(_) = id {
       self.locals.push(var_type);
     }
     if let Some(expr) = init_expr {
@@ -86,14 +89,19 @@ impl FunctionAnalizer<'_> {
     to_conditional(ret)
   }
 
-  fn generate_constructor(&mut self, id: Identifier, members: usize, constructor_type: TypeId) {
+  fn generate_constructor(
+    &mut self,
+    id: VariableIdentifier,
+    members: usize,
+    constructor_type: TypeId,
+  ) {
     self.code.create_constructor(members as u8);
-    self.declare(id, constructor_type);
+    self.declare_variable(id, constructor_type);
   }
 
   fn struct_stmt(
     &mut self,
-    id: Identifier,
+    id: VariableIdentifier,
     _name_sr: SourceRange,
     member_names: &[StrHandle],
     member_types: &[TypeId],
@@ -142,17 +150,17 @@ impl FunctionAnalizer<'_> {
 
   fn function_stmt(
     &mut self,
-    id: Identifier,
+    id: VariableIdentifier,
     parameters: &[TypeId],
     fn_type: TypeId,
-    captures: &[Identifier],
+    captures: &[VariableIdentifier],
     declaration_sr: SourceRange,
     body: &[StmtHandle],
   ) {
-    self.set_type(id, fn_type);
+    self.set_variable_type(id, fn_type);
     self.check_function(parameters, captures, declaration_sr, body);
     unsafe {
-      self.declare(id, fn_type);
+      self.declare_variable(id, fn_type);
       self.code.maybe_create_closure(captures);
     }
   }
@@ -183,13 +191,9 @@ impl FunctionAnalizer<'_> {
     unsafe { self.code.push_op(OpCode::Pop) }
   }
 
-  fn extern_function(&mut self, name_id: Identifier, fn_type: TypeId, extern_id: ExternId) {
-    unsafe {
-      self
-        .code
-        .push_constant(ConstantValue::ExternId(extern_id.0));
-    }
-    self.declare(name_id, fn_type);
+  fn extern_function(&mut self, name_id: ExternId, fn_type: TypeId) {
+    assert!(name_id.is_relative());
+    self.extern_function_types[name_id.get_relative() as usize] = fn_type;
   }
 
   pub(super) fn analyze_stmt(&mut self, stmt: StmtHandle) -> OptRet {
@@ -248,17 +252,16 @@ impl FunctionAnalizer<'_> {
         None
       }
       Stmt::ExternFunction {
-        name_id,
+        identifier,
         fn_type,
-        extern_id,
         ..
       } => {
-        self.extern_function(*name_id, *fn_type, *extern_id);
+        self.extern_function(*identifier, *fn_type);
         None
       }
       Stmt::Import { .. } => None,
       Stmt::FunctionDeclaration { id, fn_type, .. } => {
-        self.set_type(*id, *fn_type);
+        self.set_variable_type(*id, *fn_type);
         None
       }
     }

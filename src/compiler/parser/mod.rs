@@ -10,9 +10,11 @@ use super::errors::parser_err;
 use super::errors::CompilerError;
 use super::errors::CompilerResult;
 use super::global_env::GlobalEnv;
+use super::identifier::ExternId;
 use super::identifier::GlobalId;
 use super::identifier::Identifier;
 use super::identifier::ModuleId;
+use super::identifier::VariableIdentifier;
 use super::lexer::*;
 use super::types::type_map::TypeMap;
 use super::types::Type;
@@ -31,8 +33,9 @@ pub struct ParsedModule {
   pub ast: AST,
   pub globals: HashMap<String, GlobalId>,
   pub module_global_types: Vec<TypeId>,
-  pub module_extern_functions: Vec<GlobalId>,
   pub globals_count: u16,
+  pub extern_functions: HashMap<String, ExternId>,
+  pub module_extern_functions_types: Vec<TypeId>,
 }
 
 pub struct Parser<'parsing> {
@@ -109,8 +112,18 @@ impl<'parsing> Parser<'parsing> {
     self.state = ParserState::NoErrors;
   }
 
-  fn get_name(&mut self, name: &str, name_sr: SourceRange) -> Identifier {
-    match self.env.get_name(name, name_sr) {
+  fn get_variable_id(&mut self, name: &str, name_sr: SourceRange) -> VariableIdentifier {
+    match self.env.get_variable_id(name, name_sr) {
+      Ok(id) => id,
+      Err(err) => {
+        self.emit_error(err);
+        VariableIdentifier::Invalid
+      }
+    }
+  }
+
+  fn get_id(&mut self, name: &str, name_sr: SourceRange) -> Identifier {
+    match self.env.get_id(name, name_sr) {
       Ok(id) => id,
       Err(err) => {
         self.emit_error(err);
@@ -119,8 +132,8 @@ impl<'parsing> Parser<'parsing> {
     }
   }
 
-  fn get_opt_name(&mut self, name: &str, name_sr: SourceRange) -> Option<Identifier> {
-    self.env.get_name(name, name_sr).ok()
+  fn get_opt_name(&mut self, name: &str, name_sr: SourceRange) -> Option<VariableIdentifier> {
+    self.env.get_variable_id(name, name_sr).ok()
   }
 
   fn match_id_or_err(&mut self) -> (&'parsing str, SourceRange) {
@@ -223,7 +236,7 @@ impl<'parsing> Parser<'parsing> {
           "bool" => TypeId::BOOL,
           other => {
             let struct_sr = self.lex.previous_token_range();
-            let struct_id = self.get_name(other, struct_sr);
+            let struct_id = self.get_variable_id(other, struct_sr);
             self.type_map.get_or_add(Type::Struct(struct_id))
           }
         }
@@ -307,9 +320,10 @@ impl<'parsing> Parser<'parsing> {
         module_name,
         ast: parser.ast,
         globals: parser.env.globals,
-        module_extern_functions: parser.env.extern_ids,
         module_global_types: parser.env.module_global_types,
         globals_count: parser.env.module_globals_count,
+        extern_functions: parser.env.extern_functions,
+        module_extern_functions_types: parser.env.extern_function_types,
       })
     } else {
       Err(parser.errors)

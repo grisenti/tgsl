@@ -7,7 +7,7 @@ use super::{
   codegen::BytecodeBuilder,
   errors::CompilerError,
   global_env::GlobalTypes,
-  identifier::Identifier,
+  identifier::{Identifier, VariableIdentifier},
   types::{type_map::TypeMap, TypeId},
 };
 
@@ -20,7 +20,7 @@ struct Struct {
   member_types: Vec<TypeId>,
 }
 
-type StructMap = HashMap<Identifier, Struct>;
+type StructMap = HashMap<VariableIdentifier, Struct>;
 
 struct SemAState {
   structs: StructMap,
@@ -39,7 +39,8 @@ impl SemanticAnalizer {
   pub fn analyze(
     ast: &AST,
     global_types: GlobalTypes,
-    module_global_types: &mut [TypeId],
+    module_global_variable_types: &mut [TypeId],
+    module_extern_functions_types: &mut [TypeId],
     type_map: &TypeMap,
   ) -> Result<BytecodeBuilder, Vec<CompilerError>> {
     let program = ast.get_program();
@@ -56,7 +57,8 @@ impl SemanticAnalizer {
         global_types,
       },
       &mut global_env,
-      module_global_types,
+      module_global_variable_types,
+      module_extern_functions_types,
     );
     if global_env.errors.is_empty() {
       Ok(code)

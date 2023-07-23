@@ -1,45 +1,39 @@
 use std::collections::HashMap;
 
-use super::errors::{ge_err, parser_err, CompilerResult};
-use super::identifier::{GlobalId, Identifier, ModuleId};
+use crate::compiler::identifier::VariableIdentifier;
+
+use super::errors::{ge_err, CompilerResult};
+use super::identifier::{ExternId, GlobalId, Identifier, ModuleId};
 use super::lexer::SourceRange;
 use super::parser::ParsedModule;
 use super::types::TypeId;
 
-type GlobalName = Vec<(GlobalId, ModuleId)>;
-
 pub struct Module {
-  pub public_names: HashMap<String, GlobalId>,
+  pub public_global_variables: HashMap<String, GlobalId>,
+  pub public_extern_functions: HashMap<String, ExternId>,
 }
 
 #[derive(Clone, Copy)]
 pub struct GlobalTypes<'a> {
-  types: &'a [TypeId],
-  base_ids: &'a [u16],
+  types: &'a HashMap<Identifier, TypeId>,
 }
 
 impl<'a> GlobalTypes<'a> {
-  pub fn get_type(&self, gid: GlobalId) -> TypeId {
-    assert!(!gid.is_relative());
-
-    let (id, module) = gid.split_absolute();
-    let module_start = self.base_ids[module as usize];
-    self.types[(module_start + id) as usize]
+  pub fn get_type(&self, id: Identifier) -> TypeId {
+    *self.types.get(&id).unwrap()
   }
 
   pub fn new(global_env: &'a GlobalEnv) -> Self {
     Self {
-      base_ids: &global_env.module_base_identifier,
       types: &global_env.types,
     }
   }
 }
 
 pub struct GlobalEnv {
-  types: Vec<TypeId>,
+  types: HashMap<Identifier, TypeId>,
   module_names: HashMap<String, ModuleId>,
   modules: Vec<Module>,
-  module_base_identifier: Vec<u16>,
 }
 
 impl GlobalEnv {
@@ -58,10 +52,32 @@ impl GlobalEnv {
   pub fn export_module(&mut self, parsed_module: ParsedModule) -> Option<ModuleId> {
     if let Some(module_name) = parsed_module.module_name {
       debug_assert!(!self.module_names.contains_key(&module_name));
+
       let module_id = self.modules.len() as u16;
-      self.types.extend(parsed_module.module_global_types.iter());
       self.module_names.insert(module_name, ModuleId(module_id));
-      let module_public_names = parsed_module
+
+      // TODO: CLEANUP THIS!!!!!
+      for id in parsed_module.globals.values() {
+        if id.is_relative() && id.is_public() {
+          let type_id = parsed_module.module_global_types[id.get_relative() as usize];
+          self.types.insert(
+            GlobalId::absolute(module_id, id.get_relative()).into(),
+            type_id,
+          );
+        }
+      }
+
+      for id in parsed_module.extern_functions.values() {
+        if id.is_relative() && id.is_public() {
+          let type_id = parsed_module.module_extern_functions_types[id.get_relative() as usize];
+          self.types.insert(
+            ExternId::absolute(module_id, id.get_relative()).into(),
+            type_id,
+          );
+        }
+      }
+
+      let public_global_variables = parsed_module
         .globals
         .into_iter()
         .filter(|(_, gid)| gid.is_public())
@@ -74,14 +90,24 @@ impl GlobalEnv {
           }
         })
         .collect::<HashMap<_, _>>();
-      let exported_names = module_public_names.len();
-      //we always have at least one from initialization
-      let last_base_identifier = self.module_base_identifier.last().unwrap();
-      self
-        .module_base_identifier
-        .push(last_base_identifier + exported_names as u16);
+
+      let public_extern_functions = parsed_module
+        .extern_functions
+        .into_iter()
+        .filter(|(_, gid)| gid.is_public())
+        .filter_map(|(name, gid)| {
+          if gid.is_relative() {
+            let relative_id = gid.get_relative();
+            Some((name, ExternId::absolute(module_id, relative_id)))
+          } else {
+            None
+          }
+        })
+        .collect::<HashMap<_, _>>();
+
       self.modules.push(Module {
-        public_names: module_public_names,
+        public_global_variables,
+        public_extern_functions,
       });
       Some(ModuleId(module_id))
     } else {
@@ -95,17 +121,16 @@ impl GlobalEnv {
 
   pub fn get_id(&self, module_id: ModuleId, name: &str) -> Option<GlobalId> {
     self.modules[module_id.0 as usize]
-      .public_names
+      .public_global_variables
       .get(name)
       .copied()
   }
 
   pub fn new() -> Self {
     Self {
-      types: Vec::new(),
+      types: HashMap::new(),
       module_names: HashMap::new(),
       modules: Vec::new(),
-      module_base_identifier: vec![0],
     }
   }
 }

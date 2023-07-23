@@ -1,7 +1,10 @@
 use crate::compiler::bytecode::OpCode;
 use std::fmt::Debug;
 
-use super::{bytecode::ConstantValue, identifier::Identifier};
+use super::{
+  bytecode::ConstantValue,
+  identifier::{Identifier, VariableIdentifier},
+};
 
 pub struct Label(usize);
 pub struct JumpPoint(usize);
@@ -95,19 +98,19 @@ impl BytecodeBuilder {
     self.code[start..end].rotate_left(mid - start);
   }
 
-  pub unsafe fn get_id(&mut self, id: Identifier) {
+  pub unsafe fn get_variable(&mut self, id: VariableIdentifier) {
     match id {
-      Identifier::Global(gid) => {
+      VariableIdentifier::Global(gid) => {
         self.push_constant(ConstantValue::GlobalId(gid));
         self.push_op(OpCode::GetGlobal);
       }
-      Identifier::Local(id) => {
+      VariableIdentifier::Local(id) => {
         self.push_op2(OpCode::GetLocal, id);
       }
-      Identifier::Capture(id) => {
+      VariableIdentifier::Capture(id) => {
         self.push_op2(OpCode::GetCapture, id);
       }
-      Identifier::Invalid => panic!("codegen with invalid ast"),
+      VariableIdentifier::Invalid => panic!("codegen with invalid ast"),
     }
   }
 
@@ -120,11 +123,11 @@ impl BytecodeBuilder {
     }
   }
 
-  pub unsafe fn maybe_create_closure(&mut self, captures: &[Identifier]) {
+  pub unsafe fn maybe_create_closure(&mut self, captures: &[VariableIdentifier]) {
     if !captures.is_empty() {
       self.push_op2(OpCode::MakeClosure, captures.len() as u8);
       for c in captures {
-        self.get_id(*c);
+        self.get_variable(*c);
         self.push_op(OpCode::Capture);
       }
     }

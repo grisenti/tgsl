@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::compiler::{
-  identifier::Identifier,
+  identifier::{Identifier, VariableIdentifier},
   lexer::{SourceRange, Token},
   types::TypeId,
 };
@@ -101,18 +101,18 @@ pub enum Expr {
     value: Literal,
     value_sr: SourceRange,
   },
-  Variable {
+  Identifier {
     id: Identifier,
     id_sr: SourceRange,
   },
   Assignment {
-    id: Identifier,
+    id: VariableIdentifier,
     id_sr: SourceRange,
     value: ExprHandle,
   },
   Lambda {
     parameters_sr: SourceRange,
-    captures: Vec<Identifier>,
+    captures: Vec<VariableIdentifier>,
     parameter_types: Vec<TypeId>,
     return_type: TypeId,
     function_type_id: TypeId,
@@ -126,7 +126,7 @@ pub enum Expr {
   Dot {
     lhs: ExprHandle,
     rhs_name: StrHandle,
-    rhs_id: Option<Identifier>,
+    rhs_id: Option<VariableIdentifier>,
     rhs_sr: SourceRange,
   },
   Set {

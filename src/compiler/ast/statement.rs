@@ -1,5 +1,5 @@
 use crate::compiler::{
-  identifier::{ExternId, Identifier, ModuleId},
+  identifier::{ExternId, Identifier, ModuleId, VariableIdentifier},
   lexer::SourceRange,
   types::TypeId,
 };
@@ -9,7 +9,7 @@ use super::{ExprHandle, StmtHandle, StrHandle};
 #[derive(Debug, Clone)]
 pub enum Stmt {
   VarDecl {
-    identifier: Identifier,
+    identifier: VariableIdentifier,
     id_sr: SourceRange,
     var_type: TypeId,
     expression: Option<ExprHandle>,
@@ -31,24 +31,23 @@ pub enum Stmt {
     loop_body: StmtHandle,
   },
   FunctionDefinition {
-    id: Identifier,
+    id: VariableIdentifier,
     name_sr: SourceRange,
-    captures: Vec<Identifier>,
+    captures: Vec<VariableIdentifier>,
     parameter_types: Vec<TypeId>,
     return_type: TypeId,
     fn_type: TypeId,
     body: Vec<StmtHandle>,
   },
   FunctionDeclaration {
-    id: Identifier,
+    id: VariableIdentifier,
     name_sr: SourceRange,
     parameter_types: Vec<TypeId>,
     return_type: TypeId,
     fn_type: TypeId,
   },
   ExternFunction {
-    name_id: Identifier,
-    extern_id: ExternId,
+    identifier: ExternId,
     name_sr: SourceRange,
     fn_type: TypeId,
   },
@@ -58,7 +57,7 @@ pub enum Stmt {
     return_sr: SourceRange,
   },
   Struct {
-    id: Identifier,
+    id: VariableIdentifier,
     name_sr: SourceRange,
     constructor_type: TypeId,
     struct_type: TypeId,

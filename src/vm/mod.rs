@@ -1,7 +1,12 @@
-use std::mem::ManuallyDrop;
+use std::{collections::HashMap, mem::ManuallyDrop};
 
 use crate::{
-  compiler::{bytecode::OpCode, errors::ErrorPrinter, identifier::ModuleId, Compiler},
+  compiler::{
+    bytecode::OpCode,
+    errors::ErrorPrinter,
+    identifier::{ExternId, ModuleId},
+    Compiler,
+  },
   standard_library::load_standard_library,
 };
 
@@ -402,29 +407,21 @@ impl VM {
 
   fn bind_functions(
     &mut self,
-    external_ids: &[u16],
-    module_id: ModuleId,
+    declared_extern_functions: &HashMap<String, ExternId>,
     extern_functions: Vec<(&str, ExternFunction)>,
   ) -> Result<(), String> {
-    let mut extern_pair = extern_functions
-      .into_iter()
-      .filter_map(|(name, func)| {
-        self
-          .compiler
-          .get_global(module_id, name)
-          .map(|id| (id, func))
-      })
-      .collect::<Vec<_>>();
-    if extern_pair.len() < external_ids.len() {
-      return Err("missing external function in module loading".to_string());
+    let mut vec = vec![];
+    for (name, func) in extern_functions {
+      if let Some(id) = declared_extern_functions.get(name) {
+        vec.push((id, func));
+      } else {
+        return Err("invalid extern function".to_string());
+      }
     }
-    // extern_pair.sort_by_key(|(id, _)| *id);
-    // for ((id, func), ext_id) in extern_pair.into_iter().zip(external_ids) {
-    //   if id != *ext_id {
-    //     return Err("trying to bind a function that is not marked extern".to_string());
-    //   }
-    //   self.extern_functions.push(func);
-    // }
+    vec.sort_by_key(|(id, _)| id.get_relative());
+    for (_, func) in vec {
+      self.extern_functions.push(func);
+    }
     Ok(())
   }
 
@@ -438,11 +435,11 @@ impl VM {
       Ok(module) => module,
     };
     // FIXME: replace 100 with actual count
+    self.address_table.update_table(&compiled_module);
     self
       .globals
       .resize(self.globals.len() + 100, TaggedValue::none());
-    //self.bind_functions(&ext_ids, id, extern_functions)?;
-    self.address_table.update_table(&compiled_module);
+    self.bind_functions(&compiled_module.extern_functions, extern_functions)?;
     self.interpret(Chunk::new(compiled_module.code, &self.address_table));
     Ok(())
   }
@@ -459,7 +456,7 @@ impl VM {
       function_call: 0,
       address_table: AddressTable::new(),
     };
-    //load_standard_library(&mut vm);
+    load_standard_library(&mut vm);
     vm
   }
 }

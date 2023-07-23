@@ -1,4 +1,11 @@
-use crate::{check_error, compiler::errors::SourceRangeProvider, return_if_err};
+use crate::{
+  check_error,
+  compiler::{
+    errors::SourceRangeProvider,
+    identifier::{ExternId, VariableIdentifier},
+  },
+  return_if_err,
+};
 
 use super::*;
 
@@ -153,7 +160,7 @@ impl<'src> Parser<'src> {
     let identifier = check_error!(
       self,
       self.env.define_variable(name, id_sr),
-      Identifier::Invalid
+      VariableIdentifier::Invalid
     );
     let var_type = self.parse_opt_type_specifier();
     let ret = if self.lookahead == Token::Basic('=') {
@@ -184,7 +191,7 @@ impl<'src> Parser<'src> {
       check_error!(
         self,
         self.env.define_variable(name, name_sr),
-        Identifier::Invalid
+        VariableIdentifier::Invalid
       );
       let param_type = self.parse_type_specifier_or_err();
       parameter_types.push(param_type);
@@ -233,7 +240,7 @@ impl<'src> Parser<'src> {
       let id = check_error!(
         self,
         self.env.declare_global_function(name, name_sr),
-        Identifier::Invalid
+        VariableIdentifier::Invalid
       );
       return self.ast.add_statement(Stmt::FunctionDeclaration {
         id,
@@ -246,7 +253,7 @@ impl<'src> Parser<'src> {
     let id = check_error!(
       self,
       self.env.define_global_function(name, name_sr),
-      Identifier::Invalid
+      VariableIdentifier::Invalid
     );
     let body = self.parse_unscoped_block();
     let captures = self.env.pop_function();
@@ -269,7 +276,7 @@ impl<'src> Parser<'src> {
     let name_id = check_error!(
       self,
       self.env.define_global_function(name, name_sr),
-      Identifier::Invalid
+      VariableIdentifier::Invalid
     );
     self.match_or_err(Token::Basic('{'));
     let mut member_names = Vec::new();
@@ -282,8 +289,9 @@ impl<'src> Parser<'src> {
       self.match_or_err(Token::Basic(','));
     }
     self.match_or_err(Token::Basic('}'));
-    let (struct_type, constructor_type) =
-      self.type_map.add_struct_type(name_id, member_types.clone());
+    let (struct_type, constructor_type) = self
+      .type_map
+      .add_struct_type(name_id.into(), member_types.clone());
     self.ast.add_statement(Stmt::Struct {
       id: name_id,
       name_sr,
@@ -304,20 +312,18 @@ impl<'src> Parser<'src> {
     self.advance();
     self.match_or_err(Token::Fn);
     let (name, name_sr) = self.match_id_or_err();
-    let name_id = check_error!(
+    let identifier = check_error!(
       self,
-      self.env.define_global_function(name, name_sr),
-      Identifier::Invalid
+      self.env.declare_extern_function(name, name_sr),
+      ExternId::relative(0)
     );
-    let extern_id = self.env.create_extern_id(name_id);
     let parameters = self.parse_function_param_types();
     let ret = self.parse_function_return_type();
     let fn_type = self.type_map.get_or_add(Type::Function { parameters, ret });
     self.ast.add_statement(Stmt::ExternFunction {
-      name_id,
+      identifier,
       name_sr,
       fn_type,
-      extern_id,
     })
   }
 

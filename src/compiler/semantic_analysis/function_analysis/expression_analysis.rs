@@ -1,9 +1,11 @@
+use core::panic;
+
 use crate::compiler::{
   ast::{Expr, ExprHandle, Literal, Operator, StmtHandle, StrHandle},
   bytecode::{ConstantValue, OpCode},
   codegen::Address,
   errors::sema_err,
-  identifier::Identifier,
+  identifier::{Identifier, VariableIdentifier},
   lexer::SourceRange,
   types::{Type, TypeId},
 };
@@ -37,7 +39,7 @@ enum CallType {
 
 enum DotKind {
   MaybeCall {
-    rhs_id: Option<Identifier>,
+    rhs_id: Option<VariableIdentifier>,
     rhs_name: StrHandle,
     rhs_sr: SourceRange,
     lhs_type: TypeId,
@@ -48,7 +50,7 @@ enum DotKind {
 impl FunctionAnalizer<'_> {
   fn get_struct_member(
     &mut self,
-    struct_id: Identifier,
+    struct_id: VariableIdentifier,
     name: StrHandle,
   ) -> Option<(usize, TypeId)> {
     let s = self.global_env.structs[&struct_id].clone();
@@ -67,16 +69,16 @@ impl FunctionAnalizer<'_> {
 
   fn dot_call(
     &mut self,
-    id: Identifier,
+    function_id: VariableIdentifier,
     lhs: TypeId,
     lhs_start_address: Address,
     name_sr: SourceRange,
     name: StrHandle,
   ) -> CallType {
-    let typeid = self.get_typeid(id);
+    let typeid = self.get_variable_typeid(function_id);
     if let Type::Function { parameters, ret } = self.type_map.get_type(typeid) {
       let function_start = self.code.get_next_instruction_address();
-      unsafe { self.code.get_id(id) }
+      unsafe { self.code.get_variable(function_id) }
       let chunk_end = self.code.get_next_instruction_address();
       unsafe { self.code.swap(lhs_start_address, function_start, chunk_end) }
       CallType::DotCall {
@@ -93,9 +95,8 @@ impl FunctionAnalizer<'_> {
   fn try_dot_call(&mut self, expr: ExprHandle) -> CallType {
     let call_start = self.code.get_next_instruction_address();
     match *expr.get(self.ast) {
-      Expr::Variable { id, .. } => {
-        let typeid = self.get_typeid(id);
-        unsafe { self.code.get_id(id) }
+      Expr::Identifier { id, .. } => {
+        let typeid = self.get_identifier(id);
         if let Type::Function { .. } = self.get_type(typeid) {
           CallType::Call(typeid)
         } else {
@@ -125,7 +126,7 @@ impl FunctionAnalizer<'_> {
     &mut self,
     info: SourceRange,
     parameters: &[TypeId],
-    captures: &[Identifier],
+    captures: &[VariableIdentifier],
     fn_type: TypeId,
     body: &[StmtHandle],
   ) -> TypeId {
@@ -136,16 +137,19 @@ impl FunctionAnalizer<'_> {
     fn_type
   }
 
-  pub fn assignment(&mut self, id: Identifier, id_info: SourceRange, value: ExprHandle) -> TypeId {
+  pub fn assignment(
+    &mut self,
+    id: VariableIdentifier,
+    id_info: SourceRange,
+    value: ExprHandle,
+  ) -> TypeId {
     let value_type = self.analyze_expr(value);
     self.assign(id, id_info, value_type);
     value_type
   }
 
   pub fn variable(&mut self, id: Identifier) -> TypeId {
-    // FIXME: id type checked twice
-    unsafe { self.code.get_id(id) };
-    self.get_typeid(id)
+    self.get_identifier(id)
   }
 
   pub fn literal(&mut self, literal: Literal) -> TypeId {
@@ -357,7 +361,7 @@ impl FunctionAnalizer<'_> {
     &mut self,
     left_expr: ExprHandle,
     rhs_name: StrHandle,
-    rhs_id: Option<Identifier>,
+    rhs_id: Option<VariableIdentifier>,
     rhs_sr: SourceRange,
   ) -> DotKind {
     let left = self.analyze_expr(left_expr);
@@ -387,7 +391,7 @@ impl FunctionAnalizer<'_> {
     &mut self,
     left_expr: ExprHandle,
     rhs_name: StrHandle,
-    rhs_id: Option<Identifier>,
+    rhs_id: Option<VariableIdentifier>,
     rhs_sr: SourceRange,
   ) -> TypeId {
     if let DotKind::MemberAccess(typeid) = self.dot_kind(left_expr, rhs_name, rhs_id, rhs_sr) {
@@ -454,7 +458,7 @@ impl FunctionAnalizer<'_> {
         body,
       ),
       Expr::Assignment { id, id_sr, value } => self.assignment(*id, *id_sr, *value),
-      Expr::Variable { id, .. } => self.variable(*id),
+      Expr::Identifier { id, .. } => self.variable(*id),
       Expr::Literal { value, .. } => self.literal(*value),
       Expr::FnCall {
         func,
