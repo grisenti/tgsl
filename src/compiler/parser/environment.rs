@@ -3,7 +3,7 @@ use std::collections::hash_map::Entry;
 use crate::compiler::{
   errors::ge_err,
   global_env::GlobalEnv,
-  identifier::{ExternId, GlobalId, Identifier, ModuleId, VariableIdentifier},
+  identifier::{ExternId, GlobalVarId, Identifier, ModuleId, VariableIdentifier},
 };
 
 use super::*;
@@ -35,7 +35,7 @@ pub struct Environment<'src> {
   names_in_current_scope: u8,
   functions_declaration_stack: Vec<Function>,
 
-  pub globals: HashMap<String, GlobalId>,
+  pub globals: HashMap<String, GlobalVarId>,
   pub module_global_types: Vec<TypeId>,
   pub module_globals_count: u16,
   pub extern_functions: HashMap<String, ExternId>,
@@ -48,8 +48,8 @@ impl<'src> Environment<'src> {
     self.scope_depth == 0
   }
 
-  fn new_global_id(&mut self) -> GlobalId {
-    let id = GlobalId::relative(self.module_globals_count);
+  fn new_global_id(&mut self) -> GlobalVarId {
+    let id = GlobalVarId::relative(self.module_globals_count);
     self.module_globals_count += 1;
     self.module_global_types.push(TypeId::UNKNOWN);
     id
@@ -117,7 +117,7 @@ impl<'src> Environment<'src> {
     name: &str,
     name_sr: SourceRange,
     declaration: bool,
-  ) -> CompilerResult<GlobalId> {
+  ) -> CompilerResult<GlobalVarId> {
     let id = self.new_global_id().into_public();
     match self.globals.entry(name.to_string()) {
       Entry::Vacant(e) => {
@@ -315,7 +315,7 @@ mod test {
 
   use crate::compiler::{
     global_env::GlobalEnv,
-    identifier::{GlobalId, VariableIdentifier},
+    identifier::{GlobalVarId, VariableIdentifier},
     lexer::SourceRange,
   };
 
@@ -331,7 +331,7 @@ mod test {
     assert_eq!(
       env.get_variable_id("x", SourceRange::EMPTY),
       Ok(VariableIdentifier::Global(
-        GlobalId::relative(0).into_public()
+        GlobalVarId::relative(0).into_public()
       ))
     );
   }
@@ -347,7 +347,7 @@ mod test {
     assert_eq!(
       env.get_variable_id("x", SourceRange::EMPTY),
       Ok(VariableIdentifier::Global(
-        GlobalId::relative(0).into_public()
+        GlobalVarId::relative(0).into_public()
       ))
     );
   }
@@ -420,7 +420,7 @@ mod test {
     assert_eq!(
       env.get_variable_id("x", SourceRange::EMPTY),
       Ok(VariableIdentifier::Global(
-        GlobalId::relative(0).into_public()
+        GlobalVarId::relative(0).into_public()
       ))
     );
   }

@@ -60,12 +60,12 @@ macro_rules! define_identifier {
   };
 }
 
-define_identifier!(GlobalId);
+define_identifier!(GlobalVarId);
 define_identifier!(ExternId);
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub enum VariableIdentifier {
-  Global(GlobalId),
+  Global(GlobalVarId),
   Capture(CaptureId),
   Local(LocalId),
   Invalid,
@@ -84,7 +84,7 @@ impl Into<Identifier> for VariableIdentifier {
   }
 }
 
-impl Into<Identifier> for GlobalId {
+impl Into<Identifier> for GlobalVarId {
   fn into(self) -> Identifier {
     VariableIdentifier::Global(self).into()
   }

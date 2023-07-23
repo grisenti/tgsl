@@ -11,7 +11,7 @@ use super::errors::CompilerError;
 use super::errors::CompilerResult;
 use super::global_env::GlobalEnv;
 use super::identifier::ExternId;
-use super::identifier::GlobalId;
+use super::identifier::GlobalVarId;
 use super::identifier::Identifier;
 use super::identifier::ModuleId;
 use super::identifier::VariableIdentifier;
@@ -31,7 +31,7 @@ enum ParserState {
 pub struct ParsedModule {
   pub module_name: Option<String>,
   pub ast: AST,
-  pub globals: HashMap<String, GlobalId>,
+  pub globals: HashMap<String, GlobalVarId>,
   pub module_global_types: Vec<TypeId>,
   pub globals_count: u16,
   pub extern_functions: HashMap<String, ExternId>,

@@ -1,6 +1,6 @@
 use super::{
   ast::Operator,
-  identifier::{ExternId, GlobalId},
+  identifier::{ExternId, GlobalVarId},
 };
 use core::fmt::Debug;
 
@@ -102,7 +102,7 @@ impl OpCode {
 #[derive(Clone, Debug)]
 pub enum ConstantValue {
   Number(f64),
-  GlobalId(GlobalId),
+  GlobalId(GlobalVarId),
   ExternId(ExternId),
   Bool(bool),
   Str(String),

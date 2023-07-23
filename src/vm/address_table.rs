@@ -1,5 +1,5 @@
 use crate::compiler::{
-  identifier::{ExternId, GlobalId},
+  identifier::{ExternId, GlobalVarId},
   CompiledModule,
 };
 
@@ -9,7 +9,7 @@ pub struct AddressTable {
 }
 
 impl AddressTable {
-  pub fn resolve_variable(&self, global_id: GlobalId) -> u32 {
+  pub fn resolve_variable(&self, global_id: GlobalVarId) -> u32 {
     if global_id.is_relative() {
       let last_end = self.module_variables_address_space.last().unwrap().1;
       last_end + global_id.get_relative() as u32

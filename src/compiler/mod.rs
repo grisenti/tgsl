@@ -4,7 +4,7 @@ use self::{
   codegen::BytecodeBuilder,
   errors::CompilerError,
   global_env::{GlobalEnv, GlobalTypes},
-  identifier::{ExternId, GlobalId, ModuleId},
+  identifier::{ExternId, GlobalVarId, ModuleId},
   parser::Parser,
   semantic_analysis::SemanticAnalizer,
   types::type_map::TypeMap,
@@ -58,7 +58,7 @@ impl Compiler {
     })
   }
 
-  pub fn get_global(&self, module_id: ModuleId, name: &str) -> Option<GlobalId> {
+  pub fn get_global(&self, module_id: ModuleId, name: &str) -> Option<GlobalVarId> {
     self.global_env.get_id(module_id, name)
   }
 

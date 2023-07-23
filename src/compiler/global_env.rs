@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use crate::compiler::identifier::VariableIdentifier;
 
 use super::errors::{ge_err, CompilerResult};
-use super::identifier::{ExternId, GlobalId, Identifier, ModuleId};
+use super::identifier::{ExternId, GlobalVarId, Identifier, ModuleId};
 use super::lexer::SourceRange;
 use super::parser::ParsedModule;
 use super::types::TypeId;
 
 pub struct Module {
-  pub public_global_variables: HashMap<String, GlobalId>,
+  pub public_global_variables: HashMap<String, GlobalVarId>,
   pub public_extern_functions: HashMap<String, ExternId>,
 }
 
@@ -64,7 +64,7 @@ impl GlobalEnv {
         if id.is_relative() && id.is_public() {
           let type_id = parsed_module.module_global_types[id.get_relative() as usize];
           self.types.insert(
-            GlobalId::absolute(module_id, id.get_relative()).into(),
+            GlobalVarId::absolute(module_id, id.get_relative()).into(),
             type_id,
           );
         }
@@ -87,7 +87,7 @@ impl GlobalEnv {
         .filter_map(|(name, gid)| {
           if gid.is_relative() {
             let relative_id = gid.get_relative();
-            Some((name, GlobalId::absolute(module_id, relative_id)))
+            Some((name, GlobalVarId::absolute(module_id, relative_id)))
           } else {
             None
           }
@@ -122,7 +122,7 @@ impl GlobalEnv {
     !self.module_names.contains_key(name)
   }
 
-  pub fn get_id(&self, module_id: ModuleId, name: &str) -> Option<GlobalId> {
+  pub fn get_id(&self, module_id: ModuleId, name: &str) -> Option<GlobalVarId> {
     self.modules[module_id.0 as usize]
       .public_global_variables
       .get(name)
