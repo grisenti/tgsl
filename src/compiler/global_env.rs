@@ -15,24 +15,37 @@ pub struct Module {
 
 #[derive(Clone, Copy)]
 pub struct GlobalTypes<'a> {
-  types: &'a HashMap<Identifier, TypeId>,
+  variable_types: &'a [TypeId],
+  extern_functions_types: &'a [TypeId],
 }
 
 impl<'a> GlobalTypes<'a> {
   pub fn get_type(&self, id: Identifier) -> TypeId {
-    *self.types.get(&id).unwrap()
+    match id {
+      Identifier::Variable(VariableIdentifier::Global(id)) => {
+        assert!(!id.is_relative());
+        self.variable_types[id.get_id() as usize]
+      }
+      Identifier::ExternFunction(id) => {
+        assert!(!id.is_relative());
+        self.extern_functions_types[id.get_id() as usize]
+      }
+      _ => panic!("invalid identifier"),
+    }
   }
 
   pub fn new(global_env: &'a GlobalEnv) -> Self {
     Self {
-      types: &global_env.types,
+      variable_types: &global_env.variable_types,
+      extern_functions_types: &global_env.extern_functions_types,
     }
   }
 }
 
 #[derive(Default)]
 pub struct GlobalEnv {
-  types: HashMap<Identifier, TypeId>,
+  variable_types: Vec<TypeId>,
+  extern_functions_types: Vec<TypeId>,
   module_names: HashMap<String, ModuleId>,
   modules: Vec<Module>,
   global_variables_count: u32,
@@ -62,27 +75,12 @@ impl GlobalEnv {
       let module_id = self.modules.len() as u16;
       self.module_names.insert(module_name, ModuleId(module_id));
 
-      for id in parsed_module.globals.values() {
-        if id.is_relative() && id.is_public() {
-          let relative_id = id.get_id();
-          let type_id = parsed_module.module_global_types[relative_id as usize];
-          self.types.insert(
-            GlobalVarId::absolute(self.global_variables_count + relative_id).into(),
-            type_id,
-          );
-        }
-      }
-
-      for id in parsed_module.extern_functions.values() {
-        if id.is_relative() && id.is_public() {
-          let relative_id = id.get_id();
-          let type_id = parsed_module.module_extern_functions_types[relative_id as usize];
-          self.types.insert(
-            ExternId::absolute(self.extern_functions_count + relative_id).into(),
-            type_id,
-          );
-        }
-      }
+      self
+        .variable_types
+        .extend(parsed_module.module_global_types.iter());
+      self
+        .extern_functions_types
+        .extend(parsed_module.module_extern_functions_types.iter());
 
       let public_global_variables = parsed_module
         .globals
