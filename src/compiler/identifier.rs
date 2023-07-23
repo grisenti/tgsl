@@ -61,21 +61,21 @@ pub enum Identifier {
   Invalid,
 }
 
-impl Into<Identifier> for VariableIdentifier {
-  fn into(self) -> Identifier {
-    Identifier::Variable(self)
+impl From<VariableIdentifier> for Identifier {
+  fn from(val: VariableIdentifier) -> Self {
+    Identifier::Variable(val)
   }
 }
 
-impl Into<Identifier> for GlobalVarId {
-  fn into(self) -> Identifier {
-    VariableIdentifier::Global(self).into()
+impl From<GlobalVarId> for Identifier {
+  fn from(val: GlobalVarId) -> Self {
+    VariableIdentifier::Global(val).into()
   }
 }
 
-impl Into<Identifier> for ExternId {
-  fn into(self) -> Identifier {
-    Identifier::ExternFunction(self)
+impl From<ExternId> for Identifier {
+  fn from(val: ExternId) -> Self {
+    Identifier::ExternFunction(val)
   }
 }
 
