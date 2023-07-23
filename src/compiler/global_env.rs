@@ -51,7 +51,10 @@ impl GlobalEnv {
 
   pub fn export_module(&mut self, parsed_module: ParsedModule) -> Option<ModuleId> {
     if let Some(module_name) = parsed_module.module_name {
-      debug_assert!(!self.module_names.contains_key(&module_name));
+      debug_assert!(
+        !self.module_names.contains_key(&module_name),
+        "this error should have been detected earlier by calling `is_module_name_available`"
+      );
 
       let module_id = self.modules.len() as u16;
       self.module_names.insert(module_name, ModuleId(module_id));
