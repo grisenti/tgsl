@@ -3,7 +3,10 @@ use std::{
   mem::{size_of, ManuallyDrop},
 };
 
-use super::{chunk::Function, value::*};
+use crate::vm::{
+  chunk::Function,
+  value::{Aggregate, Closure, Object, ObjectType, ObjectValue, TaggedValue, ValueType},
+};
 
 const OBJECT_SIZE: usize = std::mem::size_of::<Object>();
 
@@ -147,6 +150,12 @@ impl GC {
   }
 
   pub fn new() -> Self {
+    Default::default()
+  }
+}
+
+impl Default for GC {
+  fn default() -> Self {
     Self {
       allocations: Vec::new(),
       next_collection: 1024 * 1024,
