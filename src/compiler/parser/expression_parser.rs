@@ -1,3 +1,5 @@
+use std::f32::consts::E;
+
 use crate::return_if_err;
 
 use super::*;
@@ -16,37 +18,87 @@ const MAX_LOGICAL_OP_PRECEDENCE: usize = 2;
 const LOGICAL_OP_PRECEDENCE: [&[Token<'_>]; MAX_LOGICAL_OP_PRECEDENCE] =
   [&[Token::Or, Token::Or], &[Token::And, Token::And]];
 
+pub struct ParsedExpression {
+  pub handle: ExprHandle,
+  pub type_id: TypeId,
+}
+
+impl ParsedExpression {
+  const INVALID: Self = Self {
+    handle: ExprHandle::INVALID,
+    type_id: TypeId::ERROR,
+  };
+}
+
 impl<'src> Parser<'src> {
-  fn parse_primary(&mut self) -> ExprHandle {
-    return_if_err!(self, ExprHandle::INVALID);
+  fn parse_primary(&mut self) -> ParsedExpression {
+    return_if_err!(self, ParsedExpression::INVALID);
+
     match self.lookahead {
-      Token::Number(_) | Token::String(_) | Token::True | Token::False | Token::Null => {
-        let value = literal_from_token(self.lookahead, &mut self.ast);
+      Token::Number(num) => {
         let value_sr = self.lex.previous_token_range();
         self.advance();
-        self.ast.add_expression(Expr::Literal { value, value_sr })
+        ParsedExpression {
+          handle: self.ast.add_expression(Expr::LiteralNumber {
+            value: num,
+            value_sr,
+          }),
+          type_id: TypeId::NUM,
+        }
+      }
+      Token::String(str) => {
+        let value_sr = self.lex.previous_token_range();
+        self.advance();
+        let handle = self.ast.add_str(str);
+        ParsedExpression {
+          handle: self
+            .ast
+            .add_expression(Expr::LiteralString { handle, value_sr }),
+          type_id: TypeId::STR,
+        }
+      }
+      Token::True | Token::False => {
+        let value = self.lookahead == Token::True;
+        let value_sr = self.lex.previous_token_range();
+        self.advance();
+        ParsedExpression {
+          handle: self
+            .ast
+            .add_expression(Expr::LiteralBool { value, value_sr }),
+          type_id: TypeId::BOOL,
+        }
       }
       Token::Id(id) => {
         let id_sr = self.lex.previous_token_range();
-        let id = self.get_id(id, id_sr);
+        let (id, id_type) = self.get_id(id, id_sr);
         self.advance();
-        self.ast.add_expression(Expr::Identifier { id, id_sr })
+        ParsedExpression {
+          handle: self
+            .ast
+            .add_expression(Expr::Identifier { id, id_type, id_sr }),
+          type_id: id_type,
+        }
       }
       Token::Basic(c) if c == '(' => {
         self.advance();
-        let ret = self.parse_expression();
+        let parsed_expression = self.parse_expression();
         self.match_or_err(Token::Basic(')'));
-        ret
+        ParsedExpression {
+          handle: self
+            .ast
+            .add_expression(Expr::Paren(parsed_expression.handle)),
+          type_id: parsed_expression.type_id,
+        }
       }
       _ => {
         let err = parser_err::expected_primary(&self.lex, self.lookahead);
         self.emit_error(err);
-        ExprHandle::INVALID
+        ParsedExpression::INVALID
       }
     }
   }
 
-  fn parse_arguments(&mut self, call_start: SourceRange) -> Vec<ExprHandle> {
+  fn parse_arguments(&mut self, call_start: SourceRange) -> Vec<ParsedExpression> {
     return_if_err!(self, vec![]);
     let mut arguments = Vec::new();
     loop {
@@ -64,9 +116,14 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_call(&mut self) -> ExprHandle {
-    return_if_err!(self, ExprHandle::INVALID);
-    let mut expr = self.parse_primary();
+  fn parse_call(&mut self) -> ParsedExpression {
+    return_if_err!(self, ParsedExpression::INVALID);
+
+    let ParsedExpression {
+      type_id,
+      handle: mut expr,
+    } = self.parse_primary();
+
     loop {
       match self.lookahead {
         Token::Basic('(') => {
@@ -83,7 +140,8 @@ impl<'src> Parser<'src> {
           expr = self.ast.add_expression(Expr::FnCall {
             func: expr,
             call_sr,
-            arguments,
+            arguments: arguments.into_iter().map(|expr| expr.handle).collect(),
+            expr_type: TypeId::UNKNOWN,
           })
         }
         Token::Basic('.') => {
@@ -104,74 +162,110 @@ impl<'src> Parser<'src> {
         _ => break,
       }
     }
-    expr
+    ParsedExpression {
+      type_id: TypeId::UNKNOWN,
+      handle: expr,
+    }
   }
 
-  fn parse_unary(&mut self) -> ExprHandle {
-    return_if_err!(self, ExprHandle::INVALID);
+  fn parse_unary(&mut self) -> ParsedExpression {
+    return_if_err!(self, ParsedExpression::INVALID);
+
     if let Some((op, op_sr)) = self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')]) {
       let right = self.parse_call();
-      self.ast.add_expression(Expr::Unary {
-        operator: to_operator(op),
-        operator_sr: op_sr,
-        right,
-      })
+      ParsedExpression {
+        handle: self.ast.add_expression(Expr::Unary {
+          operator: to_operator(op),
+          operator_sr: op_sr,
+          right: right.handle,
+          expr_type: TypeId::UNKNOWN,
+        }),
+        type_id: TypeId::UNKNOWN,
+      }
     } else {
       self.parse_call()
     }
   }
 
-  fn parse_binary_operation(&mut self, prec: usize) -> ExprHandle {
-    return_if_err!(self, ExprHandle::INVALID);
+  fn parse_binary_operation(&mut self, prec: usize) -> ParsedExpression {
+    return_if_err!(self, ParsedExpression::INVALID);
+
     if prec == MAX_BIN_OP_PRECEDENCE {
       self.parse_unary()
     } else {
-      let mut expr = self.parse_binary_operation(prec + 1);
+      let ParsedExpression {
+        handle: mut expr,
+        type_id,
+      } = self.parse_binary_operation(prec + 1);
       while let Some((op, op_sr)) = self.matches_alternatives(BIN_OP_PRECEDENCE[prec]) {
         let right = self.parse_binary_operation(prec + 1);
         expr = self.ast.add_expression(Expr::Binary {
           left: expr,
           operator: to_operator(op),
           operator_sr: op_sr,
-          right,
+          right: right.handle,
+          expr_type: TypeId::UNKNOWN,
         })
       }
-      expr
+      ParsedExpression {
+        handle: expr,
+        type_id: TypeId::UNKNOWN,
+      }
     }
   }
 
-  fn parse_logical_operation(&mut self, prec: usize) -> ExprHandle {
-    return_if_err!(self, ExprHandle::INVALID);
+  fn parse_logical_operation(&mut self, prec: usize) -> ParsedExpression {
+    return_if_err!(self, ParsedExpression::INVALID);
+
     if prec == MAX_LOGICAL_OP_PRECEDENCE {
       self.parse_binary_operation(0)
     } else {
-      let mut expr = self.parse_logical_operation(prec + 1);
+      let ParsedExpression {
+        handle: mut expr,
+        type_id,
+      } = self.parse_logical_operation(prec + 1);
       while let Some((op, op_sr)) = self.matches_alternatives(LOGICAL_OP_PRECEDENCE[prec]) {
         let right = self.parse_logical_operation(prec + 1);
         expr = self.ast.add_expression(Expr::Logical {
           left: expr,
           operator: to_operator(op),
           operator_sr: op_sr,
-          right,
+          right: right.handle,
+          expr_type: TypeId::UNKNOWN,
         })
       }
-      expr
+      ParsedExpression {
+        handle: expr,
+        type_id: TypeId::UNKNOWN,
+      }
     }
   }
 
-  fn parse_assignment(&mut self) -> ExprHandle {
-    return_if_err!(self, ExprHandle::INVALID);
-    let lhs = self.parse_logical_operation(0);
+  fn parse_assignment(&mut self) -> ParsedExpression {
+    return_if_err!(self, ParsedExpression::INVALID);
+
+    let ParsedExpression {
+      handle: lhs,
+      type_id,
+    } = self.parse_logical_operation(0);
     if let Some((_, eq_src_rc)) = self.match_next(Token::Basic('=')) {
-      let rhs = self.parse_logical_operation(0);
+      let ParsedExpression {
+        handle: rhs,
+        type_id,
+      } = self.parse_logical_operation(0);
+
       match lhs.get(&self.ast) {
-        &Expr::Identifier { id, id_sr } => {
+        &Expr::Identifier { id, id_sr, .. } => {
           if let Identifier::Variable(id) = id {
-            self.ast.add_expression(Expr::Assignment {
-              id,
-              id_sr,
-              value: rhs,
-            })
+            ParsedExpression {
+              handle: self.ast.add_expression(Expr::Assignment {
+                id,
+                id_sr,
+                value: rhs,
+                type_id: TypeId::UNKNOWN,
+              }),
+              type_id: TypeId::UNKNOWN,
+            }
           } else {
             // FIXME: make this into a proper error
             panic!("cannot assing to non-variable")
@@ -182,25 +276,32 @@ impl<'src> Parser<'src> {
           rhs_name: name,
           rhs_sr,
           ..
-        } => self.ast.add_expression(Expr::Set {
-          object,
-          member_name: name,
-          member_name_sr: rhs_sr,
-          value: rhs,
-        }),
+        } => ParsedExpression {
+          handle: self.ast.add_expression(Expr::Set {
+            object,
+            member_name: name,
+            member_name_sr: rhs_sr,
+            value: rhs,
+          }),
+          type_id: TypeId::UNKNOWN,
+        },
         _ => {
           let err = parser_err::lvalue_assignment(eq_src_rc);
           self.emit_error(err);
-          ExprHandle::INVALID
+          ParsedExpression::INVALID
         }
       }
     } else {
-      lhs
+      ParsedExpression {
+        handle: lhs,
+        type_id,
+      }
     }
   }
 
-  fn parse_lambda(&mut self) -> ExprHandle {
-    return_if_err!(self, ExprHandle::INVALID);
+  fn parse_lambda(&mut self) -> ParsedExpression {
+    return_if_err!(self, ParsedExpression::INVALID);
+
     let parameters_sr_start = self.lex.previous_token_range();
     self.env.push_function();
     self.match_or_err(Token::Basic('('));
@@ -220,18 +321,23 @@ impl<'src> Parser<'src> {
       ret: return_type,
     });
     let parameters_sr = SourceRange::combine(parameters_sr_start, parameters_sr_end);
-    self.ast.add_expression(Expr::Lambda {
-      parameters_sr,
-      captures,
-      parameter_types,
-      body,
-      function_type_id,
-      return_type,
-    })
+
+    ParsedExpression {
+      handle: self.ast.add_expression(Expr::Lambda {
+        parameters_sr,
+        captures,
+        parameter_types,
+        body,
+        function_type_id,
+        return_type,
+      }),
+      type_id: function_type_id,
+    }
   }
 
-  pub(super) fn parse_expression(&mut self) -> ExprHandle {
-    return_if_err!(self, ExprHandle::INVALID);
+  pub(super) fn parse_expression(&mut self) -> ParsedExpression {
+    return_if_err!(self, ParsedExpression::INVALID);
+
     if self.match_next(Token::Fn).is_some() {
       self.parse_lambda()
     } else {

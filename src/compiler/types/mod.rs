@@ -1,7 +1,4 @@
-use super::{
-  ast::Literal,
-  identifier::{Identifier, StructId, VariableIdentifier},
-};
+use super::identifier::{Identifier, StructId, VariableIdentifier};
 
 pub mod type_map;
 
@@ -32,15 +29,6 @@ impl TypeId {
   pub const UNKNOWN: TypeId = TypeId(4);
   pub const NOTHING: TypeId = TypeId(5);
   pub const ERROR: TypeId = TypeId(6);
-
-  pub fn from_literal(lit: Literal) -> Self {
-    match lit {
-      Literal::String(_) => TypeId::STR,
-      Literal::Number(_) => TypeId::NUM,
-      Literal::True | Literal::False => TypeId::BOOL,
-      Literal::Null => TypeId::UNKNOWN,
-    }
-  }
 }
 
 pub const DEFAULT_TYPEIDS: [(Type, TypeId); 7] = [

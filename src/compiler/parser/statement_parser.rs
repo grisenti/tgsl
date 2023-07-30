@@ -48,7 +48,7 @@ impl<'src> Parser<'src> {
 
   fn parse_expr_stmt(&mut self) -> StmtHandle {
     let expr = self.parse_expression();
-    let ret = self.ast.add_statement(Stmt::Expr(expr));
+    let ret = self.ast.add_statement(Stmt::Expr(expr.handle));
     self.match_or_err(Token::Basic(';'));
     ret
   }
@@ -68,7 +68,7 @@ impl<'src> Parser<'src> {
     };
     self.ast.add_statement(Stmt::IfBranch {
       if_sr,
-      condition,
+      condition: condition.handle,
       true_branch,
       else_branch,
     })
@@ -84,7 +84,7 @@ impl<'src> Parser<'src> {
     let loop_body = self.parse_statement();
     self.ast.add_statement(Stmt::While {
       while_sr,
-      condition,
+      condition: condition.handle,
       loop_body,
     })
   }
@@ -101,14 +101,14 @@ impl<'src> Parser<'src> {
     let after = self.parse_expression();
     self.match_or_err(Token::Basic(')'));
     let body = self.parse_statement();
-    let while_finally = self.ast.add_statement(Stmt::Expr(after));
+    let while_finally = self.ast.add_statement(Stmt::Expr(after.handle));
     let while_body = self.ast.add_statement(Stmt::Block {
       statements: vec![body, while_finally],
       locals: 0,
     });
     let while_loop = self.ast.add_statement(Stmt::While {
       while_sr: for_sr,
-      condition,
+      condition: condition.handle,
       loop_body: while_body,
     });
     let _locals = self.env.pop_scope(); // for statement scope
@@ -136,7 +136,10 @@ impl<'src> Parser<'src> {
       None
     };
     self.match_or_err(Token::Basic(';'));
-    self.ast.add_statement(Stmt::Return { expr, return_sr })
+    self.ast.add_statement(Stmt::Return {
+      expr: expr.map(|expr| expr.handle),
+      return_sr,
+    })
   }
 
   fn parse_statement(&mut self) -> StmtHandle {
@@ -169,7 +172,7 @@ impl<'src> Parser<'src> {
         identifier,
         id_sr,
         var_type,
-        expression: Some(self.parse_expression()),
+        expression: Some(self.parse_expression().handle),
       }
     } else {
       Stmt::VarDecl {

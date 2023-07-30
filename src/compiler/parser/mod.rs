@@ -130,12 +130,12 @@ impl<'parsing> Parser<'parsing> {
     }
   }
 
-  fn get_id(&mut self, name: &str, name_sr: SourceRange) -> Identifier {
+  fn get_id(&mut self, name: &str, name_sr: SourceRange) -> (Identifier, TypeId) {
     match self.env.get_id(name, name_sr) {
-      Ok(id) => id,
+      Ok(id) => (id, TypeId::UNKNOWN),
       Err(err) => {
         self.emit_error(err);
-        Identifier::Invalid
+        (Identifier::Invalid, TypeId::ERROR)
       }
     }
   }

@@ -193,6 +193,34 @@ impl StmtHandle {
 impl ExprHandle {
   pub fn to_json(&self, ast: &AST) -> JsonValue {
     match self.get(ast) {
+      Expr::LiteralString { handle, .. } => {
+        object! {
+          "LiteralString": {
+            "value": handle.get(ast)
+          }
+        }
+      }
+      Expr::LiteralNumber { value, .. } => {
+        object! {
+          "LiteralNumber": {
+            "value": *value
+          }
+        }
+      }
+      Expr::LiteralBool { value, .. } => {
+        object! {
+          "LiteralNumber": {
+            "value": *value
+          }
+        }
+      }
+      Expr::Paren(expr) => {
+        object! {
+          "Paren": {
+            "expr": expr.to_json(ast)
+          }
+        }
+      }
       Expr::Binary {
         left,
         operator,
@@ -228,13 +256,6 @@ impl ExprHandle {
           "Unary": {
             "operator": format!("{}", operator),
             "right": right.to_json(ast),
-          }
-        }
-      }
-      Expr::Literal { value, .. } => {
-        object! {
-          "Literal": {
-            value: value.display(ast)
           }
         }
       }

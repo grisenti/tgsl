@@ -48,67 +48,51 @@ pub fn to_operator(token: Token) -> Operator {
   }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Literal {
-  String(StrHandle),
-  Number(f64),
-  True,
-  False,
-  Null,
-}
-
-impl Literal {
-  pub fn display(&self, ast: &AST) -> String {
-    match self {
-      Self::String(s) => format!("\"{}\"", s.get(ast)),
-      Self::Number(num) => format!("{num}"),
-      _ => format!("{self:?}").to_lowercase(),
-    }
-  }
-}
-
-pub fn literal_from_token(token: Token, ast: &mut AST) -> Literal {
-  match token {
-    Token::String(s) => Literal::String(ast.add_str(s)),
-    Token::Number(num) => Literal::Number(num),
-    Token::True => Literal::True,
-    Token::False => Literal::False,
-    Token::Null => Literal::Null,
-    _ => panic!(),
-  }
-}
-
 #[derive(Debug, Clone)]
 pub enum Expr {
+  LiteralString {
+    handle: StrHandle,
+    value_sr: SourceRange,
+  },
+  LiteralNumber {
+    value: f64,
+    value_sr: SourceRange,
+  },
+  LiteralBool {
+    value: bool,
+    value_sr: SourceRange,
+  },
+  Identifier {
+    id: Identifier,
+    id_type: TypeId,
+    id_sr: SourceRange,
+  },
+  Paren(ExprHandle),
+  Assignment {
+    id: VariableIdentifier,
+    type_id: TypeId,
+    id_sr: SourceRange,
+    value: ExprHandle,
+  },
   Binary {
     left: ExprHandle,
     operator: Operator,
     operator_sr: SourceRange,
     right: ExprHandle,
+    expr_type: TypeId,
   },
   Logical {
     left: ExprHandle,
     operator: Operator,
     operator_sr: SourceRange,
     right: ExprHandle,
+    expr_type: TypeId,
   },
   Unary {
     operator: Operator,
     operator_sr: SourceRange,
     right: ExprHandle,
-  },
-  Literal {
-    value: Literal,
-    value_sr: SourceRange,
-  },
-  Identifier {
-    id: Identifier,
-    id_sr: SourceRange,
-  },
-  Assignment {
-    id: VariableIdentifier,
-    id_sr: SourceRange,
-    value: ExprHandle,
+    expr_type: TypeId,
   },
   Lambda {
     parameters_sr: SourceRange,
@@ -122,7 +106,11 @@ pub enum Expr {
     func: ExprHandle,
     call_sr: SourceRange,
     arguments: Vec<ExprHandle>,
+    expr_type: TypeId,
   },
+  // MemberGet {},
+  // DotCall {},
+  // MemberSet {},
   Dot {
     lhs: ExprHandle,
     rhs_name: StrHandle,
