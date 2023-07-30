@@ -3,14 +3,13 @@ use std::collections::HashMap;
 use crate::compiler::identifier::VariableIdentifier;
 
 use super::errors::{ge_err, CompilerResult};
-use super::identifier::{ExternId, GlobalVarId, Identifier, ModuleId};
+use super::identifier::{ExternId, GlobalIdentifier, GlobalVarId, Identifier, ModuleId};
 use super::lexer::SourceRange;
 use super::parser::ParsedModule;
 use super::types::TypeId;
 
 pub struct Module {
-  pub public_global_variables: HashMap<String, GlobalVarId>,
-  pub public_extern_functions: HashMap<String, ExternId>,
+  pub global_names: HashMap<String, GlobalIdentifier>,
 }
 
 #[derive(Clone, Copy)]
@@ -77,48 +76,32 @@ impl GlobalEnv {
 
       self
         .variable_types
-        .extend(parsed_module.module_global_types.iter());
+        .extend(parsed_module.module_global_variable_types.iter());
       self
         .extern_functions_types
         .extend(parsed_module.module_extern_functions_types.iter());
 
-      let public_global_variables = parsed_module
-        .globals
-        .into_iter()
-        .filter(|(_, gid)| gid.is_public())
-        .filter_map(|(name, gid)| {
-          if gid.is_relative() {
-            let relative_id = gid.get_id();
-            Some((
-              name,
-              GlobalVarId::absolute(self.global_variables_count + relative_id),
-            ))
-          } else {
-            None
+      let mut module_names = HashMap::new();
+      for (name, id) in parsed_module.global_names {
+        match id {
+          GlobalIdentifier::Variable(var_id) => {
+            if var_id.is_relative() && var_id.is_public() {
+              let absolute_id =
+                GlobalVarId::absolute(var_id.get_id() + self.global_variables_count);
+              module_names.insert(name, GlobalIdentifier::Variable(absolute_id));
+            }
           }
-        })
-        .collect::<HashMap<_, _>>();
-
-      let public_extern_functions = parsed_module
-        .extern_functions
-        .into_iter()
-        .filter(|(_, gid)| gid.is_public())
-        .filter_map(|(name, gid)| {
-          if gid.is_relative() {
-            let relative_id = gid.get_id();
-            Some((
-              name,
-              ExternId::absolute(self.extern_functions_count + relative_id),
-            ))
-          } else {
-            None
+          GlobalIdentifier::ExternFunction(ext_id) => {
+            if ext_id.is_relative() && ext_id.is_public() {
+              let absolute_id = ExternId::absolute(ext_id.get_id() + self.global_variables_count);
+              module_names.insert(name, GlobalIdentifier::ExternFunction(absolute_id));
+            }
           }
-        })
-        .collect::<HashMap<_, _>>();
+        }
+      }
 
       self.modules.push(Module {
-        public_global_variables,
-        public_extern_functions,
+        global_names: module_names,
       });
       Some(ModuleId(module_id))
     } else {
@@ -130,9 +113,9 @@ impl GlobalEnv {
     !self.module_names.contains_key(name)
   }
 
-  pub fn get_id(&self, module_id: ModuleId, name: &str) -> Option<GlobalVarId> {
+  pub fn get_id(&self, module_id: ModuleId, name: &str) -> Option<GlobalIdentifier> {
     self.modules[module_id.0 as usize]
-      .public_global_variables
+      .global_names
       .get(name)
       .copied()
   }

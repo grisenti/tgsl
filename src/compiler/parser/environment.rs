@@ -3,7 +3,7 @@ use std::collections::hash_map::Entry;
 use crate::compiler::{
   errors::ge_err,
   global_env::GlobalEnv,
-  identifier::{ExternId, GlobalVarId, Identifier, ModuleId, VariableIdentifier},
+  identifier::{ExternId, GlobalIdentifier, GlobalVarId, Identifier, ModuleId, VariableIdentifier},
 };
 
 use super::*;
@@ -35,24 +35,14 @@ pub struct Environment<'src> {
   names_in_current_scope: u8,
   functions_declaration_stack: Vec<Function>,
 
-  pub global_variables: HashMap<String, GlobalVarId>,
+  pub global_names: HashMap<String, GlobalIdentifier>,
   pub module_global_variables_types: Vec<TypeId>,
-  pub module_globals_count: u16,
-  pub extern_functions: HashMap<String, ExternId>,
   pub extern_function_types: Vec<TypeId>,
-  module_extern_functions_count: u16,
 }
 
 impl<'src> Environment<'src> {
   pub fn in_global_scope(&self) -> bool {
     self.scope_depth == 0
-  }
-
-  fn new_global_id(&mut self) -> GlobalVarId {
-    let id = GlobalVarId::relative(self.module_globals_count as u32);
-    self.module_globals_count += 1;
-    self.module_global_variables_types.push(TypeId::UNKNOWN);
-    id
   }
 
   fn find_local(&self, local_name: &str) -> Option<Local<'src>> {
@@ -77,7 +67,10 @@ impl<'src> Environment<'src> {
     let start_depth = self.functions_declaration_stack.len() as u8;
     let target_depth = local.function_depth;
 
-    debug_assert!(start_depth >= target_depth);
+    if start_depth < target_depth {
+      return VariableIdentifier::Invalid;
+    }
+    //assert!(start_depth >= target_depth);
 
     let mut capture_id = VariableIdentifier::Local(local.id);
     let functions = self
@@ -103,10 +96,8 @@ impl<'src> Environment<'src> {
   }
 
   fn get_global(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<Identifier> {
-    if let Some(&global_variable) = self.global_variables.get(name) {
+    if let Some(&global_variable) = self.global_names.get(name) {
       Ok(global_variable.into())
-    } else if let Some(&extern_function) = self.extern_functions.get(name) {
-      Ok(extern_function.into())
     } else {
       Err(ge_err::undeclared_global(name_sr))
     }
@@ -116,15 +107,13 @@ impl<'src> Environment<'src> {
     &mut self,
     name: &str,
     name_sr: SourceRange,
-    declaration: bool,
-  ) -> CompilerResult<GlobalVarId> {
-    let id = self.new_global_id().into_public();
-    match self.global_variables.entry(name.to_string()) {
-      Entry::Vacant(e) => {
-        e.insert(id);
-        Ok(id)
-      }
-      Entry::Occupied(_) => Err(ge_err::identifier_redeclaration(name_sr, name)),
+    global_id: GlobalIdentifier,
+  ) -> CompilerResult<()> {
+    if let Entry::Vacant(e) = self.global_names.entry(name.to_string()) {
+      e.insert(global_id);
+      Ok(())
+    } else {
+      Err(ge_err::identifier_redeclaration(name_sr, name))
     }
   }
 
@@ -144,12 +133,12 @@ impl<'src> Environment<'src> {
     if let Some(local) = self.find_local(name) {
       Ok(self.capture(local))
     } else {
-      self
-        .global_variables
-        .get(name)
-        .copied()
-        .map(VariableIdentifier::Global)
-        .ok_or(ge_err::undeclared_global(name_sr))
+      let id = self.global_names.get(name).copied();
+      if let Some(GlobalIdentifier::Variable(id)) = id {
+        Ok(VariableIdentifier::Global(id))
+      } else {
+        Err(ge_err::undeclared_global(name_sr))
+      }
     }
   }
 
@@ -158,7 +147,11 @@ impl<'src> Environment<'src> {
     name: &str,
     name_sr: SourceRange,
   ) -> CompilerResult<VariableIdentifier> {
-    self.declare_global_function(name, name_sr) // FIXME: definition and declaration are the same
+    match self.global_names.get(name).copied() {
+      Some(GlobalIdentifier::Variable(var_id)) => Ok(VariableIdentifier::Global(var_id)),
+      None => self.declare_global_function(name, name_sr),
+      _ => panic!(),
+    }
   }
 
   pub fn declare_global_function(
@@ -166,8 +159,9 @@ impl<'src> Environment<'src> {
     name: &str,
     name_sr: SourceRange,
   ) -> CompilerResult<VariableIdentifier> {
-    let id = self.new_global_id();
-    self.global_variables.insert(name.to_string(), id);
+    let id = GlobalVarId::relative(self.module_global_variables_types.len() as u32);
+    self.declare_global(name, name_sr, id.into())?;
+    self.module_global_variables_types.push(TypeId::UNKNOWN);
     Ok(VariableIdentifier::Global(id))
   }
 
@@ -179,9 +173,10 @@ impl<'src> Environment<'src> {
     if self.is_local_in_current_scope(name) {
       Err(parser_err::same_scope_name_redeclaration(name_sr, name))
     } else if self.in_global_scope() {
-      self
-        .declare_global(name, name_sr, false)
-        .map(VariableIdentifier::Global)
+      let id = GlobalVarId::relative(self.module_global_variables_types.len() as u32).into_public();
+      self.declare_global(name, name_sr, id.into())?;
+      self.module_global_variables_types.push(TypeId::UNKNOWN);
+      Ok(VariableIdentifier::Global(id))
     } else {
       if self.last_local_id == u8::MAX {
         return Err(parser_err::too_many_local_names(name_sr));
@@ -254,16 +249,13 @@ impl<'src> Environment<'src> {
     Ok(())
   }
 
-  // TODO: move this functionality out of here
   pub fn declare_extern_function(
     &mut self,
     name: &str,
     name_sr: SourceRange,
   ) -> CompilerResult<ExternId> {
-    self.ensure_name_available(name, name_sr)?;
-    let id = ExternId::relative(self.module_extern_functions_count as u32).into_public();
-    self.module_extern_functions_count += 1;
-    self.extern_functions.insert(name.to_string(), id);
+    let id = ExternId::relative(self.extern_function_types.len() as u32).into_public();
+    self.declare_global(name, name_sr, GlobalIdentifier::ExternFunction(id))?;
     self.extern_function_types.push(TypeId::UNKNOWN);
     Ok(id)
   }
@@ -272,39 +264,25 @@ impl<'src> Environment<'src> {
     let module_id = self.global_env.get_module_id(name, name_sr)?;
     let module = self.global_env.get_module(module_id);
     // FIXME: does not check for double declarations
-    self.global_variables.extend(
-      module
-        .public_global_variables
-        .iter()
-        .map(|(k, v)| (k.clone(), *v)),
-    );
-
-    self.extern_functions.extend(
-      module
-        .public_extern_functions
-        .iter()
-        .map(|(k, v)| (k.clone(), *v)),
-    );
+    self
+      .global_names
+      .extend(module.global_names.iter().map(|(k, v)| (k.clone(), *v)));
 
     Ok(module_id)
   }
 
   pub fn new(global_env: &'src GlobalEnv) -> Self {
     Self {
-      global_variables: HashMap::new(),
       global_env,
-      module_globals_count: 0,
 
-      module_global_variables_types: Vec::new(),
-
-      names_in_current_scope: 0,
-      last_local_id: 0,
       locals: Vec::new(),
       scope_depth: 0,
-
+      last_local_id: 0,
+      names_in_current_scope: 0,
       functions_declaration_stack: Vec::new(),
-      extern_functions: HashMap::new(),
-      module_extern_functions_count: 0,
+
+      global_names: HashMap::new(),
+      module_global_variables_types: Vec::new(),
       extern_function_types: Vec::new(),
     }
   }

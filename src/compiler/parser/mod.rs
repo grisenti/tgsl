@@ -10,10 +10,8 @@ use super::errors::parser_err;
 use super::errors::CompilerError;
 use super::errors::CompilerResult;
 use super::global_env::GlobalEnv;
-use super::identifier::ExternId;
-use super::identifier::GlobalVarId;
+use super::identifier::GlobalIdentifier;
 use super::identifier::Identifier;
-use super::identifier::ModuleId;
 use super::identifier::VariableIdentifier;
 use super::lexer::*;
 use super::types::type_map::TypeMap;
@@ -31,10 +29,8 @@ enum ParserState {
 pub struct ParsedModule {
   pub module_name: Option<String>,
   pub ast: AST,
-  pub globals: HashMap<String, GlobalVarId>,
-  pub module_global_types: Vec<TypeId>,
-  pub globals_count: u16,
-  pub extern_functions: HashMap<String, ExternId>,
+  pub global_names: HashMap<String, GlobalIdentifier>,
+  pub module_global_variable_types: Vec<TypeId>,
   pub module_extern_functions_types: Vec<TypeId>,
 }
 
@@ -319,10 +315,8 @@ impl<'parsing> Parser<'parsing> {
       Ok(ParsedModule {
         module_name,
         ast: parser.ast,
-        globals: parser.env.global_variables,
-        module_global_types: parser.env.module_global_variables_types,
-        globals_count: parser.env.module_globals_count,
-        extern_functions: parser.env.extern_functions,
+        global_names: parser.env.global_names,
+        module_global_variable_types: parser.env.module_global_variables_types,
         module_extern_functions_types: parser.env.extern_function_types,
       })
     } else {

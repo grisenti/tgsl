@@ -79,5 +79,32 @@ impl From<ExternId> for Identifier {
   }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
+pub enum GlobalIdentifier {
+  Variable(GlobalVarId),
+  ExternFunction(ExternId),
+}
+
+impl From<GlobalIdentifier> for Identifier {
+  fn from(value: GlobalIdentifier) -> Self {
+    match value {
+      GlobalIdentifier::Variable(id) => VariableIdentifier::Global(id).into(),
+      GlobalIdentifier::ExternFunction(id) => Identifier::ExternFunction(id),
+    }
+  }
+}
+
+impl From<ExternId> for GlobalIdentifier {
+  fn from(value: ExternId) -> Self {
+    Self::ExternFunction(value)
+  }
+}
+
+impl From<GlobalVarId> for GlobalIdentifier {
+  fn from(value: GlobalVarId) -> Self {
+    Self::Variable(value)
+  }
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub struct ModuleId(pub u16);
