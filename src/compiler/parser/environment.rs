@@ -3,7 +3,9 @@ use std::collections::hash_map::Entry;
 use crate::compiler::{
   errors::ge_err,
   global_env::GlobalEnv,
-  identifier::{ExternId, GlobalIdentifier, GlobalVarId, Identifier, ModuleId, VariableIdentifier},
+  identifier::{
+    ExternId, GlobalIdentifier, GlobalVarId, Identifier, ModuleId, StructId, VariableIdentifier,
+  },
 };
 
 use super::*;
@@ -38,6 +40,7 @@ pub struct Environment<'src> {
   pub global_names: HashMap<String, GlobalIdentifier>,
   pub module_global_variables_types: Vec<TypeId>,
   pub extern_function_types: Vec<TypeId>,
+  pub module_struct_types: Vec<TypeId>,
 }
 
 impl<'src> Environment<'src> {
@@ -142,6 +145,15 @@ impl<'src> Environment<'src> {
     }
   }
 
+  pub fn get_struct_id(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<StructId> {
+    let id = self.global_names.get(name).copied();
+    if let Some(GlobalIdentifier::Struct(id)) = id {
+      Ok(id)
+    } else {
+      panic!();
+    }
+  }
+
   pub fn define_global_function(
     &mut self,
     name: &str,
@@ -163,6 +175,13 @@ impl<'src> Environment<'src> {
     self.declare_global(name, name_sr, id.into())?;
     self.module_global_variables_types.push(TypeId::UNKNOWN);
     Ok(VariableIdentifier::Global(id))
+  }
+
+  pub fn declare_struct(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<StructId> {
+    let id = StructId::relative(self.module_struct_types.len() as u32).into_public();
+    self.declare_global(name, name_sr, id.into())?;
+    self.module_struct_types.push(TypeId::UNKNOWN);
+    Ok(id)
   }
 
   pub fn define_variable(
@@ -284,6 +303,7 @@ impl<'src> Environment<'src> {
       global_names: HashMap::new(),
       module_global_variables_types: Vec::new(),
       extern_function_types: Vec::new(),
+      module_struct_types: Vec::new(),
     }
   }
 }

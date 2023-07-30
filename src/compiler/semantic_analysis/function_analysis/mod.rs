@@ -36,6 +36,7 @@ pub struct FunctionAnalizer<'analysis> {
   global_types: GlobalTypes<'analysis>,
   global_variables_types: &'analysis mut [TypeId],
   extern_function_types: &'analysis mut [TypeId],
+  struct_types: &'analysis mut [TypeId],
   declaration_info: Option<SourceRange>,
 }
 
@@ -94,6 +95,13 @@ impl<'analysis> FunctionAnalizer<'analysis> {
         unsafe { self.code.push_constant(ConstantValue::ExternId(ext_id)) };
         if ext_id.is_relative() {
           self.extern_function_types[ext_id.get_id() as usize]
+        } else {
+          self.global_types.get_type(id)
+        }
+      }
+      Identifier::Struct(struct_id) => {
+        if struct_id.is_relative() {
+          self.struct_types[struct_id.get_id() as usize]
         } else {
           self.global_types.get_type(id)
         }
@@ -236,6 +244,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       self.global_env,
       self.global_variables_types,
       self.extern_function_types,
+      self.struct_types,
     );
     unsafe {
       self.code.push_function(result.code);
@@ -249,6 +258,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
     global_env: &'analysis mut SemAState,
     variable_types: &'analysis mut [TypeId],
     extern_function_types: &'analysis mut [TypeId],
+    struct_types: &'analysis mut [TypeId],
   ) -> FunctionAnalysisResult {
     let mut analizer = Self {
       captures: function_info.captures,
@@ -263,6 +273,7 @@ impl<'analysis> FunctionAnalizer<'analysis> {
       type_map: analysis_parameters.type_map,
       global_types: analysis_parameters.global_types,
       global_variables_types: variable_types,
+      struct_types,
       extern_function_types,
       ast: analysis_parameters.ast,
     };

@@ -12,6 +12,7 @@ use super::errors::CompilerResult;
 use super::global_env::GlobalEnv;
 use super::identifier::GlobalIdentifier;
 use super::identifier::Identifier;
+use super::identifier::StructId;
 use super::identifier::VariableIdentifier;
 use super::lexer::*;
 use super::types::type_map::TypeMap;
@@ -32,6 +33,7 @@ pub struct ParsedModule {
   pub global_names: HashMap<String, GlobalIdentifier>,
   pub module_global_variable_types: Vec<TypeId>,
   pub module_extern_functions_types: Vec<TypeId>,
+  pub module_struct_types: Vec<TypeId>,
 }
 
 pub struct Parser<'parsing> {
@@ -114,6 +116,16 @@ impl<'parsing> Parser<'parsing> {
       Err(err) => {
         self.emit_error(err);
         VariableIdentifier::Invalid
+      }
+    }
+  }
+
+  fn get_struct_id(&mut self, name: &str, name_sr: SourceRange) -> StructId {
+    match self.env.get_struct_id(name, name_sr) {
+      Ok(id) => id,
+      Err(err) => {
+        self.emit_error(err);
+        StructId::relative(0)
       }
     }
   }
@@ -232,7 +244,7 @@ impl<'parsing> Parser<'parsing> {
           "bool" => TypeId::BOOL,
           other => {
             let struct_sr = self.lex.previous_token_range();
-            let struct_id = self.get_variable_id(other, struct_sr);
+            let struct_id = self.get_struct_id(other, struct_sr);
             self.type_map.get_or_add(Type::Struct(struct_id))
           }
         }
@@ -318,6 +330,7 @@ impl<'parsing> Parser<'parsing> {
         global_names: parser.env.global_names,
         module_global_variable_types: parser.env.module_global_variables_types,
         module_extern_functions_types: parser.env.extern_function_types,
+        module_struct_types: parser.env.module_struct_types,
       })
     } else {
       Err(parser.errors)

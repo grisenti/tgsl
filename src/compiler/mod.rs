@@ -60,12 +60,13 @@ impl Compiler {
       GlobalTypes::new(&self.global_env),
       &mut parsed_module.module_global_variable_types,
       &mut parsed_module.module_extern_functions_types,
+      &mut parsed_module.module_struct_types,
       &self.type_map,
     )?;
-    println!("{:?}", parsed_module.ast);
     let extern_functions = Self::module_extern_functions(&parsed_module.global_names);
     let globals_count = parsed_module.module_global_variable_types.len();
     let module_id = self.global_env.export_module(parsed_module);
+    println!("{:?}", &generated_code);
     Ok(CompiledModule {
       module_id,
       globals_count: globals_count as u16,

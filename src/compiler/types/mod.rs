@@ -1,6 +1,6 @@
 use super::{
   ast::Literal,
-  identifier::{Identifier, VariableIdentifier},
+  identifier::{Identifier, StructId, VariableIdentifier},
 };
 
 pub mod type_map;
@@ -11,7 +11,7 @@ pub enum Type {
   Str,
   Num,
   Bool,
-  Struct(VariableIdentifier),
+  Struct(StructId),
   Function {
     parameters: Vec<TypeId>,
     ret: TypeId,

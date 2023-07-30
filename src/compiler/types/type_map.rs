@@ -1,7 +1,7 @@
 use std::collections::{hash_map::Entry, HashMap};
 
 use crate::compiler::{
-  identifier::{Identifier, VariableIdentifier},
+  identifier::{Identifier, StructId, VariableIdentifier},
   types::{Type, TypeId, DEFAULT_TYPEIDS},
 };
 
@@ -28,7 +28,7 @@ impl TypeMap {
 
   pub fn add_struct_type(
     &mut self,
-    struct_id: VariableIdentifier,
+    struct_id: StructId,
     member_types: Vec<TypeId>,
   ) -> (TypeId, TypeId) {
     let struct_type_id = self.get_or_add(Type::Struct(struct_id));

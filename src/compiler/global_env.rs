@@ -1,3 +1,4 @@
+use core::panic;
 use std::collections::HashMap;
 
 use crate::compiler::identifier::VariableIdentifier;
@@ -49,6 +50,7 @@ pub struct GlobalEnv {
   modules: Vec<Module>,
   global_variables_count: u32,
   extern_functions_count: u32,
+  structs_count: u32,
 }
 
 impl GlobalEnv {
@@ -82,6 +84,9 @@ impl GlobalEnv {
         .extend(parsed_module.module_extern_functions_types.iter());
 
       let mut module_names = HashMap::new();
+      let mut exported_variables = 0;
+      let mut exported_extern_functions = 0;
+      let mut exported_structs = 0;
       for (name, id) in parsed_module.global_names {
         match id {
           GlobalIdentifier::Variable(var_id) => {
@@ -89,17 +94,29 @@ impl GlobalEnv {
               let absolute_id =
                 GlobalVarId::absolute(var_id.get_id() + self.global_variables_count);
               module_names.insert(name, GlobalIdentifier::Variable(absolute_id));
+              exported_variables += 1;
             }
           }
           GlobalIdentifier::ExternFunction(ext_id) => {
             if ext_id.is_relative() && ext_id.is_public() {
-              let absolute_id = ExternId::absolute(ext_id.get_id() + self.global_variables_count);
+              let absolute_id = ExternId::absolute(ext_id.get_id() + self.extern_functions_count);
               module_names.insert(name, GlobalIdentifier::ExternFunction(absolute_id));
+              exported_extern_functions += 1;
             }
           }
+          GlobalIdentifier::Struct(struct_id) => {
+            if struct_id.is_relative() && struct_id.is_public() {
+              let absolute_id = GlobalVarId::absolute(struct_id.get_id() + self.structs_count);
+              module_names.insert(name, GlobalIdentifier::Variable(absolute_id));
+              exported_structs += 1;
+            }
+          }
+          _ => panic!(),
         }
       }
-
+      self.global_variables_count += exported_variables;
+      self.extern_functions_count += exported_extern_functions;
+      self.structs_count += exported_structs;
       self.modules.push(Module {
         global_names: module_names,
       });

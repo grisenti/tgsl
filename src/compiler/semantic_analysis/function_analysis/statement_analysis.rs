@@ -1,7 +1,7 @@
 use crate::compiler::{
   ast::{Expr, ExprHandle, StrHandle},
   bytecode::ConstantValue,
-  identifier::{ExternId, VariableIdentifier},
+  identifier::{ExternId, StructId, VariableIdentifier},
   semantic_analysis::{return_analysis::to_conditional, Struct},
 };
 
@@ -101,20 +101,22 @@ impl FunctionAnalizer<'_> {
 
   fn struct_stmt(
     &mut self,
-    id: VariableIdentifier,
+    id: StructId,
+    constructor_id: VariableIdentifier,
     _name_sr: SourceRange,
     member_names: &[StrHandle],
     member_types: &[TypeId],
     constructor_type: TypeId,
+    struct_type: TypeId,
   ) {
-    self.generate_constructor(id, member_types.len(), constructor_type);
-    self.global_env.structs.insert(
-      id,
-      Struct {
-        member_names: member_names.to_vec(),
-        member_types: member_types.to_vec(),
-      },
-    );
+    self.struct_types[id.get_id() as usize] = struct_type;
+    self.generate_constructor(constructor_id, member_types.len(), constructor_type);
+    self.global_env.structs.push(Struct {
+      member_names: member_names.to_vec(),
+      member_types: member_types.to_vec(),
+      constructor_type,
+      constructor_id,
+    });
   }
 
   fn if_stmt(
@@ -218,9 +220,18 @@ impl FunctionAnalizer<'_> {
         member_names,
         member_types,
         constructor_type,
-        ..
+        constructor_id,
+        struct_type,
       } => {
-        self.struct_stmt(*id, *name_sr, member_names, member_types, *constructor_type);
+        self.struct_stmt(
+          *id,
+          *constructor_id,
+          *name_sr,
+          member_names,
+          member_types,
+          *constructor_type,
+          *struct_type,
+        );
         None
       }
       Stmt::IfBranch {

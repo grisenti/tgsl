@@ -2,7 +2,7 @@ use crate::{
   check_error,
   compiler::{
     errors::SourceRangeProvider,
-    identifier::{ExternId, VariableIdentifier},
+    identifier::{ExternId, StructId, VariableIdentifier},
   },
   return_if_err,
 };
@@ -275,9 +275,13 @@ impl<'src> Parser<'src> {
     let (name, name_sr) = self.match_id_or_err();
     let name_id = check_error!(
       self,
-      self.env.define_global_function(name, name_sr),
-      VariableIdentifier::Invalid
+      self.env.declare_struct(name, name_sr),
+      StructId::relative(0)
     );
+    let constructor_id = self
+      .env
+      .declare_global_function(&format!("constructor<{name}>"), SourceRange::EMPTY)
+      .unwrap();
     self.match_or_err(Token::Basic('{'));
     let mut member_names = Vec::new();
     let mut member_types = Vec::new();
@@ -298,6 +302,7 @@ impl<'src> Parser<'src> {
       member_names,
       member_types,
       constructor_type,
+      constructor_id,
       struct_type,
     })
   }

@@ -18,12 +18,14 @@ mod return_analysis;
 struct Struct {
   member_names: Vec<StrHandle>,
   member_types: Vec<TypeId>,
+  constructor_type: TypeId,
+  constructor_id: VariableIdentifier,
 }
 
 type StructMap = HashMap<VariableIdentifier, Struct>;
 
 struct SemAState {
-  structs: StructMap,
+  structs: Vec<Struct>,
   errors: Vec<CompilerError>,
 }
 
@@ -41,11 +43,12 @@ impl SemanticAnalizer {
     global_types: GlobalTypes,
     module_global_variable_types: &mut [TypeId],
     module_extern_functions_types: &mut [TypeId],
+    module_struct_types: &mut [TypeId],
     type_map: &TypeMap,
   ) -> Result<BytecodeBuilder, Vec<CompilerError>> {
     let program = ast.get_program();
     let mut global_env = SemAState {
-      structs: HashMap::new(),
+      structs: Vec::new(),
       errors: Vec::new(),
     };
     let FunctionAnalysisResult { code, .. } = FunctionAnalizer::analyze(
@@ -59,6 +62,7 @@ impl SemanticAnalizer {
       &mut global_env,
       module_global_variable_types,
       module_extern_functions_types,
+      module_struct_types,
     );
     if global_env.errors.is_empty() {
       Ok(code)

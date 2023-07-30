@@ -5,8 +5,9 @@ use crate::compiler::{
   bytecode::{ConstantValue, OpCode},
   codegen::Address,
   errors::sema_err,
-  identifier::{Identifier, VariableIdentifier},
+  identifier::{Identifier, StructId, VariableIdentifier},
   lexer::SourceRange,
+  semantic_analysis::Struct,
   types::{Type, TypeId},
 };
 
@@ -48,12 +49,8 @@ enum DotKind {
 }
 
 impl FunctionAnalizer<'_> {
-  fn get_struct_member(
-    &mut self,
-    struct_id: VariableIdentifier,
-    name: StrHandle,
-  ) -> Option<(usize, TypeId)> {
-    let s = self.global_env.structs[&struct_id].clone();
+  fn get_struct_member(&mut self, struct_id: StructId, name: StrHandle) -> Option<(usize, TypeId)> {
+    let s = self.global_env.structs[struct_id.get_id() as usize].clone();
     let name = name.get(self.ast);
     if let Some((_, member_type)) = s
       .member_names
@@ -97,10 +94,18 @@ impl FunctionAnalizer<'_> {
     match *expr.get(self.ast) {
       Expr::Identifier { id, .. } => {
         let typeid = self.get_identifier(id);
-        if let Type::Function { .. } = self.get_type(typeid) {
-          CallType::Call(typeid)
-        } else {
-          CallType::Other(typeid)
+        match self.get_type(typeid) {
+          Type::Function { .. } => CallType::Call(typeid),
+          Type::Struct(id) => {
+            let Struct {
+              constructor_id,
+              constructor_type,
+              ..
+            } = self.global_env.structs[id.get_id() as usize];
+            unsafe { self.code.get_variable(constructor_id) };
+            CallType::Call(constructor_type)
+          }
+          _ => CallType::Other(typeid),
         }
       }
       Expr::Dot {

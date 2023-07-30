@@ -1,5 +1,5 @@
 use crate::compiler::{
-  identifier::{ExternId, Identifier, ModuleId, VariableIdentifier},
+  identifier::{ExternId, Identifier, ModuleId, StructId, VariableIdentifier},
   lexer::SourceRange,
   types::TypeId,
 };
@@ -57,9 +57,10 @@ pub enum Stmt {
     return_sr: SourceRange,
   },
   Struct {
-    id: VariableIdentifier,
+    id: StructId,
     name_sr: SourceRange,
     constructor_type: TypeId,
+    constructor_id: VariableIdentifier,
     struct_type: TypeId,
     member_names: Vec<StrHandle>,
     member_types: Vec<TypeId>,

@@ -45,6 +45,7 @@ macro_rules! define_identifier {
 
 define_identifier!(GlobalVarId);
 define_identifier!(ExternId);
+define_identifier!(StructId);
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub enum VariableIdentifier {
@@ -58,6 +59,7 @@ pub enum VariableIdentifier {
 pub enum Identifier {
   Variable(VariableIdentifier),
   ExternFunction(ExternId),
+  Struct(StructId),
   Invalid,
 }
 
@@ -79,10 +81,18 @@ impl From<ExternId> for Identifier {
   }
 }
 
+impl From<StructId> for Identifier {
+  fn from(value: StructId) -> Self {
+    Identifier::Struct(value)
+  }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub enum GlobalIdentifier {
   Variable(GlobalVarId),
   ExternFunction(ExternId),
+  Struct(StructId),
+  Invalid,
 }
 
 impl From<GlobalIdentifier> for Identifier {
@@ -90,6 +100,8 @@ impl From<GlobalIdentifier> for Identifier {
     match value {
       GlobalIdentifier::Variable(id) => VariableIdentifier::Global(id).into(),
       GlobalIdentifier::ExternFunction(id) => Identifier::ExternFunction(id),
+      GlobalIdentifier::Struct(id) => Identifier::Struct(id),
+      _ => panic!(),
     }
   }
 }
@@ -103,6 +115,12 @@ impl From<ExternId> for GlobalIdentifier {
 impl From<GlobalVarId> for GlobalIdentifier {
   fn from(value: GlobalVarId) -> Self {
     Self::Variable(value)
+  }
+}
+
+impl From<StructId> for GlobalIdentifier {
+  fn from(value: StructId) -> Self {
+    Self::Struct(value)
   }
 }
 

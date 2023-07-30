@@ -1,11 +1,11 @@
 import assert;
 
-struct A {
-	b: B,
-}
-
 struct B {
 	a: num,
+}
+
+struct A {
+	b: B,
 }
 
 var x = A(B(1));

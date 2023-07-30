@@ -173,7 +173,7 @@ impl StmtHandle {
           .collect::<Vec<String>>();
         object! {
           "Struct": {
-            "id": *id,
+            "id": format!("{:?}", id),
             "member_names": member_names,
             "member_types": member_types.as_slice()
           }
