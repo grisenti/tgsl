@@ -55,6 +55,12 @@ pub enum VariableIdentifier {
   Invalid,
 }
 
+impl From<GlobalVarId> for VariableIdentifier {
+  fn from(value: GlobalVarId) -> Self {
+    VariableIdentifier::Global(value)
+  }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub enum Identifier {
   Variable(VariableIdentifier),
