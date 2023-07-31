@@ -20,6 +20,8 @@ mod lexer;
 mod parser;
 mod types;
 
+use ast::json::ASTJSONPrinter;
+
 pub struct CompiledModule {
   pub module_id: Option<ModuleId>,
   pub globals_count: u16,
@@ -54,7 +56,7 @@ impl Compiler {
 
   pub fn compile(&mut self, source: &str) -> Result<AST, Vec<CompilerError>> {
     let parsed_module = Parser::parse(source, &mut self.type_map, &self.global_env)?;
-    println!("{:?}", &parsed_module.ast);
+    println!("{}", ASTJSONPrinter::print_to_string(&parsed_module.ast));
     Ok(parsed_module.ast)
 
     //let extern_functions = Self::module_extern_functions(&parsed_module.global_names);

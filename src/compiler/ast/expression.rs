@@ -1,12 +1,6 @@
 use std::fmt::Display;
 
-use crate::compiler::{
-  identifier::{Identifier, VariableIdentifier},
-  lexer::{SourceRange, Token},
-  types::TypeId,
-};
-
-use super::{ExprHandle, StmtHandle, StrHandle, AST};
+use crate::compiler::lexer::Token;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Operator {
@@ -48,79 +42,132 @@ pub fn to_operator(token: Token) -> Operator {
   }
 }
 
-#[derive(Debug, Clone)]
-pub enum Expr {
-  LiteralString {
+pub mod expr {
+  use crate::compiler::{
+    ast::{ExprHandle, StmtHandle, StrHandle},
+    identifier::{Identifier, VariableIdentifier},
+    lexer::SourceRange,
+    types::TypeId,
+  };
+
+  use super::{Expr, Operator};
+
+  macro_rules! expr_node {
+  ($name:tt, $($member:ident : $t:ty),+) => {
+    #[derive(Debug, Clone)]
+		pub struct $name {
+  		$(pub $member: $t),+
+		}
+
+    impl From<$name> for Expr {
+      fn from(value: $name) -> Self {
+        Self::$name(value)
+      }
+    }
+  };
+}
+
+  expr_node!(LiteralString,
     handle: StrHandle,
-    value_sr: SourceRange,
-  },
-  LiteralNumber {
+    value_sr: SourceRange
+  );
+
+  expr_node!(LiteralNumber,
     value: f64,
-    value_sr: SourceRange,
-  },
-  LiteralBool {
+    value_sr: SourceRange
+  );
+
+  expr_node!(LiteralBool,
     value: bool,
-    value_sr: SourceRange,
-  },
-  Identifier {
+    value_sr: SourceRange
+  );
+
+  expr_node!(Id,
     id: Identifier,
     id_type: TypeId,
-    id_sr: SourceRange,
-  },
-  Paren(ExprHandle),
-  Assignment {
+    id_sr: SourceRange
+  );
+
+  expr_node!(Paren,
+    inner: ExprHandle
+  );
+
+  expr_node!(Assignment,
     id: VariableIdentifier,
     type_id: TypeId,
     id_sr: SourceRange,
-    value: ExprHandle,
-  },
-  Binary {
+    value: ExprHandle
+  );
+
+  expr_node!(Binary,
     left: ExprHandle,
     operator: Operator,
     operator_sr: SourceRange,
     right: ExprHandle,
-    expr_type: TypeId,
-  },
-  Logical {
+    expr_type: TypeId
+  );
+
+  expr_node!(Logical,
     left: ExprHandle,
     operator: Operator,
     operator_sr: SourceRange,
     right: ExprHandle,
-    expr_type: TypeId,
-  },
-  Unary {
+    expr_type: TypeId
+  );
+
+  expr_node!(Unary,
     operator: Operator,
     operator_sr: SourceRange,
     right: ExprHandle,
-    expr_type: TypeId,
-  },
-  Lambda {
+    expr_type: TypeId
+  );
+
+  expr_node!(Lambda,
     parameters_sr: SourceRange,
     captures: Vec<VariableIdentifier>,
     parameter_types: Vec<TypeId>,
     return_type: TypeId,
     function_type_id: TypeId,
-    body: Vec<StmtHandle>,
-  },
-  FnCall {
+    body: Vec<StmtHandle>
+  );
+
+  expr_node!(FnCall,
     func: ExprHandle,
     call_sr: SourceRange,
     arguments: Vec<ExprHandle>,
-    expr_type: TypeId,
-  },
-  // MemberGet {},
-  // DotCall {},
-  // MemberSet {},
-  Dot {
+    expr_type: TypeId
+  );
+
+  expr_node!(Dot,
     lhs: ExprHandle,
     rhs_name: StrHandle,
     rhs_id: Option<VariableIdentifier>,
-    rhs_sr: SourceRange,
-  },
-  Set {
+    rhs_sr: SourceRange
+  );
+
+  expr_node!(Set,
     object: ExprHandle,
     member_name: StrHandle,
     member_name_sr: SourceRange,
-    value: ExprHandle,
-  },
+    value: ExprHandle
+  );
+}
+
+use expr::*;
+
+#[derive(Debug, Clone)]
+pub enum Expr {
+  LiteralString(LiteralString),
+  LiteralNumber(LiteralNumber),
+  LiteralBool(LiteralBool),
+  Id(Id),
+  Paren(Paren),
+  Assignment(Assignment),
+  Binary(Binary),
+  Logical(Logical),
+  Unary(Unary),
+  Lambda(Lambda),
+  FnCall(FnCall),
+  Dot(Dot),
+  Set(Set),
 }

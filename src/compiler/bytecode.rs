@@ -1,5 +1,5 @@
 use super::{
-  ast::Operator,
+  ast::expression::Operator,
   identifier::{ExternId, GlobalVarId},
 };
 use core::fmt::Debug;

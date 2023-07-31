@@ -194,7 +194,7 @@ pub mod ge_err {
 }
 
 pub mod sema_err {
-  use crate::compiler::ast::Operator;
+  use crate::compiler::ast::expression::Operator;
 
   use super::{CompilerError, SourceRangeProvider};
 

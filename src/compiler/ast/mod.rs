@@ -1,13 +1,14 @@
-mod debug_print;
-mod expression;
+pub mod expression;
 mod handle;
-mod statement;
+pub mod json;
+pub mod statement;
+pub mod visitor;
 
 use std::default::Default;
 
-pub use expression::*;
 pub use handle::*;
-pub use statement::*;
+
+use self::{expression::Expr, statement::Stmt};
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Default)]
@@ -23,13 +24,13 @@ impl AST {
     Self::default()
   }
 
-  pub fn add_expression(&mut self, expr: Expr) -> ExprHandle {
-    self.expressions.push(expr);
+  pub fn add_expression<E: Into<Expr>>(&mut self, expr: E) -> ExprHandle {
+    self.expressions.push(expr.into());
     ExprHandle::new((self.expressions.len() - 1) as u32)
   }
 
-  pub fn add_statement(&mut self, stmt: Stmt) -> StmtHandle {
-    self.statements.push(stmt);
+  pub fn add_statement<S: Into<Stmt>>(&mut self, stmt: S) -> StmtHandle {
+    self.statements.push(stmt.into());
     StmtHandle::new((self.statements.len() - 1) as u32)
   }
 

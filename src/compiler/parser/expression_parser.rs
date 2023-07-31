@@ -1,8 +1,7 @@
-use std::f32::consts::E;
-
 use crate::return_if_err;
 
 use super::*;
+use ast::expression::*;
 
 const MAX_BIN_OP_PRECEDENCE: usize = 4;
 
@@ -39,7 +38,7 @@ impl<'src> Parser<'src> {
         let value_sr = self.lex.previous_token_range();
         self.advance();
         ParsedExpression {
-          handle: self.ast.add_expression(Expr::LiteralNumber {
+          handle: self.ast.add_expression(expr::LiteralNumber {
             value: num,
             value_sr,
           }),
@@ -53,7 +52,7 @@ impl<'src> Parser<'src> {
         ParsedExpression {
           handle: self
             .ast
-            .add_expression(Expr::LiteralString { handle, value_sr }),
+            .add_expression(expr::LiteralString { handle, value_sr }),
           type_id: TypeId::STR,
         }
       }
@@ -64,7 +63,7 @@ impl<'src> Parser<'src> {
         ParsedExpression {
           handle: self
             .ast
-            .add_expression(Expr::LiteralBool { value, value_sr }),
+            .add_expression(expr::LiteralBool { value, value_sr }),
           type_id: TypeId::BOOL,
         }
       }
@@ -73,9 +72,7 @@ impl<'src> Parser<'src> {
         let (id, id_type) = self.get_id(id, id_sr);
         self.advance();
         ParsedExpression {
-          handle: self
-            .ast
-            .add_expression(Expr::Identifier { id, id_type, id_sr }),
+          handle: self.ast.add_expression(expr::Id { id, id_type, id_sr }),
           type_id: id_type,
         }
       }
@@ -84,9 +81,9 @@ impl<'src> Parser<'src> {
         let parsed_expression = self.parse_expression();
         self.match_or_err(Token::Basic(')'));
         ParsedExpression {
-          handle: self
-            .ast
-            .add_expression(Expr::Paren(parsed_expression.handle)),
+          handle: self.ast.add_expression(expr::Paren {
+            inner: parsed_expression.handle,
+          }),
           type_id: parsed_expression.type_id,
         }
       }
@@ -137,7 +134,7 @@ impl<'src> Parser<'src> {
           let call_end_sr = self.lex.previous_token_range();
           self.match_or_err(Token::Basic(')'));
           let call_sr = SourceRange::combine(call_start_sr, call_end_sr);
-          expr = self.ast.add_expression(Expr::FnCall {
+          expr = self.ast.add_expression(expr::FnCall {
             func: expr,
             call_sr,
             arguments: arguments.into_iter().map(|expr| expr.handle).collect(),
@@ -151,7 +148,7 @@ impl<'src> Parser<'src> {
             let rhs_id = self.get_opt_name(rhs_name, rhs_sr);
             self.advance();
             let rhs_name = self.ast.add_str(rhs_name);
-            expr = self.ast.add_expression(Expr::Dot {
+            expr = self.ast.add_expression(expr::Dot {
               lhs: expr,
               rhs_id,
               rhs_name,
@@ -174,7 +171,7 @@ impl<'src> Parser<'src> {
     if let Some((op, op_sr)) = self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')]) {
       let right = self.parse_call();
       ParsedExpression {
-        handle: self.ast.add_expression(Expr::Unary {
+        handle: self.ast.add_expression(expr::Unary {
           operator: to_operator(op),
           operator_sr: op_sr,
           right: right.handle,
@@ -199,7 +196,7 @@ impl<'src> Parser<'src> {
       } = self.parse_binary_operation(prec + 1);
       while let Some((op, op_sr)) = self.matches_alternatives(BIN_OP_PRECEDENCE[prec]) {
         let right = self.parse_binary_operation(prec + 1);
-        expr = self.ast.add_expression(Expr::Binary {
+        expr = self.ast.add_expression(expr::Binary {
           left: expr,
           operator: to_operator(op),
           operator_sr: op_sr,
@@ -226,7 +223,7 @@ impl<'src> Parser<'src> {
       } = self.parse_logical_operation(prec + 1);
       while let Some((op, op_sr)) = self.matches_alternatives(LOGICAL_OP_PRECEDENCE[prec]) {
         let right = self.parse_logical_operation(prec + 1);
-        expr = self.ast.add_expression(Expr::Logical {
+        expr = self.ast.add_expression(expr::Logical {
           left: expr,
           operator: to_operator(op),
           operator_sr: op_sr,
@@ -255,10 +252,10 @@ impl<'src> Parser<'src> {
       } = self.parse_logical_operation(0);
 
       match lhs.get(&self.ast) {
-        &Expr::Identifier { id, id_sr, .. } => {
+        &Expr::Id(expr::Id { id, id_sr, .. }) => {
           if let Identifier::Variable(id) = id {
             ParsedExpression {
-              handle: self.ast.add_expression(Expr::Assignment {
+              handle: self.ast.add_expression(expr::Assignment {
                 id,
                 id_sr,
                 value: rhs,
@@ -271,13 +268,13 @@ impl<'src> Parser<'src> {
             panic!("cannot assing to non-variable")
           }
         }
-        &Expr::Dot {
+        &Expr::Dot(expr::Dot {
           lhs: object,
           rhs_name: name,
           rhs_sr,
           ..
-        } => ParsedExpression {
-          handle: self.ast.add_expression(Expr::Set {
+        }) => ParsedExpression {
+          handle: self.ast.add_expression(expr::Set {
             object,
             member_name: name,
             member_name_sr: rhs_sr,
@@ -323,7 +320,7 @@ impl<'src> Parser<'src> {
     let parameters_sr = SourceRange::combine(parameters_sr_start, parameters_sr_end);
 
     ParsedExpression {
-      handle: self.ast.add_expression(Expr::Lambda {
+      handle: self.ast.add_expression(expr::Lambda {
         parameters_sr,
         captures,
         parameter_types,
@@ -351,7 +348,7 @@ mod test {
   use json::{array, JsonValue};
 
   use crate::compiler::{
-    ast::AST,
+    ast::{json::ASTJSONPrinter, visitor::ExprVisitor, AST},
     errors::CompilerError,
     global_env::GlobalEnv,
     lexer::{Lexer, SourceRange, Token},
@@ -381,11 +378,12 @@ mod test {
       state: ParserState::NoErrors,
     };
     parser.advance();
-    let handle = parser.parse_expression();
+    let expr = parser.parse_expression();
     if !parser.errors.is_empty() {
       Err(parser.errors)
     } else {
-      Ok(handle.to_json(&parser.ast))
+      let mut printer = ASTJSONPrinter {};
+      Ok(printer.visit_expr(&parser.ast, expr.handle))
     }
   }
 
@@ -396,19 +394,19 @@ mod test {
   #[test]
   fn literal_num() {
     let literal = parse_expression("1").expect("parsing error");
-    assert_eq!(literal["Literal"]["value"], "1");
+    assert_eq!(literal["LiteralNumber"]["value"], "1");
   }
 
   #[test]
   fn literal_string() {
     let literal = parse_expression("\"str\"").expect("parsing error");
-    assert_eq!(literal["Literal"]["value"], "\"str\"");
+    assert_eq!(literal["LiteralString"]["value"], "\"str\"");
   }
 
   #[test]
   fn literal_in_parenthesis() {
     let literal = parse_expression("(1)").expect("parsing error");
-    assert_eq!(literal["Literal"]["value"], "1");
+    assert_eq!(literal["Paren"]["expr"]["LiteralNumber"]["value"], "1");
   }
 
   #[test]
@@ -446,8 +444,11 @@ mod test {
   fn logical_op() {
     let logical_op = parse_expression("1 and 1").expect("parsing error");
     assert_eq!(logical_op["Logical"]["operator"], "and");
-    assert_eq!(logical_op["Logical"]["left"]["Literal"]["value"], "1");
-    assert_eq!(logical_op["Logical"]["right"]["Literal"]["value"], "1");
+    assert_eq!(logical_op["Logical"]["left"]["LiteralNumber"]["value"], "1");
+    assert_eq!(
+      logical_op["Logical"]["right"]["LiteralNumber"]["value"],
+      "1"
+    );
   }
 
   #[test]
@@ -464,7 +465,10 @@ mod test {
   fn assign_to_rvalue() {
     let assignment =
       parse_expression_with_declared_names("id = 2", &["id"]).expect("parsing error");
-    assert_eq!(assignment["Assignment"]["value"]["Literal"]["value"], "2");
+    assert_eq!(
+      assignment["Assignment"]["value"]["LiteralNumber"]["value"],
+      "2"
+    );
   }
 
   #[test]

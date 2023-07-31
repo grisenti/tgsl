@@ -9,6 +9,8 @@ use crate::{
 
 use super::*;
 
+use ast::statement::*;
+
 impl<'src> Parser<'src> {
   pub(super) fn parse_unscoped_block(&mut self) -> Vec<StmtHandle> {
     return_if_err!(self, vec![]);
@@ -43,12 +45,12 @@ impl<'src> Parser<'src> {
     }
     let locals = self.env.pop_scope();
     self.match_or_err(Token::Basic('}'));
-    self.ast.add_statement(Stmt::Block { statements, locals })
+    self.ast.add_statement(stmt::Block { statements, locals })
   }
 
   fn parse_expr_stmt(&mut self) -> StmtHandle {
     let expr = self.parse_expression();
-    let ret = self.ast.add_statement(Stmt::Expr(expr.handle));
+    let ret = self.ast.add_statement(stmt::StmtExpr { expr: expr.handle });
     self.match_or_err(Token::Basic(';'));
     ret
   }
@@ -66,7 +68,7 @@ impl<'src> Parser<'src> {
     } else {
       None
     };
-    self.ast.add_statement(Stmt::IfBranch {
+    self.ast.add_statement(stmt::IfBranch {
       if_sr,
       condition: condition.handle,
       true_branch,
@@ -82,7 +84,7 @@ impl<'src> Parser<'src> {
     let condition = self.parse_expression();
     self.match_or_err(Token::Basic(')'));
     let loop_body = self.parse_statement();
-    self.ast.add_statement(Stmt::While {
+    self.ast.add_statement(stmt::While {
       while_sr,
       condition: condition.handle,
       loop_body,
@@ -101,18 +103,20 @@ impl<'src> Parser<'src> {
     let after = self.parse_expression();
     self.match_or_err(Token::Basic(')'));
     let body = self.parse_statement();
-    let while_finally = self.ast.add_statement(Stmt::Expr(after.handle));
-    let while_body = self.ast.add_statement(Stmt::Block {
+    let while_finally = self
+      .ast
+      .add_statement(stmt::StmtExpr { expr: after.handle });
+    let while_body = self.ast.add_statement(stmt::Block {
       statements: vec![body, while_finally],
       locals: 0,
     });
-    let while_loop = self.ast.add_statement(Stmt::While {
+    let while_loop = self.ast.add_statement(stmt::While {
       while_sr: for_sr,
       condition: condition.handle,
       loop_body: while_body,
     });
     let _locals = self.env.pop_scope(); // for statement scope
-    self.ast.add_statement(Stmt::Block {
+    self.ast.add_statement(stmt::Block {
       statements: vec![init, while_loop],
       locals: 0, // FIXME: maybe not 0
     })
@@ -120,10 +124,10 @@ impl<'src> Parser<'src> {
 
   fn parse_loop_break(&mut self) -> StmtHandle {
     assert!(matches!(self.lookahead, Token::Break));
-    let break_sr = self.lex.previous_token_range();
+    let sr = self.lex.previous_token_range();
     self.advance();
     self.match_or_err(Token::Basic(';'));
-    self.ast.add_statement(Stmt::Break(break_sr))
+    self.ast.add_statement(stmt::Break { sr })
   }
 
   fn parse_function_return(&mut self) -> StmtHandle {
@@ -136,7 +140,7 @@ impl<'src> Parser<'src> {
       None
     };
     self.match_or_err(Token::Basic(';'));
-    self.ast.add_statement(Stmt::Return {
+    self.ast.add_statement(stmt::Return {
       expr: expr.map(|expr| expr.handle),
       return_sr,
     })
@@ -168,14 +172,14 @@ impl<'src> Parser<'src> {
     let var_type = self.parse_opt_type_specifier();
     let ret = if self.lookahead == Token::Basic('=') {
       self.advance(); // consume '='
-      Stmt::VarDecl {
+      stmt::VarDecl {
         identifier,
         id_sr,
         var_type,
         expression: Some(self.parse_expression().handle),
       }
     } else {
-      Stmt::VarDecl {
+      stmt::VarDecl {
         identifier,
         var_type,
         id_sr,
@@ -245,7 +249,7 @@ impl<'src> Parser<'src> {
         self.env.declare_global_function(name, name_sr),
         VariableIdentifier::Invalid
       );
-      return self.ast.add_statement(Stmt::FunctionDeclaration {
+      return self.ast.add_statement(stmt::FunctionDeclaration {
         id,
         name_sr,
         parameter_types,
@@ -261,7 +265,7 @@ impl<'src> Parser<'src> {
     let body = self.parse_unscoped_block();
     let captures = self.env.pop_function();
 
-    self.ast.add_statement(Stmt::FunctionDefinition {
+    self.ast.add_statement(stmt::FunctionDefinition {
       id,
       name_sr,
       fn_type,
@@ -299,7 +303,7 @@ impl<'src> Parser<'src> {
     let (struct_type, constructor_type) = self
       .type_map
       .add_struct_type(name_id.into(), member_types.clone());
-    self.ast.add_statement(Stmt::Struct {
+    self.ast.add_statement(stmt::Struct {
       id: name_id,
       name_sr,
       member_names,
@@ -328,7 +332,7 @@ impl<'src> Parser<'src> {
     let parameters = self.parse_function_param_types();
     let ret = self.parse_function_return_type();
     let fn_type = self.type_map.get_or_add(Type::Function { parameters, ret });
-    self.ast.add_statement(Stmt::ExternFunction {
+    self.ast.add_statement(stmt::ExternFunction {
       identifier,
       name_sr,
       fn_type,
@@ -348,7 +352,7 @@ impl<'src> Parser<'src> {
       self.advance();
       self.match_or_err(Token::Basic(';'));
       match self.env.import_module(module_name, module_name_sr) {
-        Ok(module_id) => self.ast.add_statement(Stmt::Import { module_id }),
+        Ok(module_id) => self.ast.add_statement(stmt::Import { module_id }),
         Err(error) => {
           self.emit_error(error);
           StmtHandle::INVALID
@@ -386,7 +390,7 @@ mod test {
   use json::{array, JsonValue};
 
   use crate::compiler::{
-    ast::AST,
+    ast::{json::ASTJSONPrinter, visitor::StmtVisitor, AST},
     errors::CompilerError,
     global_env::GlobalEnv,
     lexer::{Lexer, Token},
@@ -411,7 +415,8 @@ mod test {
     if !parser.errors.is_empty() {
       Err(parser.errors)
     } else {
-      Ok(handle.to_json(&parser.ast))
+      let mut printer = ASTJSONPrinter {};
+      Ok(printer.visit_stmt(&parser.ast, handle))
     }
   }
 
