@@ -16,6 +16,7 @@ struct Local<'src> {
   id: u8,             // local id used to refer to any local variable reachable from this scope
   scope_local_id: u8, // resets to 0 for any new scope
   function_depth: u8,
+  type_id: TypeId,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -66,14 +67,11 @@ impl<'src> Environment<'src> {
       .any(|local| local.name == local_name)
   }
 
-  fn capture(&mut self, local: Local) -> VariableIdentifier {
+  fn capture(&mut self, local: Local) -> (VariableIdentifier, TypeId) {
     let start_depth = self.functions_declaration_stack.len() as u8;
     let target_depth = local.function_depth;
 
-    if start_depth < target_depth {
-      return VariableIdentifier::Invalid;
-    }
-    //assert!(start_depth >= target_depth);
+    assert!(start_depth >= target_depth);
 
     let mut capture_id = VariableIdentifier::Local(local.id);
     let functions = self
@@ -95,12 +93,28 @@ impl<'src> Environment<'src> {
         });
       }
     }
-    capture_id
+    (capture_id, local.type_id)
   }
 
-  fn get_global(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<Identifier> {
+  fn get_global(
+    &mut self,
+    name: &str,
+    name_sr: SourceRange,
+  ) -> CompilerResult<(Identifier, TypeId)> {
     if let Some(&global_variable) = self.global_names.get(name) {
-      Ok(global_variable.into())
+      let type_id = match global_variable {
+        GlobalIdentifier::Variable(var_id) => {
+          self.module_global_variables_types[var_id.get_id() as usize]
+        }
+        GlobalIdentifier::ExternFunction(extern_id) => {
+          self.extern_function_types[extern_id.get_id() as usize]
+        }
+        GlobalIdentifier::Struct(struct_id) => {
+          self.module_struct_types[struct_id.get_id() as usize]
+        }
+        GlobalIdentifier::Invalid => panic!(),
+      };
+      Ok((global_variable.into(), type_id))
     } else {
       Err(ge_err::undeclared_global(name_sr))
     }
@@ -120,9 +134,14 @@ impl<'src> Environment<'src> {
     }
   }
 
-  pub fn get_id(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<Identifier> {
+  pub fn get_id(
+    &mut self,
+    name: &str,
+    name_sr: SourceRange,
+  ) -> CompilerResult<(Identifier, TypeId)> {
     if let Some(local) = self.find_local(name) {
-      Ok(self.capture(local).into())
+      let (local_id, type_id) = self.capture(local);
+      Ok((local_id.into(), type_id))
     } else {
       self.get_global(name, name_sr)
     }
@@ -132,13 +151,16 @@ impl<'src> Environment<'src> {
     &mut self,
     name: &str,
     name_sr: SourceRange,
-  ) -> CompilerResult<VariableIdentifier> {
+  ) -> CompilerResult<(VariableIdentifier, TypeId)> {
     if let Some(local) = self.find_local(name) {
       Ok(self.capture(local))
     } else {
       let id = self.global_names.get(name).copied();
       if let Some(GlobalIdentifier::Variable(id)) = id {
-        Ok(VariableIdentifier::Global(id))
+        Ok((
+          id.into(),
+          self.module_global_variables_types[id.get_id() as usize],
+        ))
       } else {
         Err(ge_err::undeclared_global(name_sr))
       }
@@ -205,6 +227,7 @@ impl<'src> Environment<'src> {
         id: self.last_local_id,
         scope_local_id: self.names_in_current_scope,
         function_depth: self.functions_declaration_stack.len() as u8,
+        type_id: TypeId::UNKNOWN,
       };
       self.last_local_id += 1;
       self.locals.push(local);

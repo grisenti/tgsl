@@ -110,12 +110,12 @@ impl<'parsing> Parser<'parsing> {
     self.state = ParserState::NoErrors;
   }
 
-  fn get_variable_id(&mut self, name: &str, name_sr: SourceRange) -> VariableIdentifier {
+  fn get_variable_id(&mut self, name: &str, name_sr: SourceRange) -> (VariableIdentifier, TypeId) {
     match self.env.get_variable_id(name, name_sr) {
-      Ok(id) => id,
+      Ok(pair) => pair,
       Err(err) => {
         self.emit_error(err);
-        VariableIdentifier::Invalid
+        (VariableIdentifier::Invalid, TypeId::ERROR)
       }
     }
   }
@@ -132,7 +132,7 @@ impl<'parsing> Parser<'parsing> {
 
   fn get_id(&mut self, name: &str, name_sr: SourceRange) -> (Identifier, TypeId) {
     match self.env.get_id(name, name_sr) {
-      Ok(id) => (id, TypeId::UNKNOWN),
+      Ok(pair) => pair,
       Err(err) => {
         self.emit_error(err);
         (Identifier::Invalid, TypeId::ERROR)
@@ -140,7 +140,11 @@ impl<'parsing> Parser<'parsing> {
     }
   }
 
-  fn get_opt_name(&mut self, name: &str, name_sr: SourceRange) -> Option<VariableIdentifier> {
+  fn get_opt_name(
+    &mut self,
+    name: &str,
+    name_sr: SourceRange,
+  ) -> Option<(VariableIdentifier, TypeId)> {
     self.env.get_variable_id(name, name_sr).ok()
   }
 
