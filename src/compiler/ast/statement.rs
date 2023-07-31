@@ -32,7 +32,8 @@ pub mod stmt {
   );
 
   stmt_node!(StmtExpr,
-    expr: ExprHandle
+    expr: ExprHandle,
+    expr_type: TypeId
   );
 
   stmt_node!(Block,

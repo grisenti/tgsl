@@ -50,7 +50,10 @@ impl<'src> Parser<'src> {
 
   fn parse_expr_stmt(&mut self) -> StmtHandle {
     let expr = self.parse_expression();
-    let ret = self.ast.add_statement(stmt::StmtExpr { expr: expr.handle });
+    let ret = self.ast.add_statement(stmt::StmtExpr {
+      expr: expr.handle,
+      expr_type: expr.type_id,
+    });
     self.match_or_err(Token::Basic(';'));
     ret
   }
@@ -103,9 +106,10 @@ impl<'src> Parser<'src> {
     let after = self.parse_expression();
     self.match_or_err(Token::Basic(')'));
     let body = self.parse_statement();
-    let while_finally = self
-      .ast
-      .add_statement(stmt::StmtExpr { expr: after.handle });
+    let while_finally = self.ast.add_statement(stmt::StmtExpr {
+      expr: after.handle,
+      expr_type: after.type_id,
+    });
     let while_body = self.ast.add_statement(stmt::Block {
       statements: vec![body, while_finally],
       locals: 0,
