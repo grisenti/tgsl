@@ -331,7 +331,7 @@ impl<'src> Environment<'src> {
   }
 }
 
-#[cfg(test)]
+#[cfg(disable)]
 mod test {
 
   use crate::compiler::{

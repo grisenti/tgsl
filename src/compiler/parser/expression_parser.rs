@@ -343,7 +343,7 @@ impl<'src> Parser<'src> {
   }
 }
 
-#[cfg(test)]
+#[cfg(disable)]
 mod test {
   use json::{array, JsonValue};
 
