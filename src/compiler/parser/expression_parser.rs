@@ -115,12 +115,15 @@ impl<'src> Parser<'src> {
 
   fn parse_call(&mut self) -> ParsedExpression {
     return_if_err!(self, ParsedExpression::INVALID);
-
+    /*
     let ParsedExpression {
       type_id,
       handle: mut expr,
-    } = self.parse_primary();
+    } =
+    */
+    self.parse_primary()
 
+    /*
     loop {
       match self.lookahead {
         Token::Basic('(') => {
@@ -145,7 +148,7 @@ impl<'src> Parser<'src> {
           self.advance();
           if let Token::Id(rhs_name) = self.lookahead {
             let rhs_sr = self.lex.previous_token_range();
-            let rhs_id = self.get_opt_name(rhs_name, rhs_sr);
+            let (rhs_id, rhs_type) = self.get_opt_name(rhs_name, rhs_sr);
             self.advance();
             let rhs_name = self.ast.add_str(rhs_name);
             expr = self.ast.add_expression(expr::Dot {
@@ -159,10 +162,11 @@ impl<'src> Parser<'src> {
         _ => break,
       }
     }
-    ParsedExpression {
+        ParsedExpression {
       type_id: TypeId::UNKNOWN,
       handle: expr,
     }
+    */
   }
 
   fn parse_unary(&mut self) -> ParsedExpression {
@@ -206,7 +210,7 @@ impl<'src> Parser<'src> {
       }
       ParsedExpression {
         handle: expr,
-        type_id: TypeId::UNKNOWN,
+        type_id,
       }
     }
   }
@@ -233,7 +237,7 @@ impl<'src> Parser<'src> {
       }
       ParsedExpression {
         handle: expr,
-        type_id: TypeId::UNKNOWN,
+        type_id,
       }
     }
   }
@@ -251,8 +255,8 @@ impl<'src> Parser<'src> {
         type_id,
       } = self.parse_logical_operation(0);
 
-      match lhs.get(&self.ast) {
-        &Expr::Id(expr::Id { id, id_sr, .. }) => {
+      match *lhs.get(&self.ast) {
+        Expr::Id(expr::Id { id, id_sr, .. }) => {
           if let Identifier::Variable(id) = id {
             ParsedExpression {
               handle: self.ast.add_expression(expr::Assignment {
@@ -268,7 +272,7 @@ impl<'src> Parser<'src> {
             panic!("cannot assing to non-variable")
           }
         }
-        &Expr::Dot(expr::Dot {
+        Expr::Dot(expr::Dot {
           lhs: object,
           rhs_name: name,
           rhs_sr,

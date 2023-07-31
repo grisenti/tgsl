@@ -274,12 +274,13 @@ impl<'parsing> Parser<'parsing> {
     self.match_type_name_or_err()
   }
 
-  fn parse_opt_type_specifier(&mut self) -> TypeId {
-    return_if_err!(self, TypeId::ERROR);
+  fn parse_opt_type_specifier(&mut self) -> Option<TypeId> {
+    return_if_err!(self, Some(TypeId::ERROR));
+
     if self.match_next(Token::Basic(':')).is_some() {
-      self.match_type_name_or_err()
+      Some(self.match_type_name_or_err())
     } else {
-      TypeId::UNKNOWN
+      None
     }
   }
 

@@ -28,7 +28,7 @@ pub mod stmt {
     identifier: VariableIdentifier,
     id_sr: SourceRange,
     var_type: TypeId,
-    expression: Option<ExprHandle>
+    init_expr: ExprHandle
   );
 
   stmt_node!(StmtExpr,

@@ -1,7 +1,7 @@
 use crate::{
   check_error,
   compiler::{
-    errors::SourceRangeProvider,
+    errors::{ty_err, SourceRangeProvider},
     identifier::{ExternId, StructId, VariableIdentifier},
   },
   return_if_err,
@@ -166,32 +166,38 @@ impl<'src> Parser<'src> {
   fn parse_var_decl(&mut self) -> StmtHandle {
     assert!(self.lookahead == Token::Var);
     return_if_err!(self, StmtHandle::INVALID);
+
     self.advance();
     let (name, id_sr) = self.match_id_or_err();
+
+    let type_specifier = self.parse_opt_type_specifier();
+    self.match_or_err(Token::Basic('='));
+    let expr = self.parse_expression();
+
+    if let Some(specifier) = type_specifier {
+      if specifier != expr.type_id {
+        self.emit_error(ty_err::type_specifier_expression_mismatch(
+          id_sr,
+          self.type_map.type_to_string(specifier),
+          self.type_map.type_to_string(expr.type_id),
+        ));
+        return StmtHandle::INVALID;
+      }
+    }
+
     let identifier = check_error!(
       self,
-      self.env.define_variable(name, id_sr),
+      self.env.define_variable(name, id_sr, expr.type_id),
       VariableIdentifier::Invalid
     );
-    let var_type = self.parse_opt_type_specifier();
-    let ret = if self.lookahead == Token::Basic('=') {
-      self.advance(); // consume '='
-      stmt::VarDecl {
-        identifier,
-        id_sr,
-        var_type,
-        expression: Some(self.parse_expression().handle),
-      }
-    } else {
-      stmt::VarDecl {
-        identifier,
-        var_type,
-        id_sr,
-        expression: None,
-      }
-    };
+
     self.match_or_err(Token::Basic(';'));
-    self.ast.add_statement(ret)
+    self.ast.add_statement(stmt::VarDecl {
+      identifier,
+      var_type: expr.type_id,
+      id_sr,
+      init_expr: expr.handle,
+    })
   }
 
   pub(super) fn parse_function_params(&mut self, call_start: SourceRange) -> Vec<TypeId> {
@@ -199,12 +205,12 @@ impl<'src> Parser<'src> {
     let mut parameter_types = Vec::new();
     loop {
       let (name, name_sr) = self.match_id_or_err();
+      let param_type = self.parse_type_specifier_or_err();
       check_error!(
         self,
-        self.env.define_variable(name, name_sr),
+        self.env.define_variable(name, name_sr, param_type),
         VariableIdentifier::Invalid
       );
-      let param_type = self.parse_type_specifier_or_err();
       parameter_types.push(param_type);
       if self.match_next(Token::Basic(',')).is_none() {
         break;

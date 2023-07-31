@@ -210,13 +210,14 @@ impl<'src> Environment<'src> {
     &mut self,
     name: &'src str,
     name_sr: SourceRange,
+    var_type: TypeId,
   ) -> CompilerResult<VariableIdentifier> {
     if self.is_local_in_current_scope(name) {
       Err(parser_err::same_scope_name_redeclaration(name_sr, name))
     } else if self.in_global_scope() {
       let id = GlobalVarId::relative(self.module_global_variables_types.len() as u32).into_public();
       self.declare_global(name, name_sr, id.into())?;
-      self.module_global_variables_types.push(TypeId::UNKNOWN);
+      self.module_global_variables_types.push(var_type);
       Ok(VariableIdentifier::Global(id))
     } else {
       if self.last_local_id == u8::MAX {
@@ -227,7 +228,7 @@ impl<'src> Environment<'src> {
         id: self.last_local_id,
         scope_local_id: self.names_in_current_scope,
         function_depth: self.functions_declaration_stack.len() as u8,
-        type_id: TypeId::UNKNOWN,
+        type_id: var_type,
       };
       self.last_local_id += 1;
       self.locals.push(local);

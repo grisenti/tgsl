@@ -165,16 +165,11 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
 
 impl StmtVisitor<JsonValue> for ASTJSONPrinter {
   fn visit_var_decl(&mut self, ast: &AST, var_decl: &stmt::VarDecl) -> JsonValue {
-    let init_expr = if let Some(expr) = var_decl.expression {
-      self.visit_expr(ast, expr)
-    } else {
-      JsonValue::Null
-    };
     object! {
       "VarDecl": {
         "id": var_decl.identifier,
         "type": format!("{:?}", var_decl.var_type),
-        "init expr": init_expr
+        "init expr": self.visit_expr(ast, var_decl.init_expr)
       }
     }
   }
