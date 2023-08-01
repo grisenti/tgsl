@@ -178,7 +178,7 @@ pub mod ty_err {
 
   def_err!(
     incorrect_binary_operator,
-    "SA012",
+    "TY003",
     "cannot apply operator {} to operands {} and {}",
     operator: Operator,
     lhs_type: String,
