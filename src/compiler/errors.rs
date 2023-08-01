@@ -165,6 +165,14 @@ pub mod ty_err {
     specified: String,
     expression: String
   );
+
+  def_err!(
+    incorrect_unary_operator,
+    "TY002",
+    "cannot apply unary operator '{}' to operand {}",
+    operator: char,
+    rhs_type: String
+  );
 }
 
 pub mod ge_err {

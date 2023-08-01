@@ -169,19 +169,50 @@ impl<'src> Parser<'src> {
     */
   }
 
+  fn check_unary(&mut self, sr: SourceRange, op: Token, rhs: TypeId) -> TypeId {
+    match op {
+      Token::Basic('!') => {
+        if rhs == TypeId::BOOL {
+          TypeId::BOOL
+        } else {
+          self.emit_error(ty_err::incorrect_unary_operator(
+            sr,
+            '!',
+            self.type_map.type_to_string(rhs),
+          ));
+          TypeId::ERROR
+        }
+      }
+      Token::Basic('-') => {
+        if rhs == TypeId::NUM {
+          TypeId::NUM
+        } else {
+          self.emit_error(ty_err::incorrect_unary_operator(
+            sr,
+            '-',
+            self.type_map.type_to_string(rhs),
+          ));
+          TypeId::ERROR
+        }
+      }
+      _ => panic!(),
+    }
+  }
+
   fn parse_unary(&mut self) -> ParsedExpression {
     return_if_err!(self, ParsedExpression::INVALID);
 
     if let Some((op, op_sr)) = self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')]) {
       let right = self.parse_call();
+      let expr_type = self.check_unary(op_sr, op, right.type_id);
       ParsedExpression {
         handle: self.ast.add_expression(expr::Unary {
           operator: to_operator(op),
           operator_sr: op_sr,
           right: right.handle,
-          expr_type: TypeId::UNKNOWN,
+          expr_type,
         }),
-        type_id: TypeId::UNKNOWN,
+        type_id: expr_type,
       }
     } else {
       self.parse_call()
