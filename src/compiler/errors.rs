@@ -184,6 +184,14 @@ pub mod ty_err {
     lhs_type: String,
     rhs_type: String
   );
+
+  def_err!(
+    assignment_of_incompatible_types,
+    "TY004",
+    "cannot assign value of type {} to identifier of type {}",
+    t1: String,
+    t2: String
+  );
 }
 
 pub mod ge_err {

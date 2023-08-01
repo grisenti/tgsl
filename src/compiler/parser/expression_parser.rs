@@ -333,6 +333,32 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn check_assignment(&mut self, id: expr::Id, value: ParsedExpression) -> ParsedExpression {
+    if let Identifier::Variable(var_id) = id.id {
+      if id.id_type == value.type_id {
+        ParsedExpression {
+          handle: self.ast.add_expression(expr::Assignment {
+            id: var_id,
+            id_sr: id.id_sr,
+            value: value.handle,
+            type_id: id.id_type,
+          }),
+          type_id: id.id_type,
+        }
+      } else {
+        self.emit_error(ty_err::assignment_of_incompatible_types(
+          id.id_sr,
+          self.type_map.type_to_string(id.id_type),
+          self.type_map.type_to_string(value.type_id),
+        ));
+        ParsedExpression::INVALID
+      }
+    } else {
+      // FIXME: make this into a proper error
+      panic!("cannot assing to non-variable")
+    }
+  }
+
   fn parse_assignment(&mut self) -> ParsedExpression {
     return_if_err!(self, ParsedExpression::INVALID);
 
@@ -341,28 +367,10 @@ impl<'src> Parser<'src> {
       type_id,
     } = self.parse_logical_operation(0);
     if let Some((_, eq_src_rc)) = self.match_next(Token::Basic('=')) {
-      let ParsedExpression {
-        handle: rhs,
-        type_id,
-      } = self.parse_logical_operation(0);
-
-      match *lhs.get(&self.ast) {
-        Expr::Id(expr::Id { id, id_sr, .. }) => {
-          if let Identifier::Variable(id) = id {
-            ParsedExpression {
-              handle: self.ast.add_expression(expr::Assignment {
-                id,
-                id_sr,
-                value: rhs,
-                type_id: TypeId::UNKNOWN,
-              }),
-              type_id: TypeId::UNKNOWN,
-            }
-          } else {
-            // FIXME: make this into a proper error
-            panic!("cannot assing to non-variable")
-          }
-        }
+      let rhs = self.parse_logical_operation(0);
+      // TODO: maybe consider making simple nodes copy
+      match lhs.get(&self.ast).clone() {
+        Expr::Id(id) => self.check_assignment(id, rhs),
         Expr::Dot(expr::Dot {
           lhs: object,
           rhs_name: name,
@@ -373,7 +381,7 @@ impl<'src> Parser<'src> {
             object,
             member_name: name,
             member_name_sr: rhs_sr,
-            value: rhs,
+            value: rhs.handle,
           }),
           type_id: TypeId::UNKNOWN,
         },
