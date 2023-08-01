@@ -281,6 +281,29 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn check_logical(&mut self, sr: SourceRange, op: Operator, lhs: TypeId, rhs: TypeId) -> TypeId {
+    const OPERATORS: &[(Operator, TypeId, TypeId, TypeId)] = &[
+      (Operator::And, TypeId::BOOL, TypeId::BOOL, TypeId::BOOL),
+      (Operator::Or, TypeId::BOOL, TypeId::BOOL, TypeId::BOOL),
+    ];
+
+    let expr_type = OPERATORS
+      .iter()
+      .find(|e| e.0 == op && e.1 == lhs && e.2 == rhs)
+      .map(|e| e.3);
+    if let Some(expr_type) = expr_type {
+      expr_type
+    } else {
+      self.emit_error(ty_err::incorrect_binary_operator(
+        sr,
+        op,
+        self.type_map.type_to_string(lhs),
+        self.type_map.type_to_string(rhs),
+      ));
+      TypeId::ERROR
+    }
+  }
+
   fn parse_logical_operation(&mut self, prec: usize) -> ParsedExpression {
     return_if_err!(self, ParsedExpression::INVALID);
 
@@ -289,21 +312,23 @@ impl<'src> Parser<'src> {
     } else {
       let ParsedExpression {
         handle: mut expr,
-        type_id,
+        type_id: mut expr_type,
       } = self.parse_logical_operation(prec + 1);
       while let Some((op, op_sr)) = self.matches_alternatives(LOGICAL_OP_PRECEDENCE[prec]) {
         let right = self.parse_logical_operation(prec + 1);
+        let operator = to_operator(op);
+        expr_type = self.check_logical(op_sr, operator, expr_type, right.type_id);
         expr = self.ast.add_expression(expr::Logical {
           left: expr,
           operator: to_operator(op),
           operator_sr: op_sr,
           right: right.handle,
-          expr_type: TypeId::UNKNOWN,
+          expr_type: expr_type,
         })
       }
       ParsedExpression {
         handle: expr,
-        type_id,
+        type_id: expr_type,
       }
     }
   }
