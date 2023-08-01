@@ -176,8 +176,7 @@ impl<'src> Parser<'src> {
     ];
     let expr_type = OPERATORS
       .iter()
-      .filter(|bin_op| bin_op.0 == op)
-      .find(|bin_op| bin_op.1 == rhs)
+      .find(|e| e.0 == op && e.1 == rhs)
       .map(|e| e.2);
     if let Some(expr_type) = expr_type {
       expr_type
