@@ -172,7 +172,7 @@ pub mod ty_err {
     incorrect_unary_operator,
     "TY002",
     "cannot apply unary operator '{}' to operand {}",
-    operator: char,
+    operator: Operator,
     rhs_type: String
   );
 

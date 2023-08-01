@@ -169,33 +169,25 @@ impl<'src> Parser<'src> {
     */
   }
 
-  fn check_unary(&mut self, sr: SourceRange, op: Token, rhs: TypeId) -> TypeId {
-    match op {
-      Token::Basic('!') => {
-        if rhs == TypeId::BOOL {
-          TypeId::BOOL
-        } else {
-          self.emit_error(ty_err::incorrect_unary_operator(
-            sr,
-            '!',
-            self.type_map.type_to_string(rhs),
-          ));
-          TypeId::ERROR
-        }
-      }
-      Token::Basic('-') => {
-        if rhs == TypeId::NUM {
-          TypeId::NUM
-        } else {
-          self.emit_error(ty_err::incorrect_unary_operator(
-            sr,
-            '-',
-            self.type_map.type_to_string(rhs),
-          ));
-          TypeId::ERROR
-        }
-      }
-      _ => panic!(),
+  fn check_unary(&mut self, sr: SourceRange, op: Operator, rhs: TypeId) -> TypeId {
+    const OPERATORS: &[(Operator, TypeId, TypeId)] = &[
+      (Operator::Basic('-'), TypeId::NUM, TypeId::NUM),
+      (Operator::Basic('!'), TypeId::BOOL, TypeId::BOOL),
+    ];
+    let expr_type = OPERATORS
+      .iter()
+      .filter(|bin_op| bin_op.0 == op)
+      .find(|bin_op| bin_op.1 == rhs)
+      .map(|e| e.2);
+    if let Some(expr_type) = expr_type {
+      expr_type
+    } else {
+      self.emit_error(ty_err::incorrect_unary_operator(
+        sr,
+        op,
+        self.type_map.type_to_string(rhs),
+      ));
+      TypeId::ERROR
     }
   }
 
@@ -204,7 +196,8 @@ impl<'src> Parser<'src> {
 
     if let Some((op, op_sr)) = self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')]) {
       let right = self.parse_call();
-      let expr_type = self.check_unary(op_sr, op, right.type_id);
+      let operator = to_operator(op);
+      let expr_type = self.check_unary(op_sr, operator, right.type_id);
       ParsedExpression {
         handle: self.ast.add_expression(expr::Unary {
           operator: to_operator(op),
@@ -219,27 +212,27 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn check_binary(&mut self, sr: SourceRange, op: Token, lhs: TypeId, rhs: TypeId) -> TypeId {
-    const OPERATORS: &[(Token, TypeId, TypeId, TypeId)] = &[
+  fn check_binary(&mut self, sr: SourceRange, op: Operator, lhs: TypeId, rhs: TypeId) -> TypeId {
+    const OPERATORS: &[(Operator, TypeId, TypeId, TypeId)] = &[
       // number
-      (Token::Basic('+'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
-      (Token::Basic('-'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
-      (Token::Basic('*'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
-      (Token::Basic('/'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
-      (Token::Basic('<'), TypeId::NUM, TypeId::NUM, TypeId::BOOL),
-      (Token::Basic('>'), TypeId::NUM, TypeId::NUM, TypeId::BOOL),
-      (Token::Leq, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
-      (Token::Geq, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
-      (Token::Same, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
-      (Token::Different, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      (Operator::Basic('+'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
+      (Operator::Basic('-'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
+      (Operator::Basic('*'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
+      (Operator::Basic('/'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
+      (Operator::Basic('<'), TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      (Operator::Basic('>'), TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      (Operator::Leq, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      (Operator::Geq, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      (Operator::Same, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      (Operator::Different, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
       // string operator
-      (Token::Basic('+'), TypeId::STR, TypeId::STR, TypeId::STR),
-      (Token::Basic('<'), TypeId::STR, TypeId::STR, TypeId::BOOL),
-      (Token::Basic('>'), TypeId::STR, TypeId::STR, TypeId::BOOL),
-      (Token::Leq, TypeId::STR, TypeId::STR, TypeId::BOOL),
-      (Token::Geq, TypeId::STR, TypeId::STR, TypeId::BOOL),
-      (Token::Same, TypeId::STR, TypeId::STR, TypeId::BOOL),
-      (Token::Different, TypeId::STR, TypeId::STR, TypeId::BOOL),
+      (Operator::Basic('+'), TypeId::STR, TypeId::STR, TypeId::STR),
+      (Operator::Basic('<'), TypeId::STR, TypeId::STR, TypeId::BOOL),
+      (Operator::Basic('>'), TypeId::STR, TypeId::STR, TypeId::BOOL),
+      (Operator::Leq, TypeId::STR, TypeId::STR, TypeId::BOOL),
+      (Operator::Geq, TypeId::STR, TypeId::STR, TypeId::BOOL),
+      (Operator::Same, TypeId::STR, TypeId::STR, TypeId::BOOL),
+      (Operator::Different, TypeId::STR, TypeId::STR, TypeId::BOOL),
     ];
 
     let expr_type = OPERATORS
@@ -252,7 +245,7 @@ impl<'src> Parser<'src> {
     } else {
       self.emit_error(ty_err::incorrect_binary_operator(
         sr,
-        to_operator(op),
+        op,
         self.type_map.type_to_string(lhs),
         self.type_map.type_to_string(rhs),
       ));
@@ -272,7 +265,8 @@ impl<'src> Parser<'src> {
       } = self.parse_binary_operation(prec + 1);
       while let Some((op, op_sr)) = self.matches_alternatives(BIN_OP_PRECEDENCE[prec]) {
         let right = self.parse_binary_operation(prec + 1);
-        expr_type = self.check_binary(op_sr, op, expr_type, right.type_id);
+        let operator = to_operator(op);
+        expr_type = self.check_binary(op_sr, operator, expr_type, right.type_id);
         expr = self.ast.add_expression(expr::Binary {
           left: expr,
           operator: to_operator(op),
