@@ -1,4 +1,4 @@
-use crate::return_if_err;
+use crate::{compiler::errors::ty_err, return_if_err};
 
 use super::*;
 use ast::expression::*;
@@ -219,6 +219,47 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn check_binary(&mut self, sr: SourceRange, op: Token, lhs: TypeId, rhs: TypeId) -> TypeId {
+    const OPERATORS: &[(Token, TypeId, TypeId, TypeId)] = &[
+      // number
+      (Token::Basic('+'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
+      (Token::Basic('-'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
+      (Token::Basic('*'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
+      (Token::Basic('/'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
+      (Token::Basic('<'), TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      (Token::Basic('>'), TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      (Token::Leq, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      (Token::Geq, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      (Token::Same, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      (Token::Different, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      // string operator
+      (Token::Basic('+'), TypeId::STR, TypeId::STR, TypeId::STR),
+      (Token::Basic('<'), TypeId::STR, TypeId::STR, TypeId::BOOL),
+      (Token::Basic('>'), TypeId::STR, TypeId::STR, TypeId::BOOL),
+      (Token::Leq, TypeId::STR, TypeId::STR, TypeId::BOOL),
+      (Token::Geq, TypeId::STR, TypeId::STR, TypeId::BOOL),
+      (Token::Same, TypeId::STR, TypeId::STR, TypeId::BOOL),
+      (Token::Different, TypeId::STR, TypeId::STR, TypeId::BOOL),
+    ];
+
+    let expr_type = OPERATORS
+      .iter()
+      .filter(|bin_op| bin_op.0 == op)
+      .find(|bin_op| bin_op.1 == lhs && bin_op.2 == rhs)
+      .map(|e| e.3);
+    if let Some(expr_type) = expr_type {
+      expr_type
+    } else {
+      self.emit_error(ty_err::incorrect_binary_operator(
+        sr,
+        to_operator(op),
+        self.type_map.type_to_string(lhs),
+        self.type_map.type_to_string(rhs),
+      ));
+      TypeId::ERROR
+    }
+  }
+
   fn parse_binary_operation(&mut self, prec: usize) -> ParsedExpression {
     return_if_err!(self, ParsedExpression::INVALID);
 
@@ -227,10 +268,11 @@ impl<'src> Parser<'src> {
     } else {
       let ParsedExpression {
         handle: mut expr,
-        type_id,
+        type_id: mut expr_type,
       } = self.parse_binary_operation(prec + 1);
       while let Some((op, op_sr)) = self.matches_alternatives(BIN_OP_PRECEDENCE[prec]) {
         let right = self.parse_binary_operation(prec + 1);
+        expr_type = self.check_binary(op_sr, op, expr_type, right.type_id);
         expr = self.ast.add_expression(expr::Binary {
           left: expr,
           operator: to_operator(op),
@@ -241,7 +283,7 @@ impl<'src> Parser<'src> {
       }
       ParsedExpression {
         handle: expr,
-        type_id,
+        type_id: expr_type,
       }
     }
   }

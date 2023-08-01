@@ -156,11 +156,13 @@ pub mod parser_err {
 }
 
 pub mod ty_err {
+  use crate::compiler::ast::expression::Operator;
+
   use super::{CompilerError, SourceRangeProvider};
 
   def_err!(
     type_specifier_expression_mismatch,
-    "TY01",
+    "TY001",
     "specified type ({}) is different from the type of the initialization expression ({})",
     specified: String,
     expression: String
@@ -171,6 +173,15 @@ pub mod ty_err {
     "TY002",
     "cannot apply unary operator '{}' to operand {}",
     operator: char,
+    rhs_type: String
+  );
+
+  def_err!(
+    incorrect_binary_operator,
+    "SA012",
+    "cannot apply operator {} to operands {} and {}",
+    operator: Operator,
+    lhs_type: String,
     rhs_type: String
   );
 }
