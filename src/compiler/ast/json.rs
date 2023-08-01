@@ -176,7 +176,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
 
   fn visit_stmt_expr(&mut self, ast: &AST, expr: &stmt::StmtExpr) -> JsonValue {
     object! {
-      "Expr": {
+      "StmtExpr": {
         "expr": self.visit_expr(ast, expr.expr),
         "expr_type": expr.expr_type
       }
