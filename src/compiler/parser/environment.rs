@@ -104,10 +104,18 @@ impl<'src> Environment<'src> {
     if let Some(&global_variable) = self.global_names.get(name) {
       let type_id = match global_variable {
         GlobalIdentifier::Variable(var_id) => {
-          self.module_global_variables_types[var_id.get_id() as usize]
+          if var_id.is_relative() {
+            self.module_global_variables_types[var_id.get_id() as usize]
+          } else {
+            self.global_env.get_variable_type(var_id)
+          }
         }
         GlobalIdentifier::ExternFunction(extern_id) => {
-          self.extern_function_types[extern_id.get_id() as usize]
+          if extern_id.is_relative() {
+            self.extern_function_types[extern_id.get_id() as usize]
+          } else {
+            self.global_env.get_extern_function_type(extern_id)
+          }
         }
         GlobalIdentifier::Struct(struct_id) => {
           self.module_struct_types[struct_id.get_id() as usize]

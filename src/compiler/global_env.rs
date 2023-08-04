@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::compiler::identifier::VariableIdentifier;
 
 use super::errors::{ge_err, CompilerResult};
-use super::identifier::{ExternId, GlobalIdentifier, GlobalVarId, Identifier, ModuleId};
+use super::identifier::{ExternId, GlobalIdentifier, GlobalVarId, Identifier, ModuleId, StructId};
 use super::lexer::SourceRange;
 use super::parser::ParsedModule;
 use super::types::TypeId;
@@ -64,6 +64,16 @@ impl GlobalEnv {
 
   pub fn get_module(&self, id: ModuleId) -> &Module {
     &self.modules[id.0 as usize]
+  }
+
+  pub fn get_variable_type(&self, id: GlobalVarId) -> TypeId {
+    assert!(!id.is_relative());
+    self.variable_types[id.get_id() as usize]
+  }
+
+  pub fn get_extern_function_type(&self, id: ExternId) -> TypeId {
+    assert!(!id.is_relative());
+    self.extern_functions_types[id.get_id() as usize]
   }
 
   pub fn export_module(&mut self, parsed_module: ParsedModule) -> Option<ModuleId> {
