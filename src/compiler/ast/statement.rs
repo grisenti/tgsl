@@ -4,7 +4,7 @@ pub mod stmt {
     ast::{ExprHandle, StmtHandle, StrHandle},
     identifier::{ExternId, ModuleId, StructId, VariableIdentifier},
     lexer::SourceRange,
-    types::TypeId,
+    types::Type,
   };
 
   use super::Stmt;
@@ -27,13 +27,13 @@ pub mod stmt {
   stmt_node!(VarDecl,
     identifier: VariableIdentifier,
     id_sr: SourceRange,
-    var_type: TypeId,
+    var_type: Type,
     init_expr: ExprHandle
   );
 
   stmt_node!(StmtExpr,
     expr: ExprHandle,
-    expr_type: TypeId
+    expr_type: Type
   );
 
   stmt_node!(Block,
@@ -58,24 +58,23 @@ pub mod stmt {
     id: VariableIdentifier,
     name_sr: SourceRange,
     captures: Vec<VariableIdentifier>,
-    parameter_types: Vec<TypeId>,
-    return_type: TypeId,
-    fn_type: TypeId,
+    parameter_types: Vec<Type>,
+    return_type: Type,
     body: Vec<StmtHandle>
   );
 
   stmt_node!(FunctionDeclaration,
     id: VariableIdentifier,
     name_sr: SourceRange,
-    parameter_types: Vec<TypeId>,
-    return_type: TypeId,
-    fn_type: TypeId
+    parameter_types: Vec<Type>,
+    return_type: Type
   );
 
   stmt_node!(ExternFunction,
     identifier: ExternId,
     name_sr: SourceRange,
-    fn_type: TypeId
+    parameter_types: Vec<Type>,
+    return_type: Type
   );
 
   stmt_node!(Break,
@@ -90,11 +89,9 @@ pub mod stmt {
   stmt_node!(Struct,
     id: StructId,
     name_sr: SourceRange,
-    constructor_type: TypeId,
     constructor_id: VariableIdentifier,
-    struct_type: TypeId,
     member_names: Vec<StrHandle>,
-    member_types: Vec<TypeId>
+    member_types: Vec<Type>
   );
 
   stmt_node!(Import,

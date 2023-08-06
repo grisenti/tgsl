@@ -19,13 +19,13 @@ const LOGICAL_OP_PRECEDENCE: [&[Token<'_>]; MAX_LOGICAL_OP_PRECEDENCE] =
 
 pub struct ParsedExpression {
   pub handle: ExprHandle,
-  pub type_id: TypeId,
+  pub type_id: Type,
 }
 
 impl ParsedExpression {
   const INVALID: Self = Self {
     handle: ExprHandle::INVALID,
-    type_id: TypeId::ERROR,
+    type_id: Type::Error,
   };
 }
 
@@ -42,7 +42,7 @@ impl<'src> Parser<'src> {
             value: num,
             value_sr,
           }),
-          type_id: TypeId::NUM,
+          type_id: Type::Num,
         }
       }
       Token::String(str) => {
@@ -53,7 +53,7 @@ impl<'src> Parser<'src> {
           handle: self
             .ast
             .add_expression(expr::LiteralString { handle, value_sr }),
-          type_id: TypeId::STR,
+          type_id: Type::Str,
         }
       }
       Token::True | Token::False => {
@@ -64,15 +64,20 @@ impl<'src> Parser<'src> {
           handle: self
             .ast
             .add_expression(expr::LiteralBool { value, value_sr }),
-          type_id: TypeId::BOOL,
+          type_id: Type::Bool,
         }
       }
       Token::Id(id) => {
         let id_sr = self.lex.previous_token_range();
         let (id, id_type) = self.get_id(id, id_sr);
+        let id_type = id_type.clone();
         self.advance();
         ParsedExpression {
-          handle: self.ast.add_expression(expr::Id { id, id_type, id_sr }),
+          handle: self.ast.add_expression(expr::Id {
+            id,
+            id_type: id_type.clone(),
+            id_sr,
+          }),
           type_id: id_type,
         }
       }
@@ -141,7 +146,7 @@ impl<'src> Parser<'src> {
             func: expr,
             call_sr,
             arguments: arguments.into_iter().map(|expr| expr.handle).collect(),
-            expr_type: TypeId::UNKNOWN,
+            expr_type: Type::UNKNOWN,
           })
         }
         Token::Basic('.') => {
@@ -163,30 +168,26 @@ impl<'src> Parser<'src> {
       }
     }
         ParsedExpression {
-      type_id: TypeId::UNKNOWN,
+      type_id: Type::UNKNOWN,
       handle: expr,
     }
     */
   }
 
-  fn check_unary(&mut self, sr: SourceRange, op: Operator, rhs: TypeId) -> TypeId {
-    const OPERATORS: &[(Operator, TypeId, TypeId)] = &[
-      (Operator::Basic('-'), TypeId::NUM, TypeId::NUM),
-      (Operator::Basic('!'), TypeId::BOOL, TypeId::BOOL),
+  fn check_unary(&mut self, sr: SourceRange, op: Operator, rhs: Type) -> Type {
+    const OPERATORS: &[(Operator, Type, Type)] = &[
+      (Operator::Basic('-'), Type::Num, Type::Num),
+      (Operator::Basic('!'), Type::Bool, Type::Bool),
     ];
     let expr_type = OPERATORS
       .iter()
       .find(|e| e.0 == op && e.1 == rhs)
-      .map(|e| e.2);
+      .map(|e| e.2.clone());
     if let Some(expr_type) = expr_type {
       expr_type
     } else {
-      self.emit_error(ty_err::incorrect_unary_operator(
-        sr,
-        op,
-        self.type_map.type_to_string(rhs),
-      ));
-      TypeId::ERROR
+      self.emit_error(ty_err::incorrect_unary_operator(sr, op, rhs.print_pretty()));
+      Type::Error
     }
   }
 
@@ -202,7 +203,7 @@ impl<'src> Parser<'src> {
           operator: to_operator(op),
           operator_sr: op_sr,
           right: right.handle,
-          expr_type,
+          expr_type: expr_type.clone(),
         }),
         type_id: expr_type,
       }
@@ -211,44 +212,44 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn check_binary(&mut self, sr: SourceRange, op: Operator, lhs: TypeId, rhs: TypeId) -> TypeId {
-    const OPERATORS: &[(Operator, TypeId, TypeId, TypeId)] = &[
+  fn check_binary(&mut self, sr: SourceRange, op: Operator, lhs: &Type, rhs: &Type) -> Type {
+    const OPERATORS: &[(Operator, Type, Type, Type)] = &[
       // number
-      (Operator::Basic('+'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
-      (Operator::Basic('-'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
-      (Operator::Basic('*'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
-      (Operator::Basic('/'), TypeId::NUM, TypeId::NUM, TypeId::NUM),
-      (Operator::Basic('<'), TypeId::NUM, TypeId::NUM, TypeId::BOOL),
-      (Operator::Basic('>'), TypeId::NUM, TypeId::NUM, TypeId::BOOL),
-      (Operator::Leq, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
-      (Operator::Geq, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
-      (Operator::Same, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
-      (Operator::Different, TypeId::NUM, TypeId::NUM, TypeId::BOOL),
+      (Operator::Basic('+'), Type::Num, Type::Num, Type::Num),
+      (Operator::Basic('-'), Type::Num, Type::Num, Type::Num),
+      (Operator::Basic('*'), Type::Num, Type::Num, Type::Num),
+      (Operator::Basic('/'), Type::Num, Type::Num, Type::Num),
+      (Operator::Basic('<'), Type::Num, Type::Num, Type::Bool),
+      (Operator::Basic('>'), Type::Num, Type::Num, Type::Bool),
+      (Operator::Leq, Type::Num, Type::Num, Type::Bool),
+      (Operator::Geq, Type::Num, Type::Num, Type::Bool),
+      (Operator::Same, Type::Num, Type::Num, Type::Bool),
+      (Operator::Different, Type::Num, Type::Num, Type::Bool),
       // string operator
-      (Operator::Basic('+'), TypeId::STR, TypeId::STR, TypeId::STR),
-      (Operator::Basic('<'), TypeId::STR, TypeId::STR, TypeId::BOOL),
-      (Operator::Basic('>'), TypeId::STR, TypeId::STR, TypeId::BOOL),
-      (Operator::Leq, TypeId::STR, TypeId::STR, TypeId::BOOL),
-      (Operator::Geq, TypeId::STR, TypeId::STR, TypeId::BOOL),
-      (Operator::Same, TypeId::STR, TypeId::STR, TypeId::BOOL),
-      (Operator::Different, TypeId::STR, TypeId::STR, TypeId::BOOL),
+      (Operator::Basic('+'), Type::Str, Type::Str, Type::Str),
+      (Operator::Basic('<'), Type::Str, Type::Str, Type::Bool),
+      (Operator::Basic('>'), Type::Str, Type::Str, Type::Bool),
+      (Operator::Leq, Type::Str, Type::Str, Type::Bool),
+      (Operator::Geq, Type::Str, Type::Str, Type::Bool),
+      (Operator::Same, Type::Str, Type::Str, Type::Bool),
+      (Operator::Different, Type::Str, Type::Str, Type::Bool),
     ];
 
     let expr_type = OPERATORS
       .iter()
       .filter(|bin_op| bin_op.0 == op)
-      .find(|bin_op| bin_op.1 == lhs && bin_op.2 == rhs)
-      .map(|e| e.3);
+      .find(|bin_op| bin_op.1 == *lhs && bin_op.2 == *rhs)
+      .map(|e| e.3.clone());
     if let Some(expr_type) = expr_type {
       expr_type
     } else {
       self.emit_error(ty_err::incorrect_binary_operator(
         sr,
         op,
-        self.type_map.type_to_string(lhs),
-        self.type_map.type_to_string(rhs),
+        lhs.print_pretty(),
+        rhs.print_pretty(),
       ));
-      TypeId::ERROR
+      Type::Error
     }
   }
 
@@ -265,13 +266,13 @@ impl<'src> Parser<'src> {
       while let Some((op, op_sr)) = self.matches_alternatives(BIN_OP_PRECEDENCE[prec]) {
         let right = self.parse_binary_operation(prec + 1);
         let operator = to_operator(op);
-        expr_type = self.check_binary(op_sr, operator, expr_type, right.type_id);
+        expr_type = self.check_binary(op_sr, operator, &expr_type, &right.type_id);
         expr = self.ast.add_expression(expr::Binary {
           left: expr,
           operator: to_operator(op),
           operator_sr: op_sr,
           right: right.handle,
-          expr_type: TypeId::UNKNOWN,
+          expr_type: Type::Unknown,
         })
       }
       ParsedExpression {
@@ -281,26 +282,26 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn check_logical(&mut self, sr: SourceRange, op: Operator, lhs: TypeId, rhs: TypeId) -> TypeId {
-    const OPERATORS: &[(Operator, TypeId, TypeId, TypeId)] = &[
-      (Operator::And, TypeId::BOOL, TypeId::BOOL, TypeId::BOOL),
-      (Operator::Or, TypeId::BOOL, TypeId::BOOL, TypeId::BOOL),
+  fn check_logical(&mut self, sr: SourceRange, op: Operator, lhs: &Type, rhs: &Type) -> Type {
+    const OPERATORS: &[(Operator, Type, Type, Type)] = &[
+      (Operator::And, Type::Bool, Type::Bool, Type::Bool),
+      (Operator::Or, Type::Bool, Type::Bool, Type::Bool),
     ];
 
     let expr_type = OPERATORS
       .iter()
-      .find(|e| e.0 == op && e.1 == lhs && e.2 == rhs)
-      .map(|e| e.3);
+      .find(|e| e.0 == op && e.1 == *lhs && e.2 == *rhs)
+      .map(|e| e.3.clone());
     if let Some(expr_type) = expr_type {
       expr_type
     } else {
       self.emit_error(ty_err::incorrect_binary_operator(
         sr,
         op,
-        self.type_map.type_to_string(lhs),
-        self.type_map.type_to_string(rhs),
+        lhs.print_pretty(),
+        rhs.print_pretty(),
       ));
-      TypeId::ERROR
+      Type::Error
     }
   }
 
@@ -317,13 +318,13 @@ impl<'src> Parser<'src> {
       while let Some((op, op_sr)) = self.matches_alternatives(LOGICAL_OP_PRECEDENCE[prec]) {
         let right = self.parse_logical_operation(prec + 1);
         let operator = to_operator(op);
-        expr_type = self.check_logical(op_sr, operator, expr_type, right.type_id);
+        expr_type = self.check_logical(op_sr, operator, &expr_type, &right.type_id);
         expr = self.ast.add_expression(expr::Logical {
           left: expr,
           operator: to_operator(op),
           operator_sr: op_sr,
           right: right.handle,
-          expr_type: expr_type,
+          expr_type: expr_type.clone(),
         })
       }
       ParsedExpression {
@@ -341,15 +342,15 @@ impl<'src> Parser<'src> {
             id: var_id,
             id_sr: id.id_sr,
             value: value.handle,
-            type_id: id.id_type,
+            type_: id.id_type.clone(),
           }),
           type_id: id.id_type,
         }
       } else {
         self.emit_error(ty_err::assignment_of_incompatible_types(
           id.id_sr,
-          self.type_map.type_to_string(id.id_type),
-          self.type_map.type_to_string(value.type_id),
+          id.id_type.print_pretty(),
+          value.type_id.print_pretty(),
         ));
         ParsedExpression::INVALID
       }
@@ -383,7 +384,7 @@ impl<'src> Parser<'src> {
             member_name_sr: rhs_sr,
             value: rhs.handle,
           }),
-          type_id: TypeId::UNKNOWN,
+          type_id: Type::Unknown,
         },
         _ => {
           let err = parser_err::lvalue_assignment(eq_src_rc);
@@ -405,7 +406,7 @@ impl<'src> Parser<'src> {
     let parameters_sr_start = self.lex.previous_token_range();
     self.env.push_function();
     self.match_or_err(Token::Basic('('));
-    let parameters = if self.lookahead != Token::Basic(')') {
+    let parameter_types = if self.lookahead != Token::Basic(')') {
       self.parse_function_params(parameters_sr_start)
     } else {
       Vec::new()
@@ -415,12 +416,9 @@ impl<'src> Parser<'src> {
     let parameters_sr_end = self.lex.previous_token_range();
     let body = self.parse_unscoped_block();
     let captures = self.env.pop_function();
-    let parameter_types = parameters;
-    let function_type_id = self.type_map.get_or_add(Type::Function {
-      parameters: parameter_types.clone(),
-      ret: return_type,
-    });
     let parameters_sr = SourceRange::combine(parameters_sr_start, parameters_sr_end);
+    let mut function_types = parameter_types.clone();
+    function_types.push(return_type.clone());
 
     ParsedExpression {
       handle: self.ast.add_expression(expr::Lambda {
@@ -428,10 +426,9 @@ impl<'src> Parser<'src> {
         captures,
         parameter_types,
         body,
-        function_type_id,
         return_type,
       }),
-      type_id: function_type_id,
+      type_id: Type::Function(function_types),
     }
   }
 
@@ -456,7 +453,7 @@ mod test {
     global_env::GlobalEnv,
     lexer::{Lexer, SourceRange, Token},
     parser::{environment::Environment, Parser, ParserState},
-    types::{type_map::TypeMap, TypeId},
+    types::{type_map::TypeMap, Type},
   };
 
   fn parse_expression_with_declared_names(
@@ -592,13 +589,10 @@ mod test {
   fn parse_lambda_no_captures() {
     let lambda = parse_expression("fn (n: num, s: str) -> num {}").expect("parsing error");
     assert_eq!(lambda["Lambda"]["captures"], JsonValue::Array(vec![]));
-    assert_eq!(
-      lambda["Lambda"]["return_type"],
-      format!("{}", TypeId::NUM.0)
-    );
+    assert_eq!(lambda["Lambda"]["return_type"], format!("{}", Type::Num.0));
     assert_eq!(
       lambda["Lambda"]["parameter_types"],
-      array![TypeId::NUM, TypeId::STR]
+      array![Type::Num, Type::Str]
     );
   }
 }

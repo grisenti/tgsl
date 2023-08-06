@@ -1,51 +1,25 @@
 use core::panic;
 use std::collections::HashMap;
 
-use crate::compiler::identifier::VariableIdentifier;
-
 use super::errors::{ge_err, CompilerResult};
 use super::identifier::{ExternId, GlobalIdentifier, GlobalVarId, Identifier, ModuleId, StructId};
 use super::lexer::SourceRange;
 use super::parser::ParsedModule;
-use super::types::TypeId;
+use super::types::Type;
 
 pub struct Module {
   pub global_names: HashMap<String, GlobalIdentifier>,
 }
 
-#[derive(Clone, Copy)]
-pub struct GlobalTypes<'a> {
-  variable_types: &'a [TypeId],
-  extern_functions_types: &'a [TypeId],
-}
-
-impl<'a> GlobalTypes<'a> {
-  pub fn get_type(&self, id: Identifier) -> TypeId {
-    match id {
-      Identifier::Variable(VariableIdentifier::Global(id)) => {
-        assert!(!id.is_relative());
-        self.variable_types[id.get_id() as usize]
-      }
-      Identifier::ExternFunction(id) => {
-        assert!(!id.is_relative());
-        self.extern_functions_types[id.get_id() as usize]
-      }
-      _ => panic!("invalid identifier"),
-    }
-  }
-
-  pub fn new(global_env: &'a GlobalEnv) -> Self {
-    Self {
-      variable_types: &global_env.variable_types,
-      extern_functions_types: &global_env.extern_functions_types,
-    }
-  }
+pub struct Struct {
+  pub member_names: Vec<String>,
+  pub member_types: Vec<Type>,
 }
 
 #[derive(Default)]
 pub struct GlobalEnv {
-  variable_types: Vec<TypeId>,
-  extern_functions_types: Vec<TypeId>,
+  variable_types: Vec<Type>,
+  extern_functions_types: Vec<Type>,
   module_names: HashMap<String, ModuleId>,
   modules: Vec<Module>,
   global_variables_count: u32,
@@ -66,14 +40,14 @@ impl GlobalEnv {
     &self.modules[id.0 as usize]
   }
 
-  pub fn get_variable_type(&self, id: GlobalVarId) -> TypeId {
+  pub fn get_variable_type(&self, id: GlobalVarId) -> &Type {
     assert!(!id.is_relative());
-    self.variable_types[id.get_id() as usize]
+    &self.variable_types[id.get_id() as usize]
   }
 
-  pub fn get_extern_function_type(&self, id: ExternId) -> TypeId {
+  pub fn get_extern_function_type(&self, id: ExternId) -> &Type {
     assert!(!id.is_relative());
-    self.extern_functions_types[id.get_id() as usize]
+    &self.extern_functions_types[id.get_id() as usize]
   }
 
   pub fn export_module(&mut self, parsed_module: ParsedModule) -> Option<ModuleId> {
@@ -88,10 +62,10 @@ impl GlobalEnv {
 
       self
         .variable_types
-        .extend(parsed_module.module_global_variable_types.iter());
+        .extend(parsed_module.module_global_variable_types.into_iter());
       self
         .extern_functions_types
-        .extend(parsed_module.module_extern_functions_types.iter());
+        .extend(parsed_module.module_extern_functions_types.into_iter());
 
       let mut module_names = HashMap::new();
       let mut exported_variables = 0;

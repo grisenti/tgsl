@@ -15,9 +15,7 @@ use super::identifier::Identifier;
 use super::identifier::StructId;
 use super::identifier::VariableIdentifier;
 use super::lexer::*;
-use super::types::type_map::TypeMap;
 use super::types::Type;
-use super::types::TypeId;
 use super::*;
 
 #[derive(PartialEq, Eq)]
@@ -31,14 +29,13 @@ pub struct ParsedModule {
   pub module_name: Option<String>,
   pub ast: AST,
   pub global_names: HashMap<String, GlobalIdentifier>,
-  pub module_global_variable_types: Vec<TypeId>,
-  pub module_extern_functions_types: Vec<TypeId>,
-  pub module_struct_types: Vec<TypeId>,
+  pub module_global_variable_types: Vec<Type>,
+  pub module_extern_functions_types: Vec<Type>,
+  pub module_struct_types: Vec<Type>,
 }
 
 pub struct Parser<'parsing> {
   env: Environment<'parsing>,
-  type_map: &'parsing mut TypeMap,
   lex: Lexer<'parsing>,
   lookahead: Token<'parsing>,
   ast: AST,
@@ -65,7 +62,8 @@ macro_rules! check_error {
     match $result {
       Ok(value) => value,
       Err(err) => {
-        $s.emit_error(err);
+        $s.errors.push(err);
+        $s.state = ParserState::WaitingRecovery;
         $invalid_value
       }
     }
@@ -110,41 +108,35 @@ impl<'parsing> Parser<'parsing> {
     self.state = ParserState::NoErrors;
   }
 
-  fn get_variable_id(&mut self, name: &str, name_sr: SourceRange) -> (VariableIdentifier, TypeId) {
-    match self.env.get_variable_id(name, name_sr) {
-      Ok(pair) => pair,
-      Err(err) => {
-        self.emit_error(err);
-        (VariableIdentifier::Invalid, TypeId::ERROR)
-      }
-    }
+  fn get_variable_id(&mut self, name: &str, name_sr: SourceRange) -> (VariableIdentifier, &Type) {
+    check_error!(
+      self,
+      self.env.get_variable_id(name, name_sr),
+      (VariableIdentifier::Invalid, &Type::Error)
+    )
   }
 
   fn get_struct_id(&mut self, name: &str, name_sr: SourceRange) -> StructId {
-    match self.env.get_struct_id(name, name_sr) {
-      Ok(id) => id,
-      Err(err) => {
-        self.emit_error(err);
-        StructId::relative(0)
-      }
-    }
+    check_error!(
+      self,
+      self.env.get_struct_id(name, name_sr),
+      StructId::relative(0)
+    )
   }
 
-  fn get_id(&mut self, name: &str, name_sr: SourceRange) -> (Identifier, TypeId) {
-    match self.env.get_id(name, name_sr) {
-      Ok(pair) => pair,
-      Err(err) => {
-        self.emit_error(err);
-        (Identifier::Invalid, TypeId::ERROR)
-      }
-    }
+  fn get_id(&mut self, name: &str, name_sr: SourceRange) -> (Identifier, &Type) {
+    check_error!(
+      self,
+      self.env.get_id(name, name_sr),
+      (Identifier::Invalid, &Type::Error)
+    )
   }
 
   fn get_opt_name(
     &mut self,
     name: &str,
     name_sr: SourceRange,
-  ) -> Option<(VariableIdentifier, TypeId)> {
+  ) -> Option<(VariableIdentifier, &Type)> {
     self.env.get_variable_id(name, name_sr).ok()
   }
 
@@ -220,7 +212,7 @@ impl<'parsing> Parser<'parsing> {
     }
   }
 
-  fn parse_function_param_types(&mut self) -> Vec<TypeId> {
+  fn parse_function_param_types(&mut self) -> Vec<Type> {
     return_if_err!(self, vec![]);
     self.match_or_err(Token::Basic('('));
     let mut result = Vec::new();
@@ -236,46 +228,46 @@ impl<'parsing> Parser<'parsing> {
     result
   }
 
-  fn match_type_name_or_err(&mut self) -> TypeId {
-    return_if_err!(self, TypeId::ERROR);
+  fn match_type_name_or_err(&mut self) -> Type {
+    return_if_err!(self, Type::Error);
     match self.lookahead {
       Token::Id(type_name) => {
         self.advance();
         match type_name {
-          "any" => TypeId::ANY,
-          "str" => TypeId::STR,
-          "num" => TypeId::NUM,
-          "bool" => TypeId::BOOL,
+          "any" => Type::Any,
+          "str" => Type::Str,
+          "num" => Type::Num,
+          "bool" => Type::Bool,
           other => {
             let struct_sr = self.lex.previous_token_range();
             let struct_id = self.get_struct_id(other, struct_sr);
-            self.type_map.get_or_add(Type::Struct(struct_id))
+            Type::Struct(struct_id)
           }
         }
       }
       Token::Fn => {
         self.advance();
-        let parameters = self.parse_function_param_types();
+        let mut function_types = self.parse_function_param_types();
         self.match_or_err(Token::ThinArrow);
-        let ret = self.match_type_name_or_err();
-        self.type_map.get_or_add(Type::Function { parameters, ret })
+        function_types.push(self.match_type_name_or_err());
+        Type::Function(function_types)
       }
       _ => {
         let err = parser_err::expected_type_name(&self.lex, self.lookahead);
         self.emit_error(err);
-        TypeId::ERROR
+        Type::Error
       }
     }
   }
 
-  fn parse_type_specifier_or_err(&mut self) -> TypeId {
-    return_if_err!(self, TypeId::ERROR);
+  fn parse_type_specifier_or_err(&mut self) -> Type {
+    return_if_err!(self, Type::Error);
     self.match_or_err(Token::Basic(':'));
     self.match_type_name_or_err()
   }
 
-  fn parse_opt_type_specifier(&mut self) -> Option<TypeId> {
-    return_if_err!(self, Some(TypeId::ERROR));
+  fn parse_opt_type_specifier(&mut self) -> Option<Type> {
+    return_if_err!(self, Some(Type::Error));
 
     if self.match_next(Token::Basic(':')).is_some() {
       Some(self.match_type_name_or_err())
@@ -307,12 +299,10 @@ impl<'parsing> Parser<'parsing> {
 
   pub fn parse(
     source: &'parsing str,
-    type_map: &'parsing mut TypeMap,
     global_env: &'parsing GlobalEnv,
   ) -> Result<ParsedModule, Vec<CompilerError>> {
     let mut parser = Self {
       lex: Lexer::new(source),
-      type_map,
       lookahead: Token::EndOfFile,
       ast: AST::new(),
       env: Environment::new(global_env),

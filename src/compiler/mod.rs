@@ -4,10 +4,9 @@ use self::{
   ast::AST,
   codegen::BytecodeBuilder,
   errors::CompilerError,
-  global_env::{GlobalEnv, GlobalTypes},
+  global_env::GlobalEnv,
   identifier::{ExternId, GlobalIdentifier, ModuleId},
   parser::Parser,
-  types::type_map::TypeMap,
 };
 
 pub mod ast;
@@ -30,7 +29,6 @@ pub struct CompiledModule {
 }
 
 pub struct Compiler {
-  type_map: TypeMap,
   global_env: GlobalEnv,
 }
 
@@ -55,7 +53,7 @@ impl Compiler {
   }
 
   pub fn compile(&mut self, source: &str) -> Result<AST, Vec<CompilerError>> {
-    let parsed_module = Parser::parse(source, &mut self.type_map, &self.global_env)?;
+    let parsed_module = Parser::parse(source, &self.global_env)?;
     println!("{}", ASTJSONPrinter::print_to_string(&parsed_module.ast));
     Ok(parsed_module.ast)
 
@@ -66,7 +64,6 @@ impl Compiler {
 
   pub fn new() -> Self {
     Self {
-      type_map: TypeMap::new(),
       global_env: GlobalEnv::new(),
     }
   }

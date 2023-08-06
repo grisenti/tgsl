@@ -3,7 +3,7 @@ use json::JsonValue;
 
 use crate::compiler::identifier::Identifier;
 use crate::compiler::identifier::VariableIdentifier;
-use crate::compiler::types::TypeId;
+use crate::compiler::types::Type;
 
 use super::expression::*;
 use super::statement::*;
@@ -24,10 +24,18 @@ impl From<VariableIdentifier> for JsonValue {
   }
 }
 
-impl From<TypeId> for JsonValue {
-  fn from(value: TypeId) -> Self {
-    JsonValue::String(format!("{}", value.0))
+impl From<&Type> for JsonValue {
+  fn from(value: &Type) -> Self {
+    JsonValue::String(format!("{:?}", value))
   }
+}
+
+fn type_list_to_json(types: &[Type]) -> JsonValue {
+  types
+    .iter()
+    .map(|ty| JsonValue::String(format!("{:?}", ty)))
+    .collect::<Vec<_>>()
+    .into()
 }
 
 pub struct ASTJSONPrinter {}
@@ -120,9 +128,8 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     object! {
       "Lambda": {
         "captures": lambda.captures.as_slice(),
-        "function_type_id": lambda.function_type_id,
-        "return_type": lambda.return_type,
-        "parameter_types": lambda.parameter_types.as_slice(),
+        "return_type": &lambda.return_type,
+        "parameter_types": type_list_to_json(&lambda.parameter_types),
         "body": body
       }
     }
@@ -178,7 +185,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     object! {
       "StmtExpr": {
         "expr": self.visit_expr(ast, expr.expr),
-        "expr_type": expr.expr_type
+        "expr_type": &expr.expr_type
       }
     }
   }
@@ -235,9 +242,8 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
       "FunctionDefinition": {
         "id": function_definition.id,
         "captures": function_definition.captures.as_slice(),
-        "parameter types": function_definition.parameter_types.as_slice(),
-        "function type": function_definition.fn_type,
-        "return type": function_definition.return_type,
+        "parameter types": type_list_to_json(&function_definition.parameter_types),
+        "return type": &function_definition.return_type,
         "body": body
       }
     }
@@ -251,9 +257,8 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     object! {
       "FunctionDeclaration": {
         "id": function_declaration.id,
-        "function type": function_declaration.fn_type,
-        "parameter types": function_declaration.parameter_types.as_slice(),
-        "return type": function_declaration.return_type,
+        "parameter types": type_list_to_json(&function_declaration.parameter_types),
+        "return type": &function_declaration.return_type,
       }
     }
   }
@@ -266,7 +271,8 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     object! {
       "ExternalFunction": {
         "identifier": format!("{:?}", extern_function.identifier),
-        "function type": extern_function.fn_type,
+        "parameter_types": type_list_to_json(&extern_function.parameter_types),
+        "return_type": &extern_function.return_type,
       }
     }
   }
@@ -298,7 +304,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
       "Struct": {
         "id": format!("{:?}", struct_stmt.id),
         "member_names": member_names,
-        "member_types": struct_stmt.member_types.as_slice()
+        "member_types": type_list_to_json(&struct_stmt.member_types)
       }
     }
   }

@@ -47,7 +47,7 @@ pub mod expr {
     ast::{ExprHandle, StmtHandle, StrHandle},
     identifier::{Identifier, VariableIdentifier},
     lexer::SourceRange,
-    types::TypeId,
+    types::Type,
   };
 
   use super::{Expr, Operator};
@@ -84,7 +84,7 @@ pub mod expr {
 
   expr_node!(Id,
     id: Identifier,
-    id_type: TypeId,
+    id_type: Type,
     id_sr: SourceRange
   );
 
@@ -94,7 +94,7 @@ pub mod expr {
 
   expr_node!(Assignment,
     id: VariableIdentifier,
-    type_id: TypeId,
+    type_: Type,
     id_sr: SourceRange,
     value: ExprHandle
   );
@@ -104,7 +104,7 @@ pub mod expr {
     operator: Operator,
     operator_sr: SourceRange,
     right: ExprHandle,
-    expr_type: TypeId
+    expr_type: Type
   );
 
   expr_node!(Logical,
@@ -112,22 +112,21 @@ pub mod expr {
     operator: Operator,
     operator_sr: SourceRange,
     right: ExprHandle,
-    expr_type: TypeId
+    expr_type: Type
   );
 
   expr_node!(Unary,
     operator: Operator,
     operator_sr: SourceRange,
     right: ExprHandle,
-    expr_type: TypeId
+    expr_type: Type
   );
 
   expr_node!(Lambda,
     parameters_sr: SourceRange,
     captures: Vec<VariableIdentifier>,
-    parameter_types: Vec<TypeId>,
-    return_type: TypeId,
-    function_type_id: TypeId,
+    parameter_types: Vec<Type>,
+    return_type: Type,
     body: Vec<StmtHandle>
   );
 
@@ -135,7 +134,7 @@ pub mod expr {
     func: ExprHandle,
     call_sr: SourceRange,
     arguments: Vec<ExprHandle>,
-    expr_type: TypeId
+    expr_type: Type
   );
 
   expr_node!(Dot,

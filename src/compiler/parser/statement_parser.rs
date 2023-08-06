@@ -178,8 +178,8 @@ impl<'src> Parser<'src> {
       if specifier != expr.type_id {
         self.emit_error(ty_err::type_specifier_expression_mismatch(
           id_sr,
-          self.type_map.type_to_string(specifier),
-          self.type_map.type_to_string(expr.type_id),
+          specifier.print_pretty(),
+          expr.type_id.print_pretty(),
         ));
         return StmtHandle::INVALID;
       }
@@ -187,7 +187,7 @@ impl<'src> Parser<'src> {
 
     let identifier = check_error!(
       self,
-      self.env.define_variable(name, id_sr, expr.type_id),
+      self.env.define_variable(name, id_sr, expr.type_id.clone()),
       VariableIdentifier::Invalid
     );
 
@@ -200,7 +200,7 @@ impl<'src> Parser<'src> {
     })
   }
 
-  pub(super) fn parse_function_params(&mut self, call_start: SourceRange) -> Vec<TypeId> {
+  pub(super) fn parse_function_params(&mut self, call_start: SourceRange) -> Vec<Type> {
     return_if_err!(self, vec![]);
     let mut parameter_types = Vec::new();
     loop {
@@ -208,7 +208,7 @@ impl<'src> Parser<'src> {
       let param_type = self.parse_type_specifier_or_err();
       check_error!(
         self,
-        self.env.define_variable(name, name_sr, param_type),
+        self.env.define_variable(name, name_sr, param_type.clone()),
         VariableIdentifier::Invalid
       );
       parameter_types.push(param_type);
@@ -224,12 +224,12 @@ impl<'src> Parser<'src> {
     }
   }
 
-  pub(super) fn parse_function_return_type(&mut self) -> TypeId {
-    return_if_err!(self, TypeId::ERROR);
+  pub(super) fn parse_function_return_type(&mut self) -> Type {
+    return_if_err!(self, Type::Error);
     if self.match_next(Token::ThinArrow).is_some() {
       self.match_type_name_or_err()
     } else {
-      TypeId::NOTHING
+      Type::Nothing
     }
   }
 
@@ -247,10 +247,6 @@ impl<'src> Parser<'src> {
     };
     self.match_or_err(Token::Basic(')'));
     let return_type = self.parse_function_return_type();
-    let fn_type = self.type_map.get_or_add(Type::Function {
-      parameters: parameter_types.clone(),
-      ret: return_type,
-    });
     if self.lookahead == Token::Basic(';') {
       self.env.pop_function();
       self.advance();
@@ -264,7 +260,6 @@ impl<'src> Parser<'src> {
         name_sr,
         parameter_types,
         return_type,
-        fn_type,
       });
     }
     let id = check_error!(
@@ -278,7 +273,6 @@ impl<'src> Parser<'src> {
     self.ast.add_statement(stmt::FunctionDefinition {
       id,
       name_sr,
-      fn_type,
       parameter_types,
       captures,
       body,
@@ -310,17 +304,12 @@ impl<'src> Parser<'src> {
       self.match_or_err(Token::Basic(','));
     }
     self.match_or_err(Token::Basic('}'));
-    let (struct_type, constructor_type) = self
-      .type_map
-      .add_struct_type(name_id.into(), member_types.clone());
     self.ast.add_statement(stmt::Struct {
       id: name_id,
       name_sr,
       member_names,
       member_types,
-      constructor_type,
       constructor_id,
-      struct_type,
     })
   }
 
@@ -339,13 +328,13 @@ impl<'src> Parser<'src> {
       self.env.declare_extern_function(name, name_sr),
       ExternId::relative(0)
     );
-    let parameters = self.parse_function_param_types();
-    let ret = self.parse_function_return_type();
-    let fn_type = self.type_map.get_or_add(Type::Function { parameters, ret });
+    let parameter_types = self.parse_function_param_types();
+    let return_type = self.parse_function_return_type();
     self.ast.add_statement(stmt::ExternFunction {
       identifier,
       name_sr,
-      fn_type,
+      parameter_types,
+      return_type,
     })
   }
 
