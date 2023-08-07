@@ -19,13 +19,13 @@ const LOGICAL_OP_PRECEDENCE: [&[Token<'_>]; MAX_LOGICAL_OP_PRECEDENCE] =
 
 pub struct ParsedExpression {
   pub handle: ExprHandle,
-  pub type_id: Type,
+  pub type_: Type,
 }
 
 impl ParsedExpression {
   const INVALID: Self = Self {
     handle: ExprHandle::INVALID,
-    type_id: Type::Error,
+    type_: Type::Error,
   };
 }
 
@@ -42,7 +42,7 @@ impl<'src> Parser<'src> {
             value: num,
             value_sr,
           }),
-          type_id: Type::Num,
+          type_: Type::Num,
         }
       }
       Token::String(str) => {
@@ -53,7 +53,7 @@ impl<'src> Parser<'src> {
           handle: self
             .ast
             .add_expression(expr::LiteralString { handle, value_sr }),
-          type_id: Type::Str,
+          type_: Type::Str,
         }
       }
       Token::True | Token::False => {
@@ -64,7 +64,7 @@ impl<'src> Parser<'src> {
           handle: self
             .ast
             .add_expression(expr::LiteralBool { value, value_sr }),
-          type_id: Type::Bool,
+          type_: Type::Bool,
         }
       }
       Token::Id(id) => {
@@ -78,7 +78,7 @@ impl<'src> Parser<'src> {
             id_type: id_type.clone(),
             id_sr,
           }),
-          type_id: id_type,
+          type_: id_type,
         }
       }
       Token::Basic(c) if c == '(' => {
@@ -89,7 +89,7 @@ impl<'src> Parser<'src> {
           handle: self.ast.add_expression(expr::Paren {
             inner: parsed_expression.handle,
           }),
-          type_id: parsed_expression.type_id,
+          type_: parsed_expression.type_,
         }
       }
       _ => {
@@ -122,7 +122,7 @@ impl<'src> Parser<'src> {
     return_if_err!(self, ParsedExpression::INVALID);
     /*
     let ParsedExpression {
-      type_id,
+      type_,
       handle: mut expr,
     } =
     */
@@ -168,7 +168,7 @@ impl<'src> Parser<'src> {
       }
     }
         ParsedExpression {
-      type_id: Type::UNKNOWN,
+      type_: Type::UNKNOWN,
       handle: expr,
     }
     */
@@ -197,7 +197,7 @@ impl<'src> Parser<'src> {
     if let Some((op, op_sr)) = self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')]) {
       let right = self.parse_call();
       let operator = to_operator(op);
-      let expr_type = self.check_unary(op_sr, operator, right.type_id);
+      let expr_type = self.check_unary(op_sr, operator, right.type_);
       ParsedExpression {
         handle: self.ast.add_expression(expr::Unary {
           operator: to_operator(op),
@@ -205,7 +205,7 @@ impl<'src> Parser<'src> {
           right: right.handle,
           expr_type: expr_type.clone(),
         }),
-        type_id: expr_type,
+        type_: expr_type,
       }
     } else {
       self.parse_call()
@@ -261,12 +261,12 @@ impl<'src> Parser<'src> {
     } else {
       let ParsedExpression {
         handle: mut expr,
-        type_id: mut expr_type,
+        type_: mut expr_type,
       } = self.parse_binary_operation(prec + 1);
       while let Some((op, op_sr)) = self.matches_alternatives(BIN_OP_PRECEDENCE[prec]) {
         let right = self.parse_binary_operation(prec + 1);
         let operator = to_operator(op);
-        expr_type = self.check_binary(op_sr, operator, &expr_type, &right.type_id);
+        expr_type = self.check_binary(op_sr, operator, &expr_type, &right.type_);
         expr = self.ast.add_expression(expr::Binary {
           left: expr,
           operator: to_operator(op),
@@ -277,7 +277,7 @@ impl<'src> Parser<'src> {
       }
       ParsedExpression {
         handle: expr,
-        type_id: expr_type,
+        type_: expr_type,
       }
     }
   }
@@ -313,12 +313,12 @@ impl<'src> Parser<'src> {
     } else {
       let ParsedExpression {
         handle: mut expr,
-        type_id: mut expr_type,
+        type_: mut expr_type,
       } = self.parse_logical_operation(prec + 1);
       while let Some((op, op_sr)) = self.matches_alternatives(LOGICAL_OP_PRECEDENCE[prec]) {
         let right = self.parse_logical_operation(prec + 1);
         let operator = to_operator(op);
-        expr_type = self.check_logical(op_sr, operator, &expr_type, &right.type_id);
+        expr_type = self.check_logical(op_sr, operator, &expr_type, &right.type_);
         expr = self.ast.add_expression(expr::Logical {
           left: expr,
           operator: to_operator(op),
@@ -329,14 +329,14 @@ impl<'src> Parser<'src> {
       }
       ParsedExpression {
         handle: expr,
-        type_id: expr_type,
+        type_: expr_type,
       }
     }
   }
 
   fn check_assignment(&mut self, id: expr::Id, value: ParsedExpression) -> ParsedExpression {
     if let Identifier::Variable(var_id) = id.id {
-      if id.id_type == value.type_id {
+      if id.id_type == value.type_ {
         ParsedExpression {
           handle: self.ast.add_expression(expr::Assignment {
             id: var_id,
@@ -344,13 +344,13 @@ impl<'src> Parser<'src> {
             value: value.handle,
             type_: id.id_type.clone(),
           }),
-          type_id: id.id_type,
+          type_: id.id_type,
         }
       } else {
         self.emit_error(ty_err::assignment_of_incompatible_types(
           id.id_sr,
           id.id_type.print_pretty(),
-          value.type_id.print_pretty(),
+          value.type_.print_pretty(),
         ));
         ParsedExpression::INVALID
       }
@@ -363,10 +363,7 @@ impl<'src> Parser<'src> {
   fn parse_assignment(&mut self) -> ParsedExpression {
     return_if_err!(self, ParsedExpression::INVALID);
 
-    let ParsedExpression {
-      handle: lhs,
-      type_id,
-    } = self.parse_logical_operation(0);
+    let ParsedExpression { handle: lhs, type_ } = self.parse_logical_operation(0);
     if let Some((_, eq_src_rc)) = self.match_next(Token::Basic('=')) {
       let rhs = self.parse_logical_operation(0);
       // TODO: maybe consider making simple nodes copy
@@ -384,7 +381,7 @@ impl<'src> Parser<'src> {
             member_name_sr: rhs_sr,
             value: rhs.handle,
           }),
-          type_id: Type::Unknown,
+          type_: Type::Unknown,
         },
         _ => {
           let err = parser_err::lvalue_assignment(eq_src_rc);
@@ -393,10 +390,7 @@ impl<'src> Parser<'src> {
         }
       }
     } else {
-      ParsedExpression {
-        handle: lhs,
-        type_id,
-      }
+      ParsedExpression { handle: lhs, type_ }
     }
   }
 
@@ -428,7 +422,7 @@ impl<'src> Parser<'src> {
         body,
         return_type,
       }),
-      type_id: Type::Function(function_types),
+      type_: Type::Function(function_types),
     }
   }
 

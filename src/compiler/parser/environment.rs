@@ -16,7 +16,7 @@ struct Local<'src> {
   id: u8,             // local id used to refer to any local variable reachable from this scope
   scope_local_id: u8, // resets to 0 for any new scope
   function_depth: u8,
-  type_id: Type,
+  type_: Type,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -94,12 +94,12 @@ impl<'src> Environment<'src> {
         });
       }
     }
-    (capture_id, &local.type_id)
+    (capture_id, &local.type_)
   }
 
   fn get_global(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<(Identifier, Type)> {
     if let Some(&global_variable) = self.global_names.get(name) {
-      let type_id = match global_variable {
+      let type_ = match global_variable {
         GlobalIdentifier::Variable(var_id) => {
           if var_id.is_relative() {
             self.module_global_variables_types[var_id.get_id() as usize].clone()
@@ -117,7 +117,7 @@ impl<'src> Environment<'src> {
         GlobalIdentifier::Struct(struct_id) => Type::Struct(struct_id),
         GlobalIdentifier::Invalid => panic!(),
       };
-      Ok((global_variable.into(), type_id.clone()))
+      Ok((global_variable.into(), type_.clone()))
     } else {
       Err(ge_err::undeclared_global(name_sr))
     }
@@ -238,7 +238,7 @@ impl<'src> Environment<'src> {
         id,
         scope_local_id: self.names_in_current_scope,
         function_depth: self.functions_declaration_stack.len() as u8,
-        type_id: var_type,
+        type_: var_type,
       };
       self.last_local_id += 1;
       self.locals.push(local);

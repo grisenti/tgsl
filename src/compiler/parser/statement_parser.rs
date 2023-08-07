@@ -52,7 +52,7 @@ impl<'src> Parser<'src> {
     let expr = self.parse_expression();
     let ret = self.ast.add_statement(stmt::StmtExpr {
       expr: expr.handle,
-      expr_type: expr.type_id,
+      expr_type: expr.type_,
     });
     self.match_or_err(Token::Basic(';'));
     ret
@@ -108,7 +108,7 @@ impl<'src> Parser<'src> {
     let body = self.parse_statement();
     let while_finally = self.ast.add_statement(stmt::StmtExpr {
       expr: after.handle,
-      expr_type: after.type_id,
+      expr_type: after.type_,
     });
     let while_body = self.ast.add_statement(stmt::Block {
       statements: vec![body, while_finally],
@@ -175,11 +175,11 @@ impl<'src> Parser<'src> {
     let expr = self.parse_expression();
 
     if let Some(specifier) = type_specifier {
-      if specifier != expr.type_id {
+      if specifier != expr.type_ {
         self.emit_error(ty_err::type_specifier_expression_mismatch(
           id_sr,
           specifier.print_pretty(),
-          expr.type_id.print_pretty(),
+          expr.type_.print_pretty(),
         ));
         return StmtHandle::INVALID;
       }
@@ -187,14 +187,14 @@ impl<'src> Parser<'src> {
 
     let identifier = check_error!(
       self,
-      self.env.define_variable(name, id_sr, expr.type_id.clone()),
+      self.env.define_variable(name, id_sr, expr.type_.clone()),
       VariableIdentifier::Invalid
     );
 
     self.match_or_err(Token::Basic(';'));
     self.ast.add_statement(stmt::VarDecl {
       identifier,
-      var_type: expr.type_id,
+      var_type: expr.type_,
       id_sr,
       init_expr: expr.handle,
     })
