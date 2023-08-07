@@ -295,16 +295,9 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
   }
 
   fn visit_struct(&mut self, ast: &AST, struct_stmt: &stmt::Struct) -> JsonValue {
-    let member_names = struct_stmt
-      .member_names
-      .iter()
-      .map(|handle| handle.get(ast).to_string())
-      .collect::<Vec<String>>();
     object! {
       "Struct": {
         "id": format!("{:?}", struct_stmt.id),
-        "member_names": member_names,
-        "member_types": type_list_to_json(&struct_stmt.member_types)
       }
     }
   }

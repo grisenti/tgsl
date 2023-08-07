@@ -1,8 +1,8 @@
-use std::collections::hash_map::Entry;
+use std::{any::TypeId, collections::hash_map::Entry};
 
 use crate::compiler::{
   errors::ge_err,
-  global_env::GlobalEnv,
+  global_env::{GlobalEnv, Struct},
   identifier::{
     ExternId, GlobalIdentifier, GlobalVarId, Identifier, ModuleId, StructId, VariableIdentifier,
   },
@@ -41,7 +41,7 @@ pub struct Environment<'src> {
   pub global_names: HashMap<String, GlobalIdentifier>,
   pub module_global_variables_types: Vec<Type>,
   pub extern_function_types: Vec<Type>,
-  pub module_struct_types: Vec<Type>,
+  pub module_structs: Vec<Option<Struct>>,
 }
 
 impl<'src> Environment<'src> {
@@ -55,7 +55,7 @@ impl<'src> Environment<'src> {
       .iter()
       .rev()
       .position(|Local { name, .. }| *name == local_name);
-    position_from_end.and_then(|pos| Some(self.locals.len() - pos))
+    position_from_end.map(|pos| self.locals.len() - pos)
   }
 
   fn is_local_in_current_scope(&self, local_name: &str) -> bool {
@@ -97,33 +97,27 @@ impl<'src> Environment<'src> {
     (capture_id, &local.type_id)
   }
 
-  fn get_global(
-    &mut self,
-    name: &str,
-    name_sr: SourceRange,
-  ) -> CompilerResult<(Identifier, &Type)> {
+  fn get_global(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<(Identifier, Type)> {
     if let Some(&global_variable) = self.global_names.get(name) {
       let type_id = match global_variable {
         GlobalIdentifier::Variable(var_id) => {
           if var_id.is_relative() {
-            &self.module_global_variables_types[var_id.get_id() as usize]
+            self.module_global_variables_types[var_id.get_id() as usize].clone()
           } else {
-            self.global_env.get_variable_type(var_id)
+            self.global_env.get_variable_type(var_id).clone()
           }
         }
         GlobalIdentifier::ExternFunction(extern_id) => {
           if extern_id.is_relative() {
-            &self.extern_function_types[extern_id.get_id() as usize]
+            self.extern_function_types[extern_id.get_id() as usize].clone()
           } else {
-            self.global_env.get_extern_function_type(extern_id)
+            self.global_env.get_extern_function_type(extern_id).clone()
           }
         }
-        GlobalIdentifier::Struct(struct_id) => {
-          &self.module_struct_types[struct_id.get_id() as usize]
-        }
+        GlobalIdentifier::Struct(struct_id) => Type::Struct(struct_id),
         GlobalIdentifier::Invalid => panic!(),
       };
-      Ok((global_variable.into(), &type_id))
+      Ok((global_variable.into(), type_id.clone()))
     } else {
       Err(ge_err::undeclared_global(name_sr))
     }
@@ -143,14 +137,10 @@ impl<'src> Environment<'src> {
     }
   }
 
-  pub fn get_id(
-    &mut self,
-    name: &str,
-    name_sr: SourceRange,
-  ) -> CompilerResult<(Identifier, &Type)> {
+  pub fn get_id(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<(Identifier, Type)> {
     if let Some(local) = self.find_local(name) {
       let (local_id, type_) = self.capture(local);
-      Ok((local_id.into(), type_))
+      Ok((local_id.into(), type_.clone()))
     } else {
       self.get_global(name, name_sr)
     }
@@ -208,10 +198,20 @@ impl<'src> Environment<'src> {
     Ok(VariableIdentifier::Global(id))
   }
 
-  pub fn declare_struct(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<StructId> {
-    let id = StructId::relative(self.module_struct_types.len() as u32).into_public();
+  pub fn define_struct(
+    &mut self,
+    name: &str,
+    name_sr: SourceRange,
+    member_names: Vec<String>,
+    member_types: Vec<Type>,
+  ) -> CompilerResult<StructId> {
+    let id = StructId::relative(self.module_structs.len() as u32).into_public();
     self.declare_global(name, name_sr, id.into())?;
-    self.module_struct_types.push(Type::Unknown);
+    self.module_structs.push(Some(Struct {
+      name: name.to_string(),
+      member_names,
+      member_types,
+    }));
     Ok(id)
   }
 
@@ -337,7 +337,7 @@ impl<'src> Environment<'src> {
       global_names: HashMap::new(),
       module_global_variables_types: Vec::new(),
       extern_function_types: Vec::new(),
-      module_struct_types: Vec::new(),
+      module_structs: Vec::new(),
     }
   }
 }

@@ -12,6 +12,7 @@ pub struct Module {
 }
 
 pub struct Struct {
+  pub name: String,
   pub member_names: Vec<String>,
   pub member_types: Vec<Type>,
 }
@@ -20,6 +21,7 @@ pub struct Struct {
 pub struct GlobalEnv {
   variable_types: Vec<Type>,
   extern_functions_types: Vec<Type>,
+  structs: Vec<Struct>,
   module_names: HashMap<String, ModuleId>,
   modules: Vec<Module>,
   global_variables_count: u32,

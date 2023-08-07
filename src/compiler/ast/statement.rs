@@ -88,10 +88,7 @@ pub mod stmt {
 
   stmt_node!(Struct,
     id: StructId,
-    name_sr: SourceRange,
-    constructor_id: VariableIdentifier,
-    member_names: Vec<StrHandle>,
-    member_types: Vec<Type>
+    name_sr: SourceRange
   );
 
   stmt_node!(Import,

@@ -10,6 +10,7 @@ use super::errors::parser_err;
 use super::errors::CompilerError;
 use super::errors::CompilerResult;
 use super::global_env::GlobalEnv;
+use super::global_env::Struct;
 use super::identifier::GlobalIdentifier;
 use super::identifier::Identifier;
 use super::identifier::StructId;
@@ -31,7 +32,7 @@ pub struct ParsedModule {
   pub global_names: HashMap<String, GlobalIdentifier>,
   pub module_global_variable_types: Vec<Type>,
   pub module_extern_functions_types: Vec<Type>,
-  pub module_struct_types: Vec<Type>,
+  pub module_structs: Vec<Option<Struct>>,
 }
 
 pub struct Parser<'parsing> {
@@ -124,11 +125,11 @@ impl<'parsing> Parser<'parsing> {
     )
   }
 
-  fn get_id(&mut self, name: &str, name_sr: SourceRange) -> (Identifier, &Type) {
+  fn get_id(&mut self, name: &str, name_sr: SourceRange) -> (Identifier, Type) {
     check_error!(
       self,
       self.env.get_id(name, name_sr),
-      (Identifier::Invalid, &Type::Error)
+      (Identifier::Invalid, Type::Error)
     )
   }
 
@@ -201,14 +202,15 @@ impl<'parsing> Parser<'parsing> {
     }
   }
 
-  fn id_str_or_err(&mut self) -> StrHandle {
-    return_if_err!(self, StrHandle::INVALID);
+  fn id_str_or_err(&mut self) -> &str {
+    return_if_err!(self, "<ERROR>");
+
     if let Token::Id(name) = self.lookahead {
       self.advance();
-      self.ast.add_str(name)
+      name
     } else {
       self.emit_error(parser_err::expected_identifier(&self.lex, self.lookahead));
-      StrHandle::INVALID
+      "<ERROR>"
     }
   }
 
@@ -325,7 +327,7 @@ impl<'parsing> Parser<'parsing> {
         global_names: parser.env.global_names,
         module_global_variable_types: parser.env.module_global_variables_types,
         module_extern_functions_types: parser.env.extern_function_types,
-        module_struct_types: parser.env.module_struct_types,
+        module_structs: parser.env.module_structs,
       })
     } else {
       Err(parser.errors)

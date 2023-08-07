@@ -284,32 +284,28 @@ impl<'src> Parser<'src> {
     assert_eq!(self.lookahead, Token::Struct);
     self.advance();
     let (name, name_sr) = self.match_id_or_err();
-    let name_id = check_error!(
-      self,
-      self.env.declare_struct(name, name_sr),
-      StructId::relative(0)
-    );
-    let constructor_id = self
-      .env
-      .declare_global_function(&format!("constructor<{name}>"), SourceRange::EMPTY)
-      .unwrap();
+
     self.match_or_err(Token::Basic('{'));
     let mut member_names = Vec::new();
     let mut member_types = Vec::new();
     while self.lookahead != Token::Basic('}') {
-      let name = self.id_str_or_err();
+      let name = self.id_str_or_err().to_string();
       let member_type = self.parse_type_specifier_or_err();
       member_names.push(name);
       member_types.push(member_type);
       self.match_or_err(Token::Basic(','));
     }
     self.match_or_err(Token::Basic('}'));
+    let name_id = check_error!(
+      self,
+      self
+        .env
+        .define_struct(name, name_sr, member_names, member_types),
+      StructId::relative(0)
+    );
     self.ast.add_statement(stmt::Struct {
       id: name_id,
       name_sr,
-      member_names,
-      member_types,
-      constructor_id,
     })
   }
 
