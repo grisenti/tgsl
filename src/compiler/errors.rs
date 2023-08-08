@@ -192,6 +192,25 @@ pub mod ty_err {
     t1: String,
     t2: String
   );
+
+  def_err!(cannot_call_type, "TY005", "cannot call type {}", t: String);
+
+  def_err!(
+    incorrect_function_argument_number,
+    "TY005",
+    "incorrect number of arguments for function call (required {}, provided {})",
+    required: usize,
+    provided: usize
+  );
+
+  def_err!(
+    incorrect_function_argument_type,
+    "TY006",
+    "mismatched types in function call. Argument {} (of type {}) should be of type {}",
+    argument_number: usize,
+    provided_type: String,
+    required_type: String
+  );
 }
 
 pub mod ge_err {

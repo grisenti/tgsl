@@ -12,9 +12,43 @@ pub struct Module {
 }
 
 pub struct Struct {
-  pub name: String,
-  pub member_names: Vec<String>,
-  pub member_types: Vec<Type>,
+  name: String,
+  member_names: Vec<String>,
+  member_types: Vec<Type>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
+pub struct MemberIndex(usize);
+
+impl Struct {
+  pub fn new(name: String, member_names: Vec<String>, member_types: Vec<Type>) -> Self {
+    assert_eq!(member_types.len(), member_types.len());
+    Self {
+      name,
+      member_names,
+      member_types,
+    }
+  }
+
+  pub fn get_member_index(&self, name: &str) -> Option<MemberIndex> {
+    self
+      .member_names
+      .iter()
+      .position(|name| name == name)
+      .map(MemberIndex)
+  }
+  pub fn member_info(&self, index: MemberIndex) -> (&str, &Type) {
+    assert!(index.0 < self.member_types.len());
+    (&self.member_names[index.0], &self.member_types[index.0])
+  }
+
+  pub fn get_name(&self) -> &str {
+    &self.name
+  }
+
+  pub fn get_member_types(&self) -> &[Type] {
+    &self.member_types
+  }
 }
 
 #[derive(Default)]
@@ -50,6 +84,11 @@ impl GlobalEnv {
   pub fn get_extern_function_type(&self, id: ExternId) -> &Type {
     assert!(!id.is_relative());
     &self.extern_functions_types[id.get_id() as usize]
+  }
+
+  pub fn get_struct(&self, id: StructId) -> &Struct {
+    assert!(!id.is_relative());
+    &self.structs[id.get_id() as usize]
   }
 
   pub fn export_module(&mut self, parsed_module: ParsedModule) -> Option<ModuleId> {

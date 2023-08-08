@@ -118,60 +118,142 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn check_arguments(
+    &mut self,
+    parameters: &[Type],
+    arguments: &[ParsedExpression],
+    call_sr: SourceRange,
+  ) -> Vec<ExprHandle> {
+    if parameters.len() != arguments.len() {
+      self.emit_error(ty_err::incorrect_function_argument_number(
+        call_sr,
+        parameters.len(),
+        arguments.len(),
+      ));
+      return vec![];
+    }
+
+    let mut invalid_call = false;
+    let mut argument_exprs = Vec::new();
+    for (index, (param, argument)) in parameters.iter().zip(arguments).enumerate() {
+      if *param != argument.type_ {
+        invalid_call = true;
+        self.emit_error(ty_err::incorrect_function_argument_type(
+          call_sr,
+          index + 1,
+          argument.type_.print_pretty(),
+          param.print_pretty(),
+        ));
+      } else {
+        argument_exprs.push(argument.handle);
+      }
+    }
+    if invalid_call {
+      vec![]
+    } else {
+      argument_exprs
+    }
+  }
+
+  fn parse_function_call(&mut self, expr: ParsedExpression) -> ParsedExpression {
+    return_if_err!(self, ParsedExpression::INVALID);
+    assert_eq!(self.lookahead, Token::Basic('('));
+
+    let call_start_sr = self.lex.previous_token_range();
+    self.advance();
+    let arguments = if self.lookahead != Token::Basic(')') {
+      self.parse_arguments(call_start_sr)
+    } else {
+      vec![]
+    };
+    let call_end_sr = self.lex.previous_token_range();
+    self.match_or_err(Token::Basic(')'));
+    let call_sr = SourceRange::combine(call_start_sr, call_end_sr);
+
+    match expr.type_ {
+      Type::Function(signature) => {
+        let arguments =
+          self.check_arguments(&signature[0..signature.len() - 1], &arguments, call_sr);
+        let return_type = signature.into_iter().last().unwrap(); // TODO: should probably encapsulate this logic
+        let handle = self.ast.add_expression(expr::FnCall {
+          func: expr.handle,
+          call_sr,
+          arguments,
+          expr_type: return_type.clone(),
+        });
+        ParsedExpression {
+          handle,
+          type_: return_type,
+        }
+      }
+      Type::Struct(id) => {
+        let s = self.env.get_struct(id).unwrap();
+        let member_types = s.get_member_types().to_vec(); // FIXME: REMOVE THIS!!!
+        let arguments = self.check_arguments(&member_types, &arguments, call_sr);
+        let handle = self.ast.add_expression(expr::FnCall {
+          func: expr.handle,
+          call_sr,
+          arguments,
+          expr_type: Type::Struct(id),
+        });
+        ParsedExpression {
+          handle,
+          type_: Type::Struct(id),
+        }
+      }
+      _ => {
+        self.emit_error(ty_err::cannot_call_type(call_sr, expr.type_.print_pretty()));
+        ParsedExpression::INVALID
+      }
+    }
+  }
+
+  fn parse_dot(&mut self, expr: ParsedExpression) -> ParsedExpression {
+    return_if_err!(self, ParsedExpression::INVALID);
+    assert_eq!(self.lookahead, Token::Basic('.'));
+
+    self.advance();
+    if let Type::Struct(struct_id) = expr.type_ {
+      if let Token::Id(rhs_name) = self.lookahead {
+        let s = self.env.get_struct(struct_id).unwrap();
+        let member_index = s.get_member_index(rhs_name).unwrap();
+        let member_type = s.member_info(member_index).1.clone();
+        let rhs_sr = self.lex.previous_token_range();
+        self.advance();
+        let handle = self.ast.add_expression(expr::MemberGet {
+          lhs: expr.handle,
+          rhs_sr,
+          member_index,
+        });
+        ParsedExpression {
+          handle,
+          type_: member_type,
+        }
+      } else {
+        panic!()
+      }
+    } else {
+      panic!()
+    }
+  }
+
   fn parse_call(&mut self) -> ParsedExpression {
     return_if_err!(self, ParsedExpression::INVALID);
-    /*
-    let ParsedExpression {
-      type_,
-      handle: mut expr,
-    } =
-    */
-    self.parse_primary()
 
-    /*
+    let mut expr = self.parse_primary();
+
     loop {
       match self.lookahead {
         Token::Basic('(') => {
-          let call_start_sr = self.lex.previous_token_range();
-          self.advance();
-          let arguments = if self.lookahead != Token::Basic(')') {
-            self.parse_arguments(call_start_sr)
-          } else {
-            vec![]
-          };
-          let call_end_sr = self.lex.previous_token_range();
-          self.match_or_err(Token::Basic(')'));
-          let call_sr = SourceRange::combine(call_start_sr, call_end_sr);
-          expr = self.ast.add_expression(expr::FnCall {
-            func: expr,
-            call_sr,
-            arguments: arguments.into_iter().map(|expr| expr.handle).collect(),
-            expr_type: Type::UNKNOWN,
-          })
+          expr = self.parse_function_call(expr);
         }
         Token::Basic('.') => {
-          self.advance();
-          if let Token::Id(rhs_name) = self.lookahead {
-            let rhs_sr = self.lex.previous_token_range();
-            let (rhs_id, rhs_type) = self.get_opt_name(rhs_name, rhs_sr);
-            self.advance();
-            let rhs_name = self.ast.add_str(rhs_name);
-            expr = self.ast.add_expression(expr::Dot {
-              lhs: expr,
-              rhs_id,
-              rhs_name,
-              rhs_sr,
-            });
-          }
+          expr = self.parse_dot(expr);
         }
         _ => break,
       }
     }
-        ParsedExpression {
-      type_: Type::UNKNOWN,
-      handle: expr,
-    }
-    */
+    expr
   }
 
   fn check_unary(&mut self, sr: SourceRange, op: Operator, rhs: Type) -> Type {

@@ -13,8 +13,10 @@ use super::*;
 #[derive(Debug, Clone)]
 struct Local<'src> {
   name: &'src str,
-  id: u8,             // local id used to refer to any local variable reachable from this scope
-  scope_local_id: u8, // resets to 0 for any new scope
+  id: u8,
+  // local id used to refer to any local variable reachable from this scope
+  scope_local_id: u8,
+  // resets to 0 for any new scope
   function_depth: u8,
   type_: Type,
 }
@@ -43,6 +45,8 @@ pub struct Environment<'src> {
   pub extern_function_types: Vec<Type>,
   pub module_structs: Vec<Option<Struct>>,
 }
+
+impl<'src> Environment<'src> {}
 
 impl<'src> Environment<'src> {
   pub fn in_global_scope(&self) -> bool {
@@ -179,10 +183,13 @@ impl<'src> Environment<'src> {
     &mut self,
     name: &str,
     name_sr: SourceRange,
+    type_: Type,
   ) -> CompilerResult<VariableIdentifier> {
+    debug_assert!(matches!(type_, Type::Function(_)));
+
     match self.global_names.get(name).copied() {
       Some(GlobalIdentifier::Variable(var_id)) => Ok(VariableIdentifier::Global(var_id)),
-      None => self.declare_global_function(name, name_sr),
+      None => self.declare_global_function(name, name_sr, type_),
       _ => panic!(),
     }
   }
@@ -191,11 +198,22 @@ impl<'src> Environment<'src> {
     &mut self,
     name: &str,
     name_sr: SourceRange,
+    type_: Type,
   ) -> CompilerResult<VariableIdentifier> {
+    debug_assert!(matches!(type_, Type::Function(_)));
+
     let id = GlobalVarId::relative(self.module_global_variables_types.len() as u32);
     self.declare_global(name, name_sr, id.into())?;
-    self.module_global_variables_types.push(Type::Unknown);
+    self.module_global_variables_types.push(type_);
     Ok(VariableIdentifier::Global(id))
+  }
+
+  pub fn get_struct(&self, id: StructId) -> Option<&Struct> {
+    if id.is_relative() {
+      self.module_structs[id.get_id() as usize].as_ref()
+    } else {
+      Some(self.global_env.get_struct(id))
+    }
   }
 
   pub fn define_struct(
@@ -207,11 +225,11 @@ impl<'src> Environment<'src> {
   ) -> CompilerResult<StructId> {
     let id = StructId::relative(self.module_structs.len() as u32).into_public();
     self.declare_global(name, name_sr, id.into())?;
-    self.module_structs.push(Some(Struct {
-      name: name.to_string(),
+    self.module_structs.push(Some(Struct::new(
+      name.to_string(),
       member_names,
       member_types,
-    }));
+    )));
     Ok(id)
   }
 
@@ -344,7 +362,6 @@ impl<'src> Environment<'src> {
 
 #[cfg(disable)]
 mod test {
-
   use crate::compiler::{
     global_env::GlobalEnv,
     identifier::{GlobalVarId, VariableIdentifier},

@@ -247,12 +247,17 @@ impl<'src> Parser<'src> {
     };
     self.match_or_err(Token::Basic(')'));
     let return_type = self.parse_function_return_type();
+    let mut function_signature = parameter_types.clone();
+    function_signature.push(return_type.clone());
+    let function_type = Type::Function(function_signature);
     if self.lookahead == Token::Basic(';') {
       self.env.pop_function();
       self.advance();
       let id = check_error!(
         self,
-        self.env.declare_global_function(name, name_sr),
+        self
+          .env
+          .declare_global_function(name, name_sr, function_type),
         VariableIdentifier::Invalid
       );
       return self.ast.add_statement(stmt::FunctionDeclaration {
@@ -264,7 +269,9 @@ impl<'src> Parser<'src> {
     }
     let id = check_error!(
       self,
-      self.env.define_global_function(name, name_sr),
+      self
+        .env
+        .define_global_function(name, name_sr, function_type),
       VariableIdentifier::Invalid
     );
     let body = self.parse_unscoped_block();

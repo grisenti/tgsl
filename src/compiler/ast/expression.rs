@@ -43,6 +43,7 @@ pub fn to_operator(token: Token) -> Operator {
 }
 
 pub mod expr {
+  use crate::compiler::global_env::MemberIndex;
   use crate::compiler::{
     ast::{ExprHandle, StmtHandle, StrHandle},
     identifier::{Identifier, VariableIdentifier},
@@ -66,7 +67,6 @@ pub mod expr {
     }
   };
 }
-
   expr_node!(LiteralString,
     handle: StrHandle,
     value_sr: SourceRange
@@ -144,6 +144,12 @@ pub mod expr {
     rhs_sr: SourceRange
   );
 
+  expr_node!(MemberGet,
+    lhs: ExprHandle,
+    rhs_sr: SourceRange,
+    member_index: MemberIndex
+  );
+
   expr_node!(Set,
     object: ExprHandle,
     member_name: StrHandle,
@@ -168,5 +174,6 @@ pub enum Expr {
   Lambda(Lambda),
   FnCall(FnCall),
   Dot(Dot),
+  MemberGet(MemberGet),
   Set(Set),
 }

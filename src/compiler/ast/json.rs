@@ -1,3 +1,5 @@
+use crate::compiler::ast::expression::expr::MemberGet;
+use crate::compiler::ast::ExprHandle;
 use json::object;
 use json::JsonValue;
 
@@ -155,6 +157,15 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
         "lhs": self.visit_expr(ast, dot.lhs),
         "rhs_name": dot.rhs_name.get(ast),
         "rhs_id": dot.rhs_id
+      }
+    }
+  }
+
+  fn visit_member_get(&mut self, ast: &AST, member_get: &MemberGet) -> JsonValue {
+    object! {
+      "MemberGet": {
+        "lhs": self.visit_expr(ast, member_get.lhs),
+        "member_index": format!("{:?}", member_get.member_index)
       }
     }
   }
