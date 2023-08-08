@@ -3,6 +3,7 @@ mod expression_parser;
 mod statement_parser;
 
 use self::environment::Environment;
+use crate::compiler::types::Function;
 
 use super::ast::*;
 use super::errors::ge_err;
@@ -249,10 +250,10 @@ impl<'parsing> Parser<'parsing> {
       }
       Token::Fn => {
         self.advance();
-        let mut function_types = self.parse_function_param_types();
+        let parameters = self.parse_function_param_types();
         self.match_or_err(Token::ThinArrow);
-        function_types.push(self.match_type_name_or_err());
-        Type::Function(function_types)
+        let return_type = self.match_type_name_or_err();
+        Type::Function(Function::new(parameters, return_type))
       }
       _ => {
         let err = parser_err::expected_type_name(&self.lex, self.lookahead);

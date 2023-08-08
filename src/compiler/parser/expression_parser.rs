@@ -1,6 +1,7 @@
 use crate::{compiler::errors::ty_err, return_if_err};
 
 use super::*;
+use crate::compiler::types::Function;
 use ast::expression::*;
 
 const MAX_BIN_OP_PRECEDENCE: usize = 4;
@@ -171,10 +172,9 @@ impl<'src> Parser<'src> {
     let call_sr = SourceRange::combine(call_start_sr, call_end_sr);
 
     match expr.type_ {
-      Type::Function(signature) => {
-        let arguments =
-          self.check_arguments(&signature[0..signature.len() - 1], &arguments, call_sr);
-        let return_type = signature.into_iter().last().unwrap(); // TODO: should probably encapsulate this logic
+      Type::Function(function) => {
+        let (parameters, return_type) = function.into_parts();
+        let arguments = self.check_arguments(&parameters, &arguments, call_sr);
         let handle = self.ast.add_expression(expr::FnCall {
           func: expr.handle,
           call_sr,
@@ -493,8 +493,7 @@ impl<'src> Parser<'src> {
     let body = self.parse_unscoped_block();
     let captures = self.env.pop_function();
     let parameters_sr = SourceRange::combine(parameters_sr_start, parameters_sr_end);
-    let mut function_types = parameter_types.clone();
-    function_types.push(return_type.clone());
+    let function = Function::new(parameter_types.clone(), return_type.clone());
 
     ParsedExpression {
       handle: self.ast.add_expression(expr::Lambda {
@@ -502,9 +501,9 @@ impl<'src> Parser<'src> {
         captures,
         parameter_types,
         body,
-        return_type,
+        return_type: return_type.clone(),
       }),
-      type_: Type::Function(function_types),
+      type_: function.into(),
     }
   }
 

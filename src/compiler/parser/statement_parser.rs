@@ -9,6 +9,7 @@ use crate::{
 
 use super::*;
 
+use crate::compiler::types::Function;
 use ast::statement::*;
 
 impl<'src> Parser<'src> {
@@ -247,9 +248,7 @@ impl<'src> Parser<'src> {
     };
     self.match_or_err(Token::Basic(')'));
     let return_type = self.parse_function_return_type();
-    let mut function_signature = parameter_types.clone();
-    function_signature.push(return_type.clone());
-    let function_type = Type::Function(function_signature);
+    let function_type = Function::new(parameter_types.clone(), return_type.clone()).into();
     if self.lookahead == Token::Basic(';') {
       self.env.pop_function();
       self.advance();
