@@ -439,7 +439,7 @@ impl<'src> Parser<'src> {
           operator: to_operator(op),
           operator_sr: op_sr,
           right: right.handle,
-          expr_type: Type::Unknown,
+          expr_type: expr_type,
         })
       }
       ParsedExpression {
