@@ -211,6 +211,34 @@ pub mod ty_err {
     provided_type: String,
     required_type: String
   );
+
+  def_err!(
+    not_a_member,
+    "TY007",
+    "{} is not a member of type {}",
+    member_name: &str,
+    object_type: String
+  );
+
+  def_err!(cannot_access_member_of_non_struct_type,
+    "TY008",
+    "cannot access member of non struct type {}",
+    lhs_type: String
+  );
+
+  def_err!(no_member_and_no_function_found,
+    "TY009",
+    "{} is neither a function member for the struct nor a valid function could be found that has type {} as a first parameter",
+    rhs_name: &str,
+    lhs_type: String
+  );
+
+  def_err!(could_not_find_function_for_dot_call,
+    "TY010",
+    "could not find function '{}' that takes type '{}' as a first parameter",
+    function_name: &str,
+    lhs_type: String
+  );
 }
 
 pub mod ge_err {

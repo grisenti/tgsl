@@ -31,10 +31,9 @@ impl ParsedExpression {
   };
 }
 
-enum MemberGetResult {
+enum MemberGetError {
   NotAStruct,
   NotAMember,
-  Valid(ParsedExpression),
 }
 
 impl<'src> Parser<'src> {
@@ -220,7 +219,7 @@ impl<'src> Parser<'src> {
     expr: &ParsedExpression,
     member_name: &str,
     member_name_sr: SourceRange,
-  ) -> MemberGetResult {
+  ) -> Result<ParsedExpression, MemberGetError> {
     if let Type::Struct(struct_id) = expr.type_ {
       let s = self.env.get_struct(struct_id).unwrap();
       if let Some(member_index) = s.get_member_index(member_name) {
@@ -230,15 +229,15 @@ impl<'src> Parser<'src> {
           rhs_sr: member_name_sr,
           member_index,
         });
-        MemberGetResult::Valid(ParsedExpression {
+        Ok(ParsedExpression {
           handle,
           type_: member_type,
         })
       } else {
-        MemberGetResult::NotAMember
+        Err(MemberGetError::NotAMember)
       }
     } else {
-      MemberGetResult::NotAStruct
+      Err(MemberGetError::NotAStruct)
     }
   }
 
@@ -247,10 +246,11 @@ impl<'src> Parser<'src> {
     expr: ParsedExpression,
     name: &str,
     name_sr: SourceRange,
-    member_get_result: MemberGetResult,
+    member_get_error: MemberGetError,
   ) -> ParsedExpression {
     if let Token::Basic('(') = self.lookahead {
       let (id, id_type) = self.get_id(name, name_sr);
+      return_if_err!(self, ParsedExpression::INVALID);
       if let Type::Function(signature) = id_type {
         let (parameters, return_type) = signature.into_parts();
         let call_start = self.lex.previous_token_range();
@@ -272,17 +272,38 @@ impl<'src> Parser<'src> {
             type_: return_type,
           }
         } else {
-          panic!()
+          match member_get_error {
+            MemberGetError::NotAStruct => self.emit_error(ty_err::no_member_and_no_function_found(
+              name_sr,
+              name,
+              expr.type_.print_pretty(),
+            )),
+            MemberGetError::NotAMember => {
+              self.emit_error(ty_err::could_not_find_function_for_dot_call(
+                name_sr,
+                name,
+                expr.type_.print_pretty(),
+              ))
+            }
+          }
+          ParsedExpression::INVALID
         }
       } else {
-        panic!()
+        self.emit_error(ty_err::cannot_call_type(name_sr, id_type.print_pretty()));
+        ParsedExpression::INVALID
       }
-    } else if let MemberGetResult::NotAMember = member_get_result {
-      panic!();
-    } else
-    /* member_get_result == MemberGetResult::NotAStruct*/
-    {
-      panic!()
+    } else {
+      match member_get_error {
+        MemberGetError::NotAStruct => self.emit_error(
+          ty_err::cannot_access_member_of_non_struct_type(name_sr, expr.type_.print_pretty()),
+        ),
+        MemberGetError::NotAMember => self.emit_error(ty_err::not_a_member(
+          name_sr,
+          name,
+          expr.type_.print_pretty(),
+        )),
+      }
+      ParsedExpression::INVALID
     }
   }
 
@@ -295,8 +316,8 @@ impl<'src> Parser<'src> {
     self.advance();
     let (name, name_sr) = self.match_id_or_err();
     match self.try_parse_member_get(&expr, name, name_sr) {
-      MemberGetResult::Valid(result) => result,
-      other => self.try_resolve_dot_call(expr, name, name_sr, other),
+      Ok(result) => result,
+      Err(err) => self.try_resolve_dot_call(expr, name, name_sr, err),
     }
   }
 
@@ -306,6 +327,7 @@ impl<'src> Parser<'src> {
     let mut expr = self.parse_primary();
 
     loop {
+      return_if_err!(self, ParsedExpression::INVALID);
       match self.lookahead {
         Token::Basic('(') => {
           expr = self.parse_function_call(expr);
