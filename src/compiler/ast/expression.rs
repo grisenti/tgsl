@@ -43,6 +43,7 @@ pub fn to_operator(token: Token) -> Operator {
 }
 
 pub mod expr {
+  use crate::compiler::errors::SourceRangeProvider;
   use crate::compiler::global_env::MemberIndex;
   use crate::compiler::{
     ast::{ExprHandle, StmtHandle, StrHandle},
@@ -150,6 +151,13 @@ pub mod expr {
     member_index: MemberIndex
   );
 
+  expr_node!(DotCall,
+    lhs: ExprHandle,
+    function: Identifier,
+    arguments: Vec<ExprHandle>,
+    call_sr: SourceRange
+  );
+
   expr_node!(Set,
     object: ExprHandle,
     member_name: StrHandle,
@@ -175,5 +183,6 @@ pub enum Expr {
   FnCall(FnCall),
   Dot(Dot),
   MemberGet(MemberGet),
+  DotCall(DotCall),
   Set(Set),
 }

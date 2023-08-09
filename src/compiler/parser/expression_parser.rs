@@ -1,6 +1,7 @@
 use crate::{compiler::errors::ty_err, return_if_err};
 
 use super::*;
+use crate::compiler::ast::expression::expr::DotCall;
 use crate::compiler::types::FunctionSignature;
 use ast::expression::*;
 
@@ -28,6 +29,12 @@ impl ParsedExpression {
     handle: ExprHandle::INVALID,
     type_: Type::Error,
   };
+}
+
+enum MemberGetResult {
+  NotAStruct,
+  NotAMember,
+  Valid(ParsedExpression),
 }
 
 impl<'src> Parser<'src> {
@@ -208,32 +215,88 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_dot(&mut self, expr: ParsedExpression) -> ParsedExpression {
-    return_if_err!(self, ParsedExpression::INVALID);
-    assert_eq!(self.lookahead, Token::Basic('.'));
-
-    self.advance();
+  fn try_parse_member_get(
+    &mut self,
+    expr: &ParsedExpression,
+    member_name: &str,
+    member_name_sr: SourceRange,
+  ) -> MemberGetResult {
     if let Type::Struct(struct_id) = expr.type_ {
-      if let Token::Id(rhs_name) = self.lookahead {
-        let s = self.env.get_struct(struct_id).unwrap();
-        let member_index = s.get_member_index(rhs_name).unwrap();
+      let s = self.env.get_struct(struct_id).unwrap();
+      if let Some(member_index) = s.get_member_index(member_name) {
         let member_type = s.member_info(member_index).1.clone();
-        let rhs_sr = self.lex.previous_token_range();
-        self.advance();
         let handle = self.ast.add_expression(expr::MemberGet {
           lhs: expr.handle,
-          rhs_sr,
+          rhs_sr: member_name_sr,
           member_index,
         });
-        ParsedExpression {
+        MemberGetResult::Valid(ParsedExpression {
           handle,
           type_: member_type,
+        })
+      } else {
+        MemberGetResult::NotAMember
+      }
+    } else {
+      MemberGetResult::NotAStruct
+    }
+  }
+
+  fn try_resolve_dot_call(
+    &mut self,
+    expr: ParsedExpression,
+    name: &str,
+    name_sr: SourceRange,
+    member_get_result: MemberGetResult,
+  ) -> ParsedExpression {
+    if let Token::Basic('(') = self.lookahead {
+      let (id, id_type) = self.get_id(name, name_sr);
+      if let Type::Function(signature) = id_type {
+        let (parameters, return_type) = signature.into_parts();
+        let call_start = self.lex.previous_token_range();
+        self.advance();
+        if parameters.first().is_some_and(|p1| *p1 == expr.type_) {
+          let parsed_arguments = self.parse_arguments(call_start);
+          let call_end = self.lex.previous_token_range();
+          let call_sr = SourceRange::combine(call_start, call_end);
+          let arguments =
+            self.check_arguments(&parameters[1..parameters.len()], &parsed_arguments, call_sr);
+          let handle = self.ast.add_expression(DotCall {
+            function: id,
+            lhs: expr.handle,
+            arguments,
+            call_sr,
+          });
+          ParsedExpression {
+            handle,
+            type_: return_type,
+          }
+        } else {
+          panic!()
         }
       } else {
         panic!()
       }
-    } else {
+    } else if let MemberGetResult::NotAMember = member_get_result {
+      panic!();
+    } else
+    /* member_get_result == MemberGetResult::NotAStruct*/
+    {
       panic!()
+    }
+  }
+
+  fn parse_dot(&mut self, expr: ParsedExpression) -> ParsedExpression {
+    return_if_err!(self, ParsedExpression::INVALID);
+    assert_eq!(self.lookahead, Token::Basic('.'));
+    // if its lhs is an object and name is a member, get the member
+    // if name is a function, try to call the function
+
+    self.advance();
+    let (name, name_sr) = self.match_id_or_err();
+    match self.try_parse_member_get(&expr, name, name_sr) {
+      MemberGetResult::Valid(result) => result,
+      other => self.try_resolve_dot_call(expr, name, name_sr, other),
     }
   }
 

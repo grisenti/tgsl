@@ -54,12 +54,10 @@ impl<'src> Environment<'src> {
   }
 
   fn find_local(&self, local_name: &str) -> Option<usize> {
-    let position_from_end = self
+    self
       .locals
       .iter()
-      .rev()
-      .position(|Local { name, .. }| *name == local_name);
-    position_from_end.map(|pos| self.locals.len() - pos)
+      .rposition(|Local { name, .. }| *name == local_name)
   }
 
   fn is_local_in_current_scope(&self, local_name: &str) -> bool {

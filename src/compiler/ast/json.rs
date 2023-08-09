@@ -1,4 +1,4 @@
-use crate::compiler::ast::expression::expr::MemberGet;
+use crate::compiler::ast::expression::expr::{DotCall, MemberGet};
 use crate::compiler::ast::ExprHandle;
 use json::object;
 use json::JsonValue;
@@ -166,6 +166,21 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
       "MemberGet": {
         "lhs": self.visit_expr(ast, member_get.lhs),
         "member_index": format!("{:?}", member_get.member_index)
+      }
+    }
+  }
+
+  fn visit_dot_call(&mut self, ast: &AST, dot_call: &DotCall) -> JsonValue {
+    let arguments = dot_call
+      .arguments
+      .iter()
+      .map(|&e| self.visit_expr(ast, e))
+      .collect::<Vec<_>>();
+    object! {
+      "DotCall": {
+        "lhs": self.visit_expr(ast, dot_call.lhs),
+        "function": dot_call.function,
+        "arguments": arguments
       }
     }
   }
