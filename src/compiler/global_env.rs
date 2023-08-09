@@ -30,11 +30,11 @@ impl Struct {
     }
   }
 
-  pub fn get_member_index(&self, name: &str) -> Option<MemberIndex> {
+  pub fn get_member_index(&self, member_name: &str) -> Option<MemberIndex> {
     self
       .member_names
       .iter()
-      .position(|name| name == name)
+      .position(|name| name == member_name)
       .map(MemberIndex)
   }
   pub fn member_info(&self, index: MemberIndex) -> (&str, &Type) {

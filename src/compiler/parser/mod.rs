@@ -3,7 +3,7 @@ mod expression_parser;
 mod statement_parser;
 
 use self::environment::Environment;
-use crate::compiler::types::Function;
+use crate::compiler::types::FunctionSignature;
 
 use super::ast::*;
 use super::errors::ge_err;
@@ -253,7 +253,7 @@ impl<'parsing> Parser<'parsing> {
         let parameters = self.parse_function_param_types();
         self.match_or_err(Token::ThinArrow);
         let return_type = self.match_type_name_or_err();
-        Type::Function(Function::new(parameters, return_type))
+        Type::Function(FunctionSignature::new(parameters, return_type))
       }
       _ => {
         let err = parser_err::expected_type_name(&self.lex, self.lookahead);

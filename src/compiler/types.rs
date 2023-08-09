@@ -4,12 +4,12 @@ use std::fmt::Display;
 use super::{global_env::GlobalEnv, identifier::StructId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Function {
+pub struct FunctionSignature {
   // signature has always at least one element, the return type.
   signature: Vec<Type>,
 }
 
-impl Function {
+impl FunctionSignature {
   pub fn new(parameters: Vec<Type>, return_type: Type) -> Self {
     let mut signature = parameters;
     signature.push(return_type);
@@ -30,8 +30,8 @@ impl Function {
   }
 }
 
-impl From<Function> for Type {
-  fn from(value: Function) -> Self {
+impl From<FunctionSignature> for Type {
+  fn from(value: FunctionSignature) -> Self {
     Type::Function(value)
   }
 }
@@ -43,7 +43,7 @@ pub enum Type {
   Num,
   Bool,
   Struct(StructId),
-  Function(Function),
+  Function(FunctionSignature),
   Unknown,
   Nothing,
   Error,
@@ -52,14 +52,14 @@ pub enum Type {
 impl Type {
   pub fn print_pretty(&self) -> String {
     match self {
-      Type::Function(function) => {
-        let parameters = function
+      Type::Function(signature) => {
+        let parameters = signature
           .get_parameters()
           .iter()
           .map(|val| val.print_pretty())
           .collect::<Vec<_>>()
           .join(" ,");
-        let return_type = function.get_return_type().print_pretty();
+        let return_type = signature.get_return_type().print_pretty();
         format!("fn ({}) -> {}", parameters, return_type)
       }
       other => format!("{:?}", self),

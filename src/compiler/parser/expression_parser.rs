@@ -1,7 +1,7 @@
 use crate::{compiler::errors::ty_err, return_if_err};
 
 use super::*;
-use crate::compiler::types::Function;
+use crate::compiler::types::FunctionSignature;
 use ast::expression::*;
 
 const MAX_BIN_OP_PRECEDENCE: usize = 4;
@@ -172,8 +172,8 @@ impl<'src> Parser<'src> {
     let call_sr = SourceRange::combine(call_start_sr, call_end_sr);
 
     match expr.type_ {
-      Type::Function(function) => {
-        let (parameters, return_type) = function.into_parts();
+      Type::Function(signature) => {
+        let (parameters, return_type) = signature.into_parts();
         let arguments = self.check_arguments(&parameters, &arguments, call_sr);
         let handle = self.ast.add_expression(expr::FnCall {
           func: expr.handle,
@@ -493,7 +493,7 @@ impl<'src> Parser<'src> {
     let body = self.parse_unscoped_block();
     let captures = self.env.pop_function();
     let parameters_sr = SourceRange::combine(parameters_sr_start, parameters_sr_end);
-    let function = Function::new(parameter_types.clone(), return_type.clone());
+    let function = FunctionSignature::new(parameter_types.clone(), return_type.clone());
 
     ParsedExpression {
       handle: self.ast.add_expression(expr::Lambda {
