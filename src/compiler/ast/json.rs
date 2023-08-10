@@ -44,7 +44,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
   fn visit_literal_string(&mut self, ast: &AST, literal_string: &expr::LiteralString) -> JsonValue {
     object! {
       "LiteralString": {
-        "value": literal_string.handle.get(ast)
+        "value": literal_string.handle.get(ast).to_string()
       }
     }
   }
@@ -52,14 +52,14 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
   fn visit_literal_number(&mut self, ast: &AST, literal_number: &expr::LiteralNumber) -> JsonValue {
     object! {
       "LiteralNumber": {
-        "value": literal_number.value
+        "value": literal_number.value.to_string()
       }
     }
   }
 
   fn visit_literal_bool(&mut self, ast: &AST, literal_bool: &expr::LiteralBool) -> JsonValue {
     object! {
-      "LiteralNumber": {
+      "LiteralBool": {
         "value": literal_bool.value
       }
     }
