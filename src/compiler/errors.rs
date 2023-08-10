@@ -239,6 +239,18 @@ pub mod ty_err {
     function_name: &str,
     lhs_type: String
   );
+
+  def_err!(
+    cannot_assign_to_function,
+    "TY011",
+    "functions cannot be assigned new values"
+  );
+
+  def_err!(
+    cannot_assing_to_type,
+    "TY012",
+    "cannot assign a value to a type"
+  );
 }
 
 pub mod ge_err {

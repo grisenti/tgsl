@@ -439,7 +439,7 @@ impl<'src> Parser<'src> {
           operator: to_operator(op),
           operator_sr: op_sr,
           right: right.handle,
-          expr_type: expr_type,
+          expr_type: expr_type.clone(),
         })
       }
       ParsedExpression {
@@ -501,41 +501,48 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn check_assignment(&mut self, id: expr::Id, value: ParsedExpression) -> ParsedExpression {
-    if let Identifier::Variable(var_id) = id.id {
-      if id.id_type == value.type_ {
-        ParsedExpression {
-          handle: self.ast.add_expression(expr::Assignment {
-            id: var_id,
-            id_sr: id.id_sr,
-            value: value.handle,
-            type_: id.id_type.clone(),
-          }),
-          type_: id.id_type,
+  fn check_assignment(
+    &mut self,
+    id: expr::Id,
+    value: ParsedExpression,
+    eq_rc: SourceRange,
+  ) -> ParsedExpression {
+    match id.id {
+      Identifier::Variable(var_id) => {
+        if id.id_type == value.type_ {
+          return ParsedExpression {
+            handle: self.ast.add_expression(expr::Assignment {
+              id: var_id,
+              id_sr: id.id_sr,
+              value: value.handle,
+              type_: id.id_type.clone(),
+            }),
+            type_: id.id_type,
+          };
+        } else {
+          self.emit_error(ty_err::assignment_of_incompatible_types(
+            eq_rc,
+            id.id_type.print_pretty(),
+            value.type_.print_pretty(),
+          ));
         }
-      } else {
-        self.emit_error(ty_err::assignment_of_incompatible_types(
-          id.id_sr,
-          id.id_type.print_pretty(),
-          value.type_.print_pretty(),
-        ));
-        ParsedExpression::INVALID
       }
-    } else {
-      // FIXME: make this into a proper error
-      panic!("cannot assing to non-variable")
+      Identifier::ExternFunction(_) => self.emit_error(ty_err::cannot_assign_to_function(eq_rc)),
+      Identifier::Struct(_) => self.emit_error(ty_err::cannot_assing_to_type(eq_rc)),
+      Identifier::Invalid => {} // error already handled
     }
+    ParsedExpression::INVALID
   }
 
   fn parse_assignment(&mut self) -> ParsedExpression {
     return_if_err!(self, ParsedExpression::INVALID);
 
     let ParsedExpression { handle: lhs, type_ } = self.parse_logical_operation(0);
-    if let Some((_, eq_src_rc)) = self.match_next(Token::Basic('=')) {
+    if let Some((_, eq_rc)) = self.match_next(Token::Basic('=')) {
       let rhs = self.parse_logical_operation(0);
       // TODO: maybe consider making simple nodes copy
       match lhs.get(&self.ast).clone() {
-        Expr::Id(id) => self.check_assignment(id, rhs),
+        Expr::Id(id) => self.check_assignment(id, rhs, eq_rc),
         Expr::Dot(expr::Dot {
           lhs: object,
           rhs_name: name,
@@ -551,7 +558,7 @@ impl<'src> Parser<'src> {
           type_: Type::Unknown,
         },
         _ => {
-          let err = parser_err::lvalue_assignment(eq_src_rc);
+          let err = parser_err::lvalue_assignment(eq_rc);
           self.emit_error(err);
           ParsedExpression::INVALID
         }
