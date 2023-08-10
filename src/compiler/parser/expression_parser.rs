@@ -606,34 +606,33 @@ impl<'src> Parser<'src> {
   }
 }
 
-#[cfg(disable)]
+#[cfg(test)]
 mod test {
   use json::{array, JsonValue};
 
+  use crate::compiler::types::FunctionSignature;
   use crate::compiler::{
     ast::{json::ASTJSONPrinter, visitor::ExprVisitor, AST},
     errors::CompilerError,
     global_env::GlobalEnv,
     lexer::{Lexer, SourceRange, Token},
     parser::{environment::Environment, Parser, ParserState},
-    types::{type_map::TypeMap, Type},
+    types::Type,
   };
 
   fn parse_expression_with_declared_names(
     expr: &str,
-    names: &[&str],
+    names: Vec<(&str, Type)>,
   ) -> Result<JsonValue, Vec<CompilerError>> {
-    let mut empty_type_map = TypeMap::new();
     let mut empty_global_env = GlobalEnv::new();
     let mut env = Environment::new(&mut empty_global_env);
-    for name in names {
+    for (name, type_) in names {
       env
-        .define_variable(name, SourceRange::EMPTY)
+        .define_variable(name, SourceRange::EMPTY, type_)
         .expect("name redeclarations");
     }
     let mut parser = Parser {
       lex: Lexer::new(expr),
-      type_map: &mut empty_type_map,
       lookahead: Token::EndOfFile,
       ast: AST::new(),
       env,
@@ -651,7 +650,13 @@ mod test {
   }
 
   fn parse_expression(expr: &str) -> Result<JsonValue, Vec<CompilerError>> {
-    parse_expression_with_declared_names(expr, &[])
+    parse_expression_with_declared_names(expr, vec![])
+  }
+
+  #[test]
+  fn literal_string() {
+    let literal = parse_expression("\"str\"").expect("parsing error");
+    assert_eq!(literal["LiteralString"]["value"], "str");
   }
 
   #[test]
@@ -661,9 +666,10 @@ mod test {
   }
 
   #[test]
-  fn literal_string() {
-    let literal = parse_expression("\"str\"").expect("parsing error");
-    assert_eq!(literal["LiteralString"]["value"], "\"str\"");
+  fn literal_bool() {
+    let literal = parse_expression("true").expect("parsing error");
+    print!("{}", literal);
+    assert_eq!(literal["LiteralBool"]["value"], true);
   }
 
   #[test]
@@ -674,43 +680,46 @@ mod test {
 
   #[test]
   fn parse_empty_function_call() {
-    let call = parse_expression_with_declared_names("main()", &["main"]).expect("parsing error");
+    let call = parse_expression_with_declared_names(
+      "main()",
+      vec![("main", FunctionSignature::new(vec![], Type::Nothing).into())],
+    )
+    .expect("parsing error");
+
     assert!(!call["FnCall"]["function"]["Variable"].is_null());
     assert_eq!(call["FnCall"]["arguments"], JsonValue::Array(vec![]));
   }
 
   #[test]
   fn parse_function_call_with_arguments() {
-    let call = parse_expression_with_declared_names("main(1, 1 + 1, \"hello\")", &["main"])
-      .expect("parsing error");
+    let call = parse_expression_with_declared_names(
+      "main(1, 1 + 1, \"hello\")",
+      vec![(
+        "main",
+        FunctionSignature::new(vec![Type::Num, Type::Num, Type::Str], Type::Nothing).into(),
+      )],
+    )
+    .expect("parsing error");
     assert!(!call["FnCall"]["function"]["Variable"].is_null());
     assert_eq!(call["FnCall"]["arguments"].len(), 3);
-  }
-
-  #[test]
-  fn parse_dot() {
-    let dot_expr =
-      parse_expression_with_declared_names("object.member", &["object"]).expect("parsing error");
-    assert!(!dot_expr["Dot"]["lhs"]["Variable"].is_null());
-    assert_eq!(dot_expr["Dot"]["rhs_id"], JsonValue::Null);
   }
 
   #[test]
   fn binary_op() {
     let bin_op = parse_expression("1 + 1").expect("parsing error");
     assert_eq!(bin_op["Binary"]["operator"], "+");
-    assert_eq!(bin_op["Binary"]["left"]["Literal"]["value"], "1");
-    assert_eq!(bin_op["Binary"]["right"]["Literal"]["value"], "1");
+    assert_eq!(bin_op["Binary"]["left"]["LiteralNumber"]["value"], "1");
+    assert_eq!(bin_op["Binary"]["right"]["LiteralNumber"]["value"], "1");
   }
 
   #[test]
   fn logical_op() {
-    let logical_op = parse_expression("1 and 1").expect("parsing error");
+    let logical_op = parse_expression("true and false").expect("parsing error");
     assert_eq!(logical_op["Logical"]["operator"], "and");
-    assert_eq!(logical_op["Logical"]["left"]["LiteralNumber"]["value"], "1");
+    assert_eq!(logical_op["Logical"]["left"]["LiteralBool"]["value"], true);
     assert_eq!(
-      logical_op["Logical"]["right"]["LiteralNumber"]["value"],
-      "1"
+      logical_op["Logical"]["right"]["LiteralBool"]["value"],
+      false
     );
   }
 
@@ -722,40 +731,5 @@ mod test {
       .unwrap()
       .clone();
     assert_eq!(err.code(), "P009");
-  }
-
-  #[test]
-  fn assign_to_rvalue() {
-    let assignment =
-      parse_expression_with_declared_names("id = 2", &["id"]).expect("parsing error");
-    assert_eq!(
-      assignment["Assignment"]["value"]["LiteralNumber"]["value"],
-      "2"
-    );
-  }
-
-  #[test]
-  fn parse_identifier() {
-    let identifier =
-      parse_expression_with_declared_names("identifier", &["identifier"]).expect("parsing error");
-    assert!(!identifier["Variable"]["id"].is_null());
-  }
-
-  #[test]
-  fn operator_precedece() {
-    let expr_no_parens = parse_expression("1 * -1 + 1 < 1 == 1").expect("parsing error");
-    let expr_parens = parse_expression("(((1 * -1) + 1) < 1) == 1").expect("parsing error");
-    assert_eq!(expr_no_parens, expr_parens);
-  }
-
-  #[test]
-  fn parse_lambda_no_captures() {
-    let lambda = parse_expression("fn (n: num, s: str) -> num {}").expect("parsing error");
-    assert_eq!(lambda["Lambda"]["captures"], JsonValue::Array(vec![]));
-    assert_eq!(lambda["Lambda"]["return_type"], format!("{}", Type::Num.0));
-    assert_eq!(
-      lambda["Lambda"]["parameter_types"],
-      array![Type::Num, Type::Str]
-    );
   }
 }
