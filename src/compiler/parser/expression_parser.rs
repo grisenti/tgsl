@@ -400,6 +400,8 @@ impl<'src> Parser<'src> {
       (Operator::Geq, Type::Str, Type::Str, Type::Bool),
       (Operator::Same, Type::Str, Type::Str, Type::Bool),
       (Operator::Different, Type::Str, Type::Str, Type::Bool),
+      // bool
+      (Operator::Same, Type::Bool, Type::Bool, Type::Bool),
     ];
 
     let expr_type = OPERATORS
