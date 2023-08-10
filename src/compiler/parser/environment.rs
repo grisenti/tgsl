@@ -322,10 +322,13 @@ impl<'src> Environment<'src> {
     &mut self,
     name: &str,
     name_sr: SourceRange,
+    function_signature: FunctionSignature,
   ) -> CompilerResult<ExternId> {
     let id = ExternId::relative(self.extern_function_types.len() as u32).into_public();
     self.declare_global(name, name_sr, GlobalIdentifier::ExternFunction(id))?;
-    self.extern_function_types.push(Type::Unknown);
+    self
+      .extern_function_types
+      .push(Type::Function(function_signature));
     Ok(id)
   }
 

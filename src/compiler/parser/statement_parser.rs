@@ -325,13 +325,14 @@ impl<'src> Parser<'src> {
     self.advance();
     self.match_or_err(Token::Fn);
     let (name, name_sr) = self.match_id_or_err();
-    let identifier = check_error!(
-      self,
-      self.env.declare_extern_function(name, name_sr),
-      ExternId::relative(0)
-    );
     let parameter_types = self.parse_function_param_types();
     let return_type = self.parse_function_return_type();
+    let signature = FunctionSignature::new(parameter_types.clone(), return_type.clone());
+    let identifier = check_error!(
+      self,
+      self.env.declare_extern_function(name, name_sr, signature),
+      ExternId::relative(0)
+    );
     self.ast.add_statement(stmt::ExternFunction {
       identifier,
       name_sr,
