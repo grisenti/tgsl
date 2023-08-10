@@ -505,7 +505,7 @@ impl<'src> Parser<'src> {
     &mut self,
     id: expr::Id,
     value: ParsedExpression,
-    eq_rc: SourceRange,
+    eq_sr: SourceRange,
   ) -> ParsedExpression {
     match id.id {
       Identifier::Variable(var_id) => {
@@ -521,14 +521,14 @@ impl<'src> Parser<'src> {
           };
         } else {
           self.emit_error(ty_err::assignment_of_incompatible_types(
-            eq_rc,
+            eq_sr,
             id.id_type.print_pretty(),
             value.type_.print_pretty(),
           ));
         }
       }
-      Identifier::ExternFunction(_) => self.emit_error(ty_err::cannot_assign_to_function(eq_rc)),
-      Identifier::Struct(_) => self.emit_error(ty_err::cannot_assing_to_type(eq_rc)),
+      Identifier::ExternFunction(_) => self.emit_error(ty_err::cannot_assign_to_function(eq_sr)),
+      Identifier::Struct(_) => self.emit_error(ty_err::cannot_assing_to_type(eq_sr)),
       Identifier::Invalid => {} // error already handled
     }
     ParsedExpression::INVALID
@@ -538,27 +538,21 @@ impl<'src> Parser<'src> {
     return_if_err!(self, ParsedExpression::INVALID);
 
     let ParsedExpression { handle: lhs, type_ } = self.parse_logical_operation(0);
-    if let Some((_, eq_rc)) = self.match_next(Token::Basic('=')) {
+    if let Some((_, eq_sr)) = self.match_next(Token::Basic('=')) {
       let rhs = self.parse_logical_operation(0);
       // TODO: maybe consider making simple nodes copy
       match lhs.get(&self.ast).clone() {
-        Expr::Id(id) => self.check_assignment(id, rhs, eq_rc),
-        Expr::Dot(expr::Dot {
-          lhs: object,
-          rhs_name: name,
-          rhs_sr,
-          ..
-        }) => ParsedExpression {
-          handle: self.ast.add_expression(expr::Set {
-            object,
-            member_name: name,
-            member_name_sr: rhs_sr,
+        Expr::Id(id) => self.check_assignment(id, rhs, eq_sr),
+        Expr::MemberGet(member) => ParsedExpression {
+          handle: self.ast.add_expression(expr::MemberSet {
+            member: member.clone(),
+            eq_sr,
             value: rhs.handle,
           }),
-          type_: Type::Unknown,
+          type_: rhs.type_.clone(),
         },
         _ => {
-          let err = parser_err::lvalue_assignment(eq_rc);
+          let err = parser_err::lvalue_assignment(eq_sr);
           self.emit_error(err);
           ParsedExpression::INVALID
         }

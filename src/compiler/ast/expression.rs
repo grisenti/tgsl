@@ -138,17 +138,16 @@ pub mod expr {
     expr_type: Type
   );
 
-  expr_node!(Dot,
-    lhs: ExprHandle,
-    rhs_name: StrHandle,
-    rhs_id: Option<VariableIdentifier>,
-    rhs_sr: SourceRange
-  );
-
   expr_node!(MemberGet,
     lhs: ExprHandle,
     rhs_sr: SourceRange,
     member_index: MemberIndex
+  );
+
+  expr_node!(MemberSet,
+    member: MemberGet,
+    eq_sr: SourceRange,
+    value: ExprHandle
   );
 
   expr_node!(DotCall,
@@ -156,13 +155,6 @@ pub mod expr {
     function: Identifier,
     arguments: Vec<ExprHandle>,
     call_sr: SourceRange
-  );
-
-  expr_node!(Set,
-    object: ExprHandle,
-    member_name: StrHandle,
-    member_name_sr: SourceRange,
-    value: ExprHandle
   );
 }
 
@@ -181,8 +173,7 @@ pub enum Expr {
   Unary(Unary),
   Lambda(Lambda),
   FnCall(FnCall),
-  Dot(Dot),
   MemberGet(MemberGet),
+  MemberSet(MemberSet),
   DotCall(DotCall),
-  Set(Set),
 }

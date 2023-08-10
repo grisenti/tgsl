@@ -14,10 +14,9 @@ pub trait ExprVisitor<T> {
   fn visit_unary(&mut self, ast: &AST, unary: &expr::Unary) -> T;
   fn visit_lambda(&mut self, ast: &AST, lambda: &expr::Lambda) -> T;
   fn visit_fn_call(&mut self, ast: &AST, fn_call: &expr::FnCall) -> T;
-  fn visit_dot(&mut self, ast: &AST, dot: &expr::Dot) -> T;
   fn visit_member_get(&mut self, ast: &AST, member_get: &expr::MemberGet) -> T;
+  fn visit_member_set(&mut self, ast: &AST, member_set: &expr::MemberSet) -> T;
   fn visit_dot_call(&mut self, ast: &AST, dot_call: &expr::DotCall) -> T;
-  fn visit_set(&mut self, ast: &AST, set: &expr::Set) -> T;
 
   fn visit_expr(&mut self, ast: &AST, expr: ExprHandle) -> T {
     match expr.get(ast) {
@@ -32,10 +31,9 @@ pub trait ExprVisitor<T> {
       Expr::Unary(value) => self.visit_unary(ast, value),
       Expr::Lambda(value) => self.visit_lambda(ast, value),
       Expr::FnCall(value) => self.visit_fn_call(ast, value),
-      Expr::Dot(value) => self.visit_dot(ast, value),
       Expr::MemberGet(value) => self.visit_member_get(ast, value),
+      Expr::MemberSet(value) => self.visit_member_set(ast, value),
       Expr::DotCall(value) => self.visit_dot_call(ast, value),
-      Expr::Set(value) => self.visit_set(ast, value),
     }
   }
 }
