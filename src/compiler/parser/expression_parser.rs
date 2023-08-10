@@ -668,7 +668,6 @@ mod test {
   #[test]
   fn literal_bool() {
     let literal = parse_expression("true").expect("parsing error");
-    print!("{}", literal);
     assert_eq!(literal["LiteralBool"]["value"], true);
   }
 
