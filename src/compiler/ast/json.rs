@@ -65,10 +65,28 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
+  fn visit_id(&mut self, ast: &AST, id: &expr::Id) -> JsonValue {
+    object! {
+      "Id": {
+        "id": id.id,
+        "id_type": format!("{:?}", id.id_type)
+      }
+    }
+  }
+
   fn visit_paren(&mut self, ast: &AST, paren: &expr::Paren) -> JsonValue {
     object! {
       "Paren": {
         "expr": self.visit_expr(ast, paren.inner)
+      }
+    }
+  }
+
+  fn visit_assignment(&mut self, ast: &AST, assignment: &expr::Assignment) -> JsonValue {
+    object! {
+      "Assignment": {
+        "id": assignment.id,
+        "value": self.visit_expr(ast, assignment.value)
       }
     }
   }
@@ -98,24 +116,6 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
       "Unary": {
         "operator": format!("{}", unary.operator),
         "right": self.visit_expr(ast, unary.right),
-      }
-    }
-  }
-
-  fn visit_id(&mut self, ast: &AST, id: &expr::Id) -> JsonValue {
-    object! {
-      "Id": {
-        "id": id.id,
-        "id_type": format!("{:?}", id.id_type)
-      }
-    }
-  }
-
-  fn visit_assignment(&mut self, ast: &AST, assignment: &expr::Assignment) -> JsonValue {
-    object! {
-      "Assignment": {
-        "id": assignment.id,
-        "value": self.visit_expr(ast, assignment.value)
       }
     }
   }
