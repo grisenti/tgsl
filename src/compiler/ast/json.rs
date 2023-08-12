@@ -104,8 +104,9 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
 
   fn visit_id(&mut self, ast: &AST, id: &expr::Id) -> JsonValue {
     object! {
-      "Variable": {
-        id: id.id
+      "Id": {
+        "id": id.id,
+        "id_type": format!("{:?}", id.id_type)
       }
     }
   }

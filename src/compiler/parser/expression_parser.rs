@@ -685,7 +685,7 @@ mod test {
     )
     .expect("parsing error");
 
-    assert!(!call["FnCall"]["function"]["Variable"].is_null());
+    assert!(!call["FnCall"]["function"]["Id"].is_null());
     assert_eq!(call["FnCall"]["arguments"], JsonValue::Array(vec![]));
   }
 
@@ -699,7 +699,7 @@ mod test {
       )],
     )
     .expect("parsing error");
-    assert!(!call["FnCall"]["function"]["Variable"].is_null());
+    assert!(!call["FnCall"]["function"]["Id"].is_null());
     assert_eq!(call["FnCall"]["arguments"].len(), 3);
   }
 
