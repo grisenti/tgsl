@@ -1,5 +1,6 @@
 use crate::{compiler::errors::ty_err, return_if_err};
 
+use super::statement_parser::ReturnKind;
 use super::*;
 use crate::compiler::ast::expression::expr::DotCall;
 use crate::compiler::types::FunctionSignature;
@@ -583,12 +584,18 @@ impl<'src> Parser<'src> {
     let parameters_sr = SourceRange::combine(parameters_sr_start, parameters_sr_end);
     let function = FunctionSignature::new(parameter_types.clone(), return_type.clone());
 
+    if matches!(body.1, ReturnKind::Conditional | ReturnKind::None if return_type != Type::Nothing)
+    {
+      self.emit_error(ty_err::no_unconditional_return(SourceRange::EMPTY)); //FIXME: provide proper sr
+      return ParsedExpression::INVALID;
+    }
+
     ParsedExpression {
       handle: self.ast.add_expression(expr::Lambda {
         parameters_sr,
         captures,
         parameter_types,
-        body,
+        body: body.0,
         return_type: return_type.clone(),
       }),
       type_: function.into(),

@@ -97,7 +97,6 @@ impl<'parsing> Parser<'parsing> {
         | Token::Var
         | Token::Struct
         | Token::Fn
-        | Token::Else
         | Token::If
         | Token::For
         | Token::While => {
@@ -316,7 +315,7 @@ impl<'parsing> Parser<'parsing> {
     let module_name = parser.parse_module_name(global_env);
     while !parser.is_at_end() && parser.state != ParserState::UnrecoverableError {
       let stmt = parser.parse_decl();
-      parser.ast.program_push(stmt);
+      parser.ast.program_push(stmt.handle);
       if parser.in_panic_state() {
         parser.recover_from_errors();
       }

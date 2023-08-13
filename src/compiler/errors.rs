@@ -264,6 +264,12 @@ pub mod ty_err {
     "TY014",
     "cannot have a return statement outside of a function"
   );
+
+  def_err!(
+    no_unconditional_return,
+    "TY015",
+    "function requires one unconditional return type"
+  );
 }
 
 pub mod ge_err {
