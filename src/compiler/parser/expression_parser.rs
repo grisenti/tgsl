@@ -609,6 +609,7 @@ impl<'src> Parser<'src> {
 #[cfg(test)]
 mod test {
   use json::{array, JsonValue};
+  use std::any::TypeId;
 
   use crate::compiler::types::FunctionSignature;
   use crate::compiler::{
@@ -649,6 +650,12 @@ mod test {
     }
   }
 
+  impl PartialEq<JsonValue> for Type {
+    fn eq(&self, other: &JsonValue) -> bool {
+      format!("{:?}", self) == *other
+    }
+  }
+
   fn parse_expression(expr: &str) -> Result<JsonValue, Vec<CompilerError>> {
     parse_expression_with_declared_names(expr, vec![])
   }
@@ -672,6 +679,13 @@ mod test {
   }
 
   #[test]
+  fn identifier_type() {
+    let id =
+      parse_expression_with_declared_names("x", vec![("x", Type::Str)]).expect("parsing error");
+    assert_eq!(Type::Str, id["Id"]["id_type"]);
+  }
+
+  #[test]
   fn literal_in_parenthesis() {
     let literal = parse_expression("(1)").expect("parsing error");
     assert_eq!(literal["Paren"]["expr"]["LiteralNumber"]["value"], "1");
@@ -681,12 +695,13 @@ mod test {
   fn parse_empty_function_call() {
     let call = parse_expression_with_declared_names(
       "main()",
-      vec![("main", FunctionSignature::new(vec![], Type::Nothing).into())],
+      vec![("main", FunctionSignature::new(vec![], Type::Str).into())],
     )
     .expect("parsing error");
-
-    assert!(!call["FnCall"]["function"]["Id"].is_null());
-    assert_eq!(call["FnCall"]["arguments"], JsonValue::Array(vec![]));
+    let call = &call["FnCall"];
+    assert!(!call["function"]["Id"].is_null());
+    assert_eq!(call["arguments"], JsonValue::Array(vec![]));
+    assert_eq!(Type::Str, call["expr_type"]);
   }
 
   #[test]
