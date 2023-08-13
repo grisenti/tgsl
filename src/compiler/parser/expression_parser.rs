@@ -658,12 +658,6 @@ mod test {
     }
   }
 
-  impl PartialEq<JsonValue> for Type {
-    fn eq(&self, other: &JsonValue) -> bool {
-      format!("{:?}", self) == *other
-    }
-  }
-
   fn parse_expression(expr: &str) -> Result<JsonValue, Vec<CompilerError>> {
     parse_expression_with_declared_names(expr, vec![])
   }
@@ -718,12 +712,14 @@ mod test {
       "main(1, 1 + 1, \"hello\")",
       vec![(
         "main",
-        FunctionSignature::new(vec![Type::Num, Type::Num, Type::Str], Type::Nothing).into(),
+        FunctionSignature::new(vec![Type::Num, Type::Num, Type::Str], Type::Num).into(),
       )],
     )
     .expect("parsing error");
-    assert!(!call["FnCall"]["function"]["Id"].is_null());
-    assert_eq!(call["FnCall"]["arguments"].len(), 3);
+    let call = &call["FnCall"];
+    assert!(!call["function"]["Id"].is_null());
+    assert_eq!(call["arguments"].len(), 3);
+    assert_eq!(Type::Num, call["expr_type"]);
   }
 
   #[test]

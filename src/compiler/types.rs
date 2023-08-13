@@ -66,3 +66,15 @@ impl Type {
     }
   }
 }
+
+#[cfg(test)]
+mod test {
+  use crate::compiler::types::Type;
+  use json::JsonValue;
+
+  impl PartialEq<JsonValue> for Type {
+    fn eq(&self, other: &JsonValue) -> bool {
+      format!("{:?}", self) == *other
+    }
+  }
+}
