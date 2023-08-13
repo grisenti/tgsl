@@ -113,6 +113,13 @@ impl<'src> Parser<'src> {
     self.advance();
     self.match_or_err(Token::Basic('('));
     let condition = self.parse_expression();
+    if condition.type_ != Type::Bool {
+      self.emit_error(ty_err::incorrect_conditional_type(
+        if_sr,
+        condition.type_.print_pretty(),
+      ));
+      return ParsedStatement::INVALID;
+    }
     self.match_or_err(Token::Basic(')'));
     let true_branch = self.parse_statement();
     let (else_branch, mut return_kind) = if (self.match_next(Token::Else)).is_some() {
@@ -140,6 +147,13 @@ impl<'src> Parser<'src> {
     self.advance(); // consume while
     self.match_or_err(Token::Basic('('));
     let condition = self.parse_expression();
+    if condition.type_ != Type::Bool {
+      self.emit_error(ty_err::incorrect_conditional_type(
+        while_sr,
+        condition.type_.print_pretty(),
+      ));
+      return ParsedStatement::INVALID;
+    }
     self.match_or_err(Token::Basic(')'));
     let loop_body = self.parse_statement();
     let handle = self.ast.add_statement(stmt::While {
