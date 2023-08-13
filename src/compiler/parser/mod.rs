@@ -43,6 +43,7 @@ pub struct Parser<'parsing> {
   ast: AST,
   errors: Vec<CompilerError>,
   state: ParserState,
+  loop_depth: u32,
 }
 
 type TokenPairOpt<'parsing> = Option<(Token<'parsing>, SourceRange)>;
@@ -310,6 +311,7 @@ impl<'parsing> Parser<'parsing> {
       env: Environment::new(global_env),
       errors: Vec::new(),
       state: ParserState::NoErrors,
+      loop_depth: 0,
     };
     parser.advance();
     let module_name = parser.parse_module_name(global_env);

@@ -9,6 +9,7 @@ use crate::{
 
 use super::*;
 
+use crate::compiler::errors::sema_err;
 use crate::compiler::types::FunctionSignature;
 use ast::statement::*;
 
@@ -145,6 +146,7 @@ impl<'src> Parser<'src> {
     assert_eq!(self.lookahead, Token::While);
     let while_sr = self.lex.previous_token_range();
     self.advance(); // consume while
+    self.loop_depth += 1;
     self.match_or_err(Token::Basic('('));
     let condition = self.parse_expression();
     if condition.type_ != Type::Bool {
@@ -161,6 +163,7 @@ impl<'src> Parser<'src> {
       condition: condition.handle,
       loop_body: loop_body.handle,
     });
+    self.loop_depth -= 1;
     ParsedStatement {
       handle,
       return_kind: loop_body.return_kind.to_conditional(),
@@ -175,6 +178,10 @@ impl<'src> Parser<'src> {
   fn parse_loop_break(&mut self) -> ParsedStatement {
     assert!(matches!(self.lookahead, Token::Break));
     let sr = self.lex.previous_token_range();
+    if self.loop_depth == 0 {
+      self.emit_error(sema_err::break_outside_loop(sr));
+      return ParsedStatement::INVALID;
+    }
     self.advance();
     self.match_or_err(Token::Basic(';'));
     self.ast.add_statement(stmt::Break { sr }).into()

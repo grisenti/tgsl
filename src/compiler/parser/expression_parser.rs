@@ -646,6 +646,7 @@ mod test {
       env,
       errors: Vec::new(),
       state: ParserState::NoErrors,
+      loop_depth: 0,
     };
     parser.advance();
     let expr = parser.parse_expression();

@@ -270,6 +270,13 @@ pub mod ty_err {
     "TY015",
     "function requires one unconditional return type"
   );
+
+  def_err!(
+    incorrect_conditional_type,
+    "TY016",
+    "cannot use value of type {} in a condition",
+    conditional_type: String
+  );
 }
 
 pub mod ge_err {
@@ -316,115 +323,15 @@ pub mod sema_err {
   use super::{CompilerError, SourceRangeProvider};
 
   def_err!(
-    assignment_of_incompatible_types,
-    "SA001",
-    "cannot assign value of type {} to identifier of type {}",
-    t1: String,
-    t2: String
-  );
-
-  def_err!(
-    no_unconditional_return,
-    "SA002",
-    "function has only confitional return types"
-  );
-
-  def_err!(
-    inconsistent_return_types,
-    "SA003",
-    "inconsistent return types in function"
-  );
-
-  def_err!(
     cannot_initialize_with_itself,
     "SA004",
     "cannot initialize identifier with itself"
   );
 
   def_err!(
-    incorrect_conditional_type,
-    "SA005",
-    "cannot use value of type {} in a condition",
-    conditional_type: String
-  );
-
-  def_err!(
     break_outside_loop,
     "SA006",
     "cannot have a break outisde of loop body"
-  );
-
-  def_err!(
-    return_outside_function,
-    "SA007",
-    "cannot have a return outside of function body"
-  );
-
-  def_err!(
-    incorrect_dot,
-    "SA008",
-    "identifier '{}' id neither a struct nor a function",
-    name: &str
-  );
-
-  def_err!(
-    incorrect_function_argument_number,
-    "SA009",
-    "incorrect number of arguments for function call (required {}, provided {})",
-    required: usize,
-    provided: usize
-  );
-
-  def_err!(
-    incorrect_function_argument_type,
-    "SA010",
-    "mismatched types in function call. Argument {} (of type {}) should be of type {}",
-    argument_number: usize,
-    provided_type: String,
-    required_type: String
-  );
-
-  def_err!(cannot_call_type, "SA011", "cannot call type {}", t: String);
-
-  def_err!(
-    incorrect_binary_operator,
-    "SA012",
-    "cannot apply operator {} to operands {} and {}",
-    operator: Operator,
-    lhs_type: String,
-    rhs_type: String
-  );
-
-  def_err!(
-    incorrect_unary_operator,
-    "SA013",
-    "cannot apply unary operator {} to operand {}",
-    operator: Operator,
-    rhs_type: String
-  );
-
-  def_err!(
-    incorrect_member_assignment,
-    "SA014",
-    "member '{}' is of type {}, cannot assing value of type {}",
-    member_name: &str,
-    member_type: String,
-    object_type: String
-  );
-
-  def_err!(
-    not_a_member,
-    "SA015",
-    "{} is not a member of type {}",
-    member_name: &str,
-    object_type: String
-  );
-
-  def_err!(
-    incorrect_type_for_set,
-    "SA016",
-    "cannot set propriety for type {}",
-    value_type: String
   );
 }
 
