@@ -231,6 +231,42 @@ impl<'src> Environment<'src> {
     Ok(id)
   }
 
+  fn define_local_variable(
+    &mut self,
+    name: &'src str,
+    name_sr: SourceRange,
+    var_type: Type,
+  ) -> CompilerResult<VariableIdentifier> {
+    if self.last_local_id == u8::MAX {
+      return Err(parser_err::too_many_local_names(name_sr));
+    }
+    let id = self.last_local_id;
+    let local = Local {
+      name,
+      id,
+      scope_local_id: self.names_in_current_scope,
+      function_depth: self.functions_declaration_stack.len() as u8,
+      type_: var_type,
+    };
+    self.last_local_id += 1;
+    self.locals.push(local);
+    Ok(VariableIdentifier::Local(id))
+  }
+
+  pub fn define_function_return_type(&mut self, type_: Type) {
+    self
+      .define_local_variable("<return_type>", SourceRange::EMPTY, type_)
+      .expect("could not define return type");
+  }
+
+  pub fn get_function_return_type(&self) -> Option<&Type> {
+    self
+      .locals
+      .iter()
+      .rfind(|local| local.name == "<return_type>")
+      .map(|local| &local.type_)
+  }
+
   pub fn define_variable(
     &mut self,
     name: &'src str,
@@ -245,20 +281,7 @@ impl<'src> Environment<'src> {
       self.module_global_variables_types.push(var_type);
       Ok(VariableIdentifier::Global(id))
     } else {
-      if self.last_local_id == u8::MAX {
-        return Err(parser_err::too_many_local_names(name_sr));
-      }
-      let id = self.last_local_id;
-      let local = Local {
-        name,
-        id,
-        scope_local_id: self.names_in_current_scope,
-        function_depth: self.functions_declaration_stack.len() as u8,
-        type_: var_type,
-      };
-      self.last_local_id += 1;
-      self.locals.push(local);
-      Ok(VariableIdentifier::Local(id))
+      self.define_local_variable(name, name_sr, var_type)
     }
   }
 

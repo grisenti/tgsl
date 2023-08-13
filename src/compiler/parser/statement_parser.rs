@@ -12,6 +12,17 @@ use super::*;
 use crate::compiler::types::FunctionSignature;
 use ast::statement::*;
 
+enum ReturnType {
+  None,
+  Conditional(Type),
+  Unconditional(Type),
+}
+
+struct ParsedStatement {
+  handle: StmtHandle,
+  return_type: ReturnType,
+}
+
 impl<'src> Parser<'src> {
   pub(super) fn parse_unscoped_block(&mut self) -> Vec<StmtHandle> {
     return_if_err!(self, vec![]);
@@ -137,18 +148,33 @@ impl<'src> Parser<'src> {
 
   fn parse_function_return(&mut self) -> StmtHandle {
     assert!(matches!(self.lookahead, Token::Return));
+
     let return_sr = self.lex.previous_token_range();
     self.advance();
-    let expr = if self.lookahead != Token::Basic(';') {
-      Some(self.parse_expression())
+
+    let (expr, type_) = if self.lookahead != Token::Basic(';') {
+      let expr = self.parse_expression();
+      (Some(expr.handle), expr.type_)
     } else {
-      None
+      (None, Type::Nothing)
     };
+
+    if let Some(current_function_return_type) = self.env.get_function_return_type() {
+      if type_ != *current_function_return_type && *current_function_return_type != Type::Error {
+        self.emit_error(ty_err::incorrect_return_type(
+          return_sr,
+          type_.print_pretty(),
+          current_function_return_type.print_pretty(),
+        ));
+        return StmtHandle::INVALID;
+      }
+    } else {
+      self.emit_error(ty_err::return_outside_of_function(return_sr));
+      return StmtHandle::INVALID;
+    }
+
     self.match_or_err(Token::Basic(';'));
-    self.ast.add_statement(stmt::Return {
-      expr: expr.map(|expr| expr.handle),
-      return_sr,
-    })
+    self.ast.add_statement(stmt::Return { expr, return_sr })
   }
 
   fn parse_statement(&mut self) -> StmtHandle {
@@ -248,6 +274,7 @@ impl<'src> Parser<'src> {
     };
     self.match_or_err(Token::Basic(')'));
     let return_type = self.parse_function_return_type();
+    self.env.define_function_return_type(return_type.clone());
     let function_type = FunctionSignature::new(parameter_types.clone(), return_type.clone()).into();
     if self.lookahead == Token::Basic(';') {
       self.env.pop_function();

@@ -251,6 +251,19 @@ pub mod ty_err {
     "TY012",
     "cannot assign a value to a type"
   );
+
+  def_err!(incorrect_return_type,
+    "TY013",
+    "expression in return statement (of type {}) does not match the required type ({})",
+    expression_type: String,
+    required_type: String
+  );
+
+  def_err!(
+    return_outside_of_function,
+    "TY014",
+    "cannot have a return statement outside of a function"
+  );
 }
 
 pub mod ge_err {
