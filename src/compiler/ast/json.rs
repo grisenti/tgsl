@@ -86,7 +86,8 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     object! {
       "Assignment": {
         "id": assignment.id,
-        "value": self.visit_expr(ast, assignment.value)
+        "value": self.visit_expr(ast, assignment.value),
+        "type_": &assignment.type_
       }
     }
   }
@@ -97,6 +98,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
         "operator": format!("{}", binary.operator),
         "left": self.visit_expr(ast, binary.left),
         "right": self.visit_expr(ast, binary.right),
+        "expr_type": &binary.expr_type
       }
     }
   }
@@ -107,6 +109,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
         "operator": format!("{}", logical.operator),
         "left": self.visit_expr(ast, logical.left),
         "right": self.visit_expr(ast, logical.right),
+        "expr_type": &logical.expr_type
       }
     }
   }
@@ -116,6 +119,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
       "Unary": {
         "operator": format!("{}", unary.operator),
         "right": self.visit_expr(ast, unary.right),
+        "expr_type": &unary.expr_type,
       }
     }
   }
@@ -145,7 +149,8 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     object! {
       "FnCall": {
         "function": self.visit_expr(ast, fn_call.func),
-        "arguments": arguments
+        "arguments": arguments,
+        "expr_type": &fn_call.expr_type,
       }
     }
   }
