@@ -16,6 +16,7 @@ pub mod errors;
 mod global_env;
 pub mod identifier;
 mod lexer;
+mod operators;
 mod parser;
 mod types;
 

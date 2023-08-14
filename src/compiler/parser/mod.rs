@@ -110,11 +110,14 @@ impl<'parsing> Parser<'parsing> {
     self.state = ParserState::NoErrors;
   }
 
-  fn get_variable_id(&mut self, name: &str, name_sr: SourceRange) -> (VariableIdentifier, &Type) {
+  fn get_variable_id(&mut self, name: &str, name_sr: SourceRange) -> (VariableIdentifier, Type) {
     check_error!(
       self,
-      self.env.get_variable_id(name, name_sr),
-      (VariableIdentifier::Invalid, &Type::Error)
+      self
+        .env
+        .get_variable_id(name, name_sr)
+        .map(|(id, type_)| (id, type_.clone())),
+      (VariableIdentifier::Invalid, Type::Error)
     )
   }
 

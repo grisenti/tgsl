@@ -1,50 +1,10 @@
-use std::fmt::Display;
+use std::fmt::{write, Display, Formatter};
 
 use crate::compiler::lexer::Token;
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum Operator {
-  Basic(char),
-
-  // wide operators
-  Leq,
-  Geq,
-  Same,
-  Different,
-  And,
-  Or,
-}
-
-impl Display for Operator {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      Self::Basic(c) => write!(f, "{c}"),
-      Self::Leq => write!(f, "<="),
-      Self::Geq => write!(f, ">="),
-      Self::Same => write!(f, "=="),
-      Self::Different => write!(f, "!="),
-      Self::And => write!(f, "and"),
-      Self::Or => write!(f, "or"),
-    }
-  }
-}
-
-pub fn to_operator(token: Token) -> Operator {
-  match token {
-    Token::Leq => Operator::Leq,
-    Token::Geq => Operator::Geq,
-    Token::Same => Operator::Same,
-    Token::Different => Operator::Different,
-    Token::And => Operator::And,
-    Token::Or => Operator::Or,
-    Token::Basic(c) => Operator::Basic(c),
-    _ => panic!(),
-  }
-}
-
 pub mod expr {
-  use crate::compiler::errors::SourceRangeProvider;
   use crate::compiler::global_env::MemberIndex;
+  use crate::compiler::operators::{BinaryOperator, LogicalOperator, UnaryOperator};
   use crate::compiler::{
     ast::{ExprHandle, StmtHandle, StrHandle},
     identifier::{Identifier, VariableIdentifier},
@@ -52,7 +12,7 @@ pub mod expr {
     types::Type,
   };
 
-  use super::{Expr, Operator};
+  use super::Expr;
 
   macro_rules! expr_node {
   ($name:tt, $($member:ident : $t:ty),+) => {
@@ -102,7 +62,7 @@ pub mod expr {
 
   expr_node!(Binary,
     left: ExprHandle,
-    operator: Operator,
+    operator: BinaryOperator,
     operator_sr: SourceRange,
     right: ExprHandle,
     expr_type: Type
@@ -110,14 +70,14 @@ pub mod expr {
 
   expr_node!(Logical,
     left: ExprHandle,
-    operator: Operator,
+    operator: LogicalOperator,
     operator_sr: SourceRange,
     right: ExprHandle,
     expr_type: Type
   );
 
   expr_node!(Unary,
-    operator: Operator,
+    operator: UnaryOperator,
     operator_sr: SourceRange,
     right: ExprHandle,
     expr_type: Type
@@ -152,7 +112,7 @@ pub mod expr {
 
   expr_node!(DotCall,
     lhs: ExprHandle,
-    function: Identifier,
+    function: VariableIdentifier,
     arguments: Vec<ExprHandle>,
     call_sr: SourceRange
   );

@@ -1,8 +1,9 @@
 use crate::{compiler::errors::ty_err, return_if_err};
 
-use super::statement_parser::ReturnKind;
 use super::*;
 use crate::compiler::ast::expression::expr::DotCall;
+use crate::compiler::operators::{BinaryOperator, LogicalOperator, UnaryOperator};
+use crate::compiler::parser::statement_parser::ReturnKind;
 use crate::compiler::types::FunctionSignature;
 use ast::expression::*;
 
@@ -250,7 +251,7 @@ impl<'src> Parser<'src> {
     member_get_error: MemberGetError,
   ) -> ParsedExpression {
     if let Token::Basic('(') = self.lookahead {
-      let (id, id_type) = self.get_id(name, name_sr);
+      let (id, id_type) = self.get_variable_id(name, name_sr);
       return_if_err!(self, ParsedExpression::INVALID);
       if let Type::Function(signature) = id_type {
         let (parameters, return_type) = signature.into_parts();
@@ -342,20 +343,21 @@ impl<'src> Parser<'src> {
     expr
   }
 
-  fn check_unary(&mut self, sr: SourceRange, op: Operator, rhs: Type) -> Type {
-    const OPERATORS: &[(Operator, Type, Type)] = &[
-      (Operator::Basic('-'), Type::Num, Type::Num),
-      (Operator::Basic('!'), Type::Bool, Type::Bool),
+  fn check_unary(&mut self, sr: SourceRange, op: Token, rhs: Type) -> (Type, UnaryOperator) {
+    #[rustfmt::skip]
+    const OPERATORS: &[(Token, Type, Type, UnaryOperator)] = &[
+      (Token::Basic('-'), Type::Num, Type::Num, UnaryOperator::NegNum),
+      (Token::Basic('!'), Type::Bool, Type::Bool, UnaryOperator::NotBool),
     ];
-    let expr_type = OPERATORS
+    let result = OPERATORS
       .iter()
       .find(|e| e.0 == op && e.1 == rhs)
-      .map(|e| e.2.clone());
-    if let Some(expr_type) = expr_type {
-      expr_type
+      .map(|e| (e.2.clone(), e.3));
+    if let Some(result) = result {
+      result
     } else {
       self.emit_error(ty_err::incorrect_unary_operator(sr, op, rhs.print_pretty()));
-      Type::Error
+      (Type::Error, UnaryOperator::Invalid)
     }
   }
 
@@ -364,54 +366,61 @@ impl<'src> Parser<'src> {
 
     if let Some((op, op_sr)) = self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')]) {
       let right = self.parse_call();
-      let operator = to_operator(op);
-      let expr_type = self.check_unary(op_sr, operator, right.type_);
+      let (result_type, operator) = self.check_unary(op_sr, op, right.type_);
       ParsedExpression {
         handle: self.ast.add_expression(expr::Unary {
-          operator: to_operator(op),
+          operator,
           operator_sr: op_sr,
           right: right.handle,
-          expr_type: expr_type.clone(),
+          expr_type: result_type.clone(),
         }),
-        type_: expr_type,
+        type_: result_type,
       }
     } else {
       self.parse_call()
     }
   }
 
-  fn check_binary(&mut self, sr: SourceRange, op: Operator, lhs: &Type, rhs: &Type) -> Type {
-    const OPERATORS: &[(Operator, Type, Type, Type)] = &[
+  fn check_binary(
+    &mut self,
+    sr: SourceRange,
+    op: Token,
+    lhs: &Type,
+    rhs: &Type,
+  ) -> (Type, BinaryOperator) {
+    #[rustfmt::skip]
+    const OPERATORS: &[(Token, Type, Type, Type, BinaryOperator)] = &[
       // number
-      (Operator::Basic('+'), Type::Num, Type::Num, Type::Num),
-      (Operator::Basic('-'), Type::Num, Type::Num, Type::Num),
-      (Operator::Basic('*'), Type::Num, Type::Num, Type::Num),
-      (Operator::Basic('/'), Type::Num, Type::Num, Type::Num),
-      (Operator::Basic('<'), Type::Num, Type::Num, Type::Bool),
-      (Operator::Basic('>'), Type::Num, Type::Num, Type::Bool),
-      (Operator::Leq, Type::Num, Type::Num, Type::Bool),
-      (Operator::Geq, Type::Num, Type::Num, Type::Bool),
-      (Operator::Same, Type::Num, Type::Num, Type::Bool),
-      (Operator::Different, Type::Num, Type::Num, Type::Bool),
-      // string operator
-      (Operator::Basic('+'), Type::Str, Type::Str, Type::Str),
-      (Operator::Basic('<'), Type::Str, Type::Str, Type::Bool),
-      (Operator::Basic('>'), Type::Str, Type::Str, Type::Bool),
-      (Operator::Leq, Type::Str, Type::Str, Type::Bool),
-      (Operator::Geq, Type::Str, Type::Str, Type::Bool),
-      (Operator::Same, Type::Str, Type::Str, Type::Bool),
-      (Operator::Different, Type::Str, Type::Str, Type::Bool),
+      (Token::Basic('+'), Type::Num, Type::Num, Type::Num, BinaryOperator::AddNum),
+      (Token::Basic('-'), Type::Num, Type::Num, Type::Num, BinaryOperator::SubNum),
+      (Token::Basic('*'), Type::Num, Type::Num, Type::Num, BinaryOperator::MulNum),
+      (Token::Basic('/'), Type::Num, Type::Num, Type::Num, BinaryOperator::DivNum),
+      (Token::Basic('<'), Type::Num, Type::Num, Type::Bool, BinaryOperator::LeNum),
+      (Token::Basic('>'), Type::Num, Type::Num, Type::Bool, BinaryOperator::GeNum),
+      (Token::Leq, Type::Num, Type::Num, Type::Bool, BinaryOperator::LeqNum),
+      (Token::Geq, Type::Num, Type::Num, Type::Bool, BinaryOperator::GeqNum),
+      (Token::Same, Type::Num, Type::Num, Type::Bool, BinaryOperator::SameNum),
+      (Token::Different, Type::Num, Type::Num, Type::Bool, BinaryOperator::DiffNum),
+      // string Token
+      (Token::Basic('+'), Type::Str, Type::Str, Type::Str, BinaryOperator::AddStr),
+      (Token::Basic('<'), Type::Str, Type::Str, Type::Bool, BinaryOperator::LeStr),
+      (Token::Basic('>'), Type::Str, Type::Str, Type::Bool, BinaryOperator::GeStr),
+      (Token::Leq, Type::Str, Type::Str, Type::Bool, BinaryOperator::LeqStr),
+      (Token::Geq, Type::Str, Type::Str, Type::Bool, BinaryOperator::GeqStr),
+      (Token::Same, Type::Str, Type::Str, Type::Bool, BinaryOperator::SameStr),
+      (Token::Different, Type::Str, Type::Str, Type::Bool, BinaryOperator::DiffStr),
       // bool
-      (Operator::Same, Type::Bool, Type::Bool, Type::Bool),
+      (Token::Same, Type::Bool, Type::Bool, Type::Bool, BinaryOperator::SameBool),
+      (Token::Different, Type::Bool, Type::Bool, Type::Bool, BinaryOperator::DiffBool),
     ];
 
-    let expr_type = OPERATORS
+    let result = OPERATORS
       .iter()
       .filter(|bin_op| bin_op.0 == op)
       .find(|bin_op| bin_op.1 == *lhs && bin_op.2 == *rhs)
-      .map(|e| e.3.clone());
-    if let Some(expr_type) = expr_type {
-      expr_type
+      .map(|e| (e.3.clone(), e.4));
+    if let Some(result) = result {
+      result
     } else {
       self.emit_error(ty_err::incorrect_binary_operator(
         sr,
@@ -419,7 +428,7 @@ impl<'src> Parser<'src> {
         lhs.print_pretty(),
         rhs.print_pretty(),
       ));
-      Type::Error
+      (Type::Error, BinaryOperator::Invalid)
     }
   }
 
@@ -435,11 +444,11 @@ impl<'src> Parser<'src> {
       } = self.parse_binary_operation(prec + 1);
       while let Some((op, op_sr)) = self.matches_alternatives(BIN_OP_PRECEDENCE[prec]) {
         let right = self.parse_binary_operation(prec + 1);
-        let operator = to_operator(op);
-        expr_type = self.check_binary(op_sr, operator, &expr_type, &right.type_);
+        let (result_type, operator) = self.check_binary(op_sr, op, &expr_type, &right.type_);
+        expr_type = result_type;
         expr = self.ast.add_expression(expr::Binary {
           left: expr,
-          operator: to_operator(op),
+          operator,
           operator_sr: op_sr,
           right: right.handle,
           expr_type: expr_type.clone(),
@@ -452,18 +461,25 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn check_logical(&mut self, sr: SourceRange, op: Operator, lhs: &Type, rhs: &Type) -> Type {
-    const OPERATORS: &[(Operator, Type, Type, Type)] = &[
-      (Operator::And, Type::Bool, Type::Bool, Type::Bool),
-      (Operator::Or, Type::Bool, Type::Bool, Type::Bool),
+  fn check_logical(
+    &mut self,
+    sr: SourceRange,
+    op: Token,
+    lhs: &Type,
+    rhs: &Type,
+  ) -> (Type, LogicalOperator) {
+    #[rustfmt::skip]
+    const OPERATORS: &[(Token, Type, Type, Type, LogicalOperator)] = &[
+      (Token::And, Type::Bool, Type::Bool, Type::Bool, LogicalOperator::And),
+      (Token::Or, Type::Bool, Type::Bool, Type::Bool, LogicalOperator::Or),
     ];
 
-    let expr_type = OPERATORS
+    let result = OPERATORS
       .iter()
       .find(|e| e.0 == op && e.1 == *lhs && e.2 == *rhs)
-      .map(|e| e.3.clone());
-    if let Some(expr_type) = expr_type {
-      expr_type
+      .map(|e| (e.3.clone(), e.4));
+    if let Some(result) = result {
+      result
     } else {
       self.emit_error(ty_err::incorrect_binary_operator(
         sr,
@@ -471,7 +487,7 @@ impl<'src> Parser<'src> {
         lhs.print_pretty(),
         rhs.print_pretty(),
       ));
-      Type::Error
+      (Type::Error, LogicalOperator::Invalid)
     }
   }
 
@@ -487,11 +503,11 @@ impl<'src> Parser<'src> {
       } = self.parse_logical_operation(prec + 1);
       while let Some((op, op_sr)) = self.matches_alternatives(LOGICAL_OP_PRECEDENCE[prec]) {
         let right = self.parse_logical_operation(prec + 1);
-        let operator = to_operator(op);
-        expr_type = self.check_logical(op_sr, operator, &expr_type, &right.type_);
+        let (resuls_type, operator) = self.check_logical(op_sr, op, &expr_type, &right.type_);
+        expr_type = resuls_type;
         expr = self.ast.add_expression(expr::Logical {
           left: expr,
-          operator: to_operator(op),
+          operator,
           operator_sr: op_sr,
           right: right.handle,
           expr_type: expr_type.clone(),
