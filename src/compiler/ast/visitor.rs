@@ -106,6 +106,13 @@ where
       _phantom_stmt_value: PhantomData::default(),
     }
   }
+
+  pub fn visit_program(mut self) -> V {
+    for stmt in self.ast.get_program() {
+      self.visitor.visit_stmt(self.ast, *stmt);
+    }
+    self.visitor
+  }
 }
 
 impl<'ast, V, S, E> Iterator for ProgramVisitor<'ast, V, S, E>

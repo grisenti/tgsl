@@ -20,6 +20,12 @@ pub struct Struct {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub struct MemberIndex(usize);
 
+impl MemberIndex {
+  pub fn get_index(self) -> usize {
+    self.0
+  }
+}
+
 impl Struct {
   pub fn new(name: String, member_names: Vec<String>, member_types: Vec<Type>) -> Self {
     assert_eq!(member_types.len(), member_types.len());

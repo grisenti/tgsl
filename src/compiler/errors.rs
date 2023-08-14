@@ -156,9 +156,9 @@ pub mod parser_err {
 }
 
 pub mod ty_err {
-  use crate::compiler::ast::expression::Operator;
-
   use super::{CompilerError, SourceRangeProvider};
+  use crate::compiler::lexer::Token;
+  use crate::compiler::operators::{BinaryOperator, UnaryOperator};
 
   def_err!(
     type_specifier_expression_mismatch,
@@ -172,7 +172,7 @@ pub mod ty_err {
     incorrect_unary_operator,
     "TY002",
     "cannot apply unary operator '{}' to operand {}",
-    operator: Operator,
+    operator: Token,
     rhs_type: String
   );
 
@@ -180,7 +180,7 @@ pub mod ty_err {
     incorrect_binary_operator,
     "TY003",
     "cannot apply operator {} to operands {} and {}",
-    operator: Operator,
+    operator: Token,
     lhs_type: String,
     rhs_type: String
   );
@@ -318,7 +318,6 @@ pub mod ge_err {
 }
 
 pub mod sema_err {
-  use crate::compiler::ast::expression::Operator;
 
   use super::{CompilerError, SourceRangeProvider};
 

@@ -20,6 +20,7 @@ mod operators;
 mod parser;
 mod types;
 
+use crate::compiler::ast::visitor::ProgramVisitor;
 use ast::json::ASTJSONPrinter;
 
 pub struct CompiledModule {
@@ -56,6 +57,8 @@ impl Compiler {
   pub fn compile(&mut self, source: &str) -> Result<AST, Vec<CompilerError>> {
     let parsed_module = Parser::parse(source, &self.global_env)?;
     println!("{}", ASTJSONPrinter::print_to_string(&parsed_module.ast));
+    let bytecode = ProgramVisitor::new(BytecodeBuilder::new(), &parsed_module.ast).visit_program();
+    println!("{:?}", bytecode);
     Ok(parsed_module.ast)
 
     //let extern_functions = Self::module_extern_functions(&parsed_module.global_names);
