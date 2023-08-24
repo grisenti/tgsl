@@ -39,7 +39,60 @@ enum MemberGetError {
   NotAMember,
 }
 
+fn check_arguments(
+  errors: &mut Vec<CompilerError>,
+  parameters: &[Type],
+  arguments: &[ParsedExpression],
+  call_sr: SourceRange,
+) -> Vec<ExprHandle> {
+  if parameters.len() != arguments.len() {
+    errors.push(ty_err::incorrect_function_argument_number(
+      call_sr,
+      parameters.len(),
+      arguments.len(),
+    ));
+    return vec![];
+  }
+
+  let mut argument_exprs = Vec::with_capacity(parameters.len());
+  for (index, (param, argument)) in parameters.iter().zip(arguments).enumerate() {
+    if *param != argument.type_ {
+      errors.push(ty_err::incorrect_function_argument_type(
+        call_sr,
+        index + 1,
+        argument.type_.print_pretty(),
+        param.print_pretty(),
+      ));
+    } else {
+      argument_exprs.push(argument.handle);
+    }
+  }
+  if argument_exprs.len() < parameters.len() {
+    vec![]
+  } else {
+    argument_exprs
+  }
+}
+
 impl<'src> Parser<'src> {
+  fn parse_arguments(&mut self, call_start: SourceRange) -> Vec<ParsedExpression> {
+    return_if_err!(self, vec![]);
+    let mut arguments = Vec::new();
+    loop {
+      arguments.push(self.parse_expression());
+      if self.matches_alternatives(&[Token::Basic(',')]).is_none() {
+        break;
+      }
+    }
+    if arguments.len() >= 255 {
+      let err = parser_err::too_many_function_arguments(call_start);
+      self.emit_error(err);
+      vec![]
+    } else {
+      arguments
+    }
+  }
+
   fn parse_constructor(&mut self, id: &str, id_sr: SourceRange) -> ParsedExpression {
     assert_eq!(self.lookahead, Token::Basic('{'));
 
@@ -52,27 +105,18 @@ impl<'src> Parser<'src> {
     let arguments_sr = SourceRange::combine(arguments_start, arguments_end);
     self.match_or_err(Token::Basic('}'));
     if let Some(struct_) = self.env.get_struct(struct_id) {
-      if struct_.get_member_types().len() < arguments.len() {
-        panic!();
-      }
-      let mut argument_expressions = Vec::with_capacity(arguments.len());
-      for (member_type, arg_expr) in struct_.get_member_types().iter().zip(&arguments) {
-        if *member_type == arg_expr.type_ {
-          argument_expressions.push(arg_expr.handle);
-        } else {
-          panic!();
-        }
-      }
-      if argument_expressions.len() < arguments.len() {
-        ParsedExpression::INVALID
-      } else {
-        ParsedExpression {
-          handle: self.ast.add_expression(expr::Construct {
-            arguments: argument_expressions,
-            struct_id,
-          }),
-          type_: Struct(struct_id),
-        }
+      let arguments = check_arguments(
+        &mut self.errors,
+        struct_.get_member_types(),
+        &arguments,
+        arguments_sr,
+      );
+      ParsedExpression {
+        handle: self.ast.add_expression(expr::Construct {
+          arguments,
+          struct_id,
+        }),
+        type_: Struct(struct_id),
       }
     } else {
       panic!(); // cannot construct
@@ -152,61 +196,6 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_arguments(&mut self, call_start: SourceRange) -> Vec<ParsedExpression> {
-    return_if_err!(self, vec![]);
-    let mut arguments = Vec::new();
-    loop {
-      arguments.push(self.parse_expression());
-      if self.matches_alternatives(&[Token::Basic(',')]).is_none() {
-        break;
-      }
-    }
-    if arguments.len() >= 255 {
-      let err = parser_err::too_many_function_arguments(call_start);
-      self.emit_error(err);
-      vec![]
-    } else {
-      arguments
-    }
-  }
-
-  fn check_arguments(
-    &mut self,
-    parameters: &[Type],
-    arguments: &[ParsedExpression],
-    call_sr: SourceRange,
-  ) -> Vec<ExprHandle> {
-    if parameters.len() != arguments.len() {
-      self.emit_error(ty_err::incorrect_function_argument_number(
-        call_sr,
-        parameters.len(),
-        arguments.len(),
-      ));
-      return vec![];
-    }
-
-    let mut invalid_call = false;
-    let mut argument_exprs = Vec::new();
-    for (index, (param, argument)) in parameters.iter().zip(arguments).enumerate() {
-      if *param != argument.type_ {
-        invalid_call = true;
-        self.emit_error(ty_err::incorrect_function_argument_type(
-          call_sr,
-          index + 1,
-          argument.type_.print_pretty(),
-          param.print_pretty(),
-        ));
-      } else {
-        argument_exprs.push(argument.handle);
-      }
-    }
-    if invalid_call {
-      vec![]
-    } else {
-      argument_exprs
-    }
-  }
-
   fn parse_function_call(&mut self, expr: ParsedExpression) -> ParsedExpression {
     return_if_err!(self, ParsedExpression::INVALID);
     assert_eq!(self.lookahead, Token::Basic('('));
@@ -223,7 +212,7 @@ impl<'src> Parser<'src> {
     let call_sr = SourceRange::combine(call_start_sr, call_end_sr);
     if let Type::Function(signature) = expr.type_ {
       let (parameters, return_type) = signature.into_parts();
-      let arguments = self.check_arguments(&parameters, &arguments, call_sr);
+      let arguments = check_arguments(&mut self.errors, &parameters, &arguments, call_sr);
       let handle = self.ast.add_expression(expr::FnCall {
         func: expr.handle,
         call_sr,
@@ -285,8 +274,12 @@ impl<'src> Parser<'src> {
           let parsed_arguments = self.parse_arguments(call_start);
           let call_end = self.lex.previous_token_range();
           let call_sr = SourceRange::combine(call_start, call_end);
-          let arguments =
-            self.check_arguments(&parameters[1..parameters.len()], &parsed_arguments, call_sr);
+          let arguments = check_arguments(
+            &mut self.errors,
+            &parameters[1..parameters.len()],
+            &parsed_arguments,
+            call_sr,
+          );
           let handle = self.ast.add_expression(DotCall {
             function: id,
             lhs: expr.handle,
