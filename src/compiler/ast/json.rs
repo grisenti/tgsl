@@ -1,8 +1,10 @@
+use crate::compiler::ast::ExprHandle;
 use json::object;
 use json::JsonValue;
+use std::fmt::format;
 
-use crate::compiler::identifier::Identifier;
 use crate::compiler::identifier::VariableIdentifier;
+use crate::compiler::identifier::{Identifier, StructId};
 use crate::compiler::types::Type;
 
 use super::expression::*;
@@ -24,6 +26,12 @@ impl From<VariableIdentifier> for JsonValue {
   }
 }
 
+impl From<StructId> for JsonValue {
+  fn from(value: StructId) -> Self {
+    JsonValue::String(format!("{value:?}"))
+  }
+}
+
 impl From<&Type> for JsonValue {
   fn from(value: &Type) -> Self {
     JsonValue::String(format!("{:?}", value))
@@ -36,6 +44,16 @@ fn type_list_to_json(types: &[Type]) -> JsonValue {
     .map(|ty| JsonValue::String(format!("{:?}", ty)))
     .collect::<Vec<_>>()
     .into()
+}
+
+fn expr_list_to_json(expressions: &[ExprHandle], ast: &AST) -> JsonValue {
+  let mut printer = ASTJSONPrinter {};
+  JsonValue::Array(
+    expressions
+      .iter()
+      .map(|&e| printer.visit_expr(ast, e))
+      .collect::<Vec<_>>(),
+  )
 }
 
 pub struct ASTJSONPrinter {}
@@ -141,11 +159,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
   }
 
   fn visit_fn_call(&mut self, ast: &AST, fn_call: &expr::FnCall) -> JsonValue {
-    let arguments = fn_call
-      .arguments
-      .iter()
-      .map(|&e| self.visit_expr(ast, e))
-      .collect::<Vec<_>>();
+    let arguments = expr_list_to_json(&fn_call.arguments, ast);
     object! {
       "FnCall": {
         "function": self.visit_expr(ast, fn_call.func),
@@ -175,15 +189,21 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
   }
 
   fn visit_dot_call(&mut self, ast: &AST, dot_call: &expr::DotCall) -> JsonValue {
-    let arguments = dot_call
-      .arguments
-      .iter()
-      .map(|&e| self.visit_expr(ast, e))
-      .collect::<Vec<_>>();
+    let arguments = expr_list_to_json(&dot_call.arguments, ast);
     object! {
       "DotCall": {
         "lhs": self.visit_expr(ast, dot_call.lhs),
         "function": dot_call.function,
+        "arguments": arguments
+      }
+    }
+  }
+
+  fn visit_constructor(&mut self, ast: &AST, constructor: &expr::Construct) -> JsonValue {
+    let arguments = expr_list_to_json(&constructor.arguments, ast);
+    object! {
+      "Constructor": {
+        "struct_id": constructor.struct_id,
         "arguments": arguments
       }
     }

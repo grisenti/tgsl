@@ -17,6 +17,7 @@ pub trait ExprVisitor<T> {
   fn visit_member_get(&mut self, ast: &AST, member_get: &expr::MemberGet) -> T;
   fn visit_member_set(&mut self, ast: &AST, member_set: &expr::MemberSet) -> T;
   fn visit_dot_call(&mut self, ast: &AST, dot_call: &expr::DotCall) -> T;
+  fn visit_constructor(&mut self, ast: &AST, constructor: &expr::Construct) -> T;
 
   fn visit_expr(&mut self, ast: &AST, expr: ExprHandle) -> T {
     match expr.get(ast) {
@@ -34,6 +35,7 @@ pub trait ExprVisitor<T> {
       Expr::MemberGet(value) => self.visit_member_get(ast, value),
       Expr::MemberSet(value) => self.visit_member_set(ast, value),
       Expr::DotCall(value) => self.visit_dot_call(ast, value),
+      Expr::Construct(value) => self.visit_constructor(ast, value),
     }
   }
 }

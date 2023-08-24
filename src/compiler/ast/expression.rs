@@ -4,6 +4,7 @@ use crate::compiler::lexer::Token;
 
 pub mod expr {
   use crate::compiler::global_env::MemberIndex;
+  use crate::compiler::identifier::StructId;
   use crate::compiler::operators::{BinaryOperator, LogicalOperator, UnaryOperator};
   use crate::compiler::{
     ast::{ExprHandle, StmtHandle, StrHandle},
@@ -116,6 +117,11 @@ pub mod expr {
     arguments: Vec<ExprHandle>,
     call_sr: SourceRange
   );
+
+  expr_node!(Construct,
+    struct_id: StructId,
+    arguments: Vec<ExprHandle>
+  );
 }
 
 use expr::*;
@@ -136,4 +142,5 @@ pub enum Expr {
   MemberGet(MemberGet),
   MemberSet(MemberSet),
   DotCall(DotCall),
+  Construct(Construct),
 }

@@ -5,6 +5,7 @@ use crate::compiler::ast::expression::expr::DotCall;
 use crate::compiler::operators::{BinaryOperator, LogicalOperator, UnaryOperator};
 use crate::compiler::parser::statement_parser::ReturnKind;
 use crate::compiler::types::FunctionSignature;
+use crate::compiler::types::Type::Struct;
 use ast::expression::*;
 
 const MAX_BIN_OP_PRECEDENCE: usize = 4;
@@ -39,6 +40,45 @@ enum MemberGetError {
 }
 
 impl<'src> Parser<'src> {
+  fn parse_constructor(&mut self, id: &str, id_sr: SourceRange) -> ParsedExpression {
+    assert_eq!(self.lookahead, Token::Basic('{'));
+
+    let struct_id = self.get_struct_id(id, id_sr);
+    return_if_err!(self, ParsedExpression::INVALID);
+    let arguments_start = self.lex.previous_token_range();
+    self.advance();
+    let arguments = self.parse_arguments(arguments_start);
+    let arguments_end = self.lex.previous_token_range();
+    let arguments_sr = SourceRange::combine(arguments_start, arguments_end);
+    self.match_or_err(Token::Basic('}'));
+    if let Some(struct_) = self.env.get_struct(struct_id) {
+      if struct_.get_member_types().len() < arguments.len() {
+        panic!();
+      }
+      let mut argument_expressions = Vec::with_capacity(arguments.len());
+      for (member_type, arg_expr) in struct_.get_member_types().iter().zip(&arguments) {
+        if *member_type == arg_expr.type_ {
+          argument_expressions.push(arg_expr.handle);
+        } else {
+          panic!();
+        }
+      }
+      if argument_expressions.len() < arguments.len() {
+        ParsedExpression::INVALID
+      } else {
+        ParsedExpression {
+          handle: self.ast.add_expression(expr::Construct {
+            arguments: argument_expressions,
+            struct_id,
+          }),
+          type_: Struct(struct_id),
+        }
+      }
+    } else {
+      panic!(); // cannot construct
+    }
+  }
+
   fn parse_primary(&mut self) -> ParsedExpression {
     return_if_err!(self, ParsedExpression::INVALID);
 
@@ -78,16 +118,19 @@ impl<'src> Parser<'src> {
       }
       Token::Id(id) => {
         let id_sr = self.lex.previous_token_range();
-        let (id, id_type) = self.get_id(id, id_sr);
-        let id_type = id_type.clone();
         self.advance();
-        ParsedExpression {
-          handle: self.ast.add_expression(expr::Id {
-            id,
-            id_type: id_type.clone(),
-            id_sr,
-          }),
-          type_: id_type,
+        if let Token::Basic('{') = self.lookahead {
+          self.parse_constructor(id, id_sr)
+        } else {
+          let (id, id_type) = self.get_id(id, id_sr);
+          ParsedExpression {
+            handle: self.ast.add_expression(expr::Id {
+              id,
+              id_type: id_type.clone(),
+              id_sr,
+            }),
+            type_: id_type.clone(),
+          }
         }
       }
       Token::Basic(c) if c == '(' => {
@@ -178,41 +221,22 @@ impl<'src> Parser<'src> {
     let call_end_sr = self.lex.previous_token_range();
     self.match_or_err(Token::Basic(')'));
     let call_sr = SourceRange::combine(call_start_sr, call_end_sr);
-
-    match expr.type_ {
-      Type::Function(signature) => {
-        let (parameters, return_type) = signature.into_parts();
-        let arguments = self.check_arguments(&parameters, &arguments, call_sr);
-        let handle = self.ast.add_expression(expr::FnCall {
-          func: expr.handle,
-          call_sr,
-          arguments,
-          expr_type: return_type.clone(),
-        });
-        ParsedExpression {
-          handle,
-          type_: return_type,
-        }
+    if let Type::Function(signature) = expr.type_ {
+      let (parameters, return_type) = signature.into_parts();
+      let arguments = self.check_arguments(&parameters, &arguments, call_sr);
+      let handle = self.ast.add_expression(expr::FnCall {
+        func: expr.handle,
+        call_sr,
+        arguments,
+        expr_type: return_type.clone(),
+      });
+      ParsedExpression {
+        handle,
+        type_: return_type,
       }
-      Type::Struct(id) => {
-        let s = self.env.get_struct(id).unwrap();
-        let member_types = s.get_member_types().to_vec(); // FIXME: REMOVE THIS!!!
-        let arguments = self.check_arguments(&member_types, &arguments, call_sr);
-        let handle = self.ast.add_expression(expr::FnCall {
-          func: expr.handle,
-          call_sr,
-          arguments,
-          expr_type: Type::Struct(id),
-        });
-        ParsedExpression {
-          handle,
-          type_: Type::Struct(id),
-        }
-      }
-      _ => {
-        self.emit_error(ty_err::cannot_call_type(call_sr, expr.type_.print_pretty()));
-        ParsedExpression::INVALID
-      }
+    } else {
+      self.emit_error(ty_err::cannot_call_type(call_sr, expr.type_.print_pretty()));
+      ParsedExpression::INVALID
     }
   }
 

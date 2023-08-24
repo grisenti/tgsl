@@ -1,6 +1,6 @@
 use crate::compiler::ast::expression::expr::{
-  Assignment, Binary, DotCall, FnCall, Id, Lambda, LiteralBool, LiteralNumber, LiteralString,
-  Logical, MemberGet, MemberSet, Paren, Unary,
+  Assignment, Binary, Construct, DotCall, FnCall, Id, Lambda, LiteralBool, LiteralNumber,
+  LiteralString, Logical, MemberGet, MemberSet, Paren, Unary,
 };
 use crate::compiler::ast::statement::stmt::{
   Block, Break, ExternFunction, FunctionDeclaration, FunctionDefinition, IfBranch, Import, Return,
@@ -346,6 +346,13 @@ impl ExprVisitor<()> for BytecodeBuilder {
       self.visit_expr(ast, *arg);
     }
     unsafe { self.push_op2(OpCode::Call, dot_call.arguments.len() as u8 + 1) };
+  }
+
+  fn visit_constructor(&mut self, ast: &AST, constructor: &Construct) -> () {
+    for arg in &constructor.arguments {
+      self.visit_expr(ast, *arg);
+    }
+    unsafe { self.push_op2(OpCode::Construct, constructor.arguments.len() as u8) };
   }
 }
 
