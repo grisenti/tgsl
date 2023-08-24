@@ -6,6 +6,14 @@
 program → declaration* EOF ;
 ```
 
+## Types
+
+```text
+
+type → IDENTIFIER
+    | fn "(" ( type ("," type)*)? ")" "->" type
+```
+
 ## Declarations
 
 ```text
@@ -14,13 +22,13 @@ declaration → struct_decl
 	| var_decl
 	| statement;
 
-struct_decl → "struct" IDENTIFIER "{" (IDENTIFIER ":" IDENTIFIER ",")* "}";
+struct_decl → "struct" IDENTIFIER "{" (IDENTIFIER ":" type ",")* "}";
 
 fn_decl → "fn" IDENTIFIER "(" parameters? ")" -> IDENTIFIER block
 
-parameters → IDENTIFIER ":" IDENTIFIER ( "," IDENTIFIER ":" IDENTIFIER)* ;
+parameters → IDENTIFIER ":" IDENTIFIER ( "," IDENTIFIER ":" type)* ;
 
-var_decl → "var" IDENTIFIER (":" IDENTIFIER)? ( "=" expression )? ";";
+var_decl → "var" IDENTIFIER (":" type)? ( "=" expression )? ";";
 ```
 
 ## Statements
@@ -52,7 +60,7 @@ block → "{" declaration* "}" ;
 ```text
 expression → lambda | assignment;
 
-lambda → "fn" "(" parameters? ")" -> IDENTIFIER block;
+lambda → "fn" "(" parameters? ")" -> type block;
 
 assignment → ( call "." )? IDENTIFIER "=" assignment
 	| logic_or ;
@@ -81,4 +89,41 @@ primary → "true"
 	| STRING
 	| IDENTIFIER
 	| "(" expression ")"
+	| constructor
+	| map
+	| array
+	
+constructor → IDENTIFIER "{" arguments "}"
+
+map → "{" (expression ":" expression ("," expression ":" expression))? "}"
+
+array → "["  (expression ("," expression)*)? "]"
 ```
+
+FN
+ID
+(
+ID
+:
+ID
+)
+->
+ID
+{
+}
+
+ID
+
++
+
+ID
+-
+ID
+
++
+
+ID
+-
+ID
+ID
+
