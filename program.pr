@@ -1,3 +1,14 @@
-fn hello() {
-	print "hello from imported module";
+fn f() -> fn() -> fn() -> num {
+  var y = 1;
+  return fn () -> fn () -> num {
+	return fn () -> num {
+		y = y + 1;
+		return y;
+	};
+  };
 }
+
+var g1 = f();
+var g2 = f();
+var z = g1();
+var w = g1();

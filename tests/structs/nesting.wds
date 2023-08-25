@@ -8,7 +8,7 @@ struct A {
 	b: B,
 }
 
-var x = A(B(1));
+var x = A{B{1}};
 x.b.a = 2;
 var y : num = x.b.a;
 assert(y == 2);

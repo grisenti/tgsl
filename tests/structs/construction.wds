@@ -4,4 +4,4 @@ struct A {
 	b: bool,
 }
 
-var a = A(1, "test", true);
+var a = A{1, "test", true};

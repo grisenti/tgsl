@@ -14,7 +14,7 @@ fn f1() -> fn() -> num {
 }
 
 fn f2() -> fn() -> num {
-  var x = A(1);
+  var x = A{1};
   var g = fn () -> num {
 		return x.a;
   };

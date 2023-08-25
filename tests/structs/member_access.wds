@@ -6,7 +6,7 @@ struct A {
 	c: bool,
 }
 
-var x = A(1, "two", false);
+var x = A{1, "two", false};
 
 assert(x.a == 1);
 assert(x.b == "two");

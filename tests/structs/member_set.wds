@@ -6,7 +6,7 @@ struct A {
 	c: bool,
 }
 
-var a = A(1, "test", false);
+var a = A{1, "test", false};
 a.a = 2.0;
 a.b = "new";
 a.c = true;
