@@ -137,14 +137,6 @@ impl<'parsing> Parser<'parsing> {
     )
   }
 
-  fn get_opt_name(
-    &mut self,
-    name: &str,
-    name_sr: SourceRange,
-  ) -> Option<(VariableIdentifier, &Type)> {
-    self.env.get_variable_id(name, name_sr).ok()
-  }
-
   fn match_id_or_err(&mut self) -> (&'parsing str, SourceRange) {
     const ERROR_RESULT: (&'static str, SourceRange) = ("<ERROR>", SourceRange::EMPTY);
     return_if_err!(self, ERROR_RESULT);

@@ -133,35 +133,25 @@ impl<'src> Parser<'src> {
 
     match self.lookahead {
       Token::Number(num) => {
-        let value_sr = self.lex.previous_token_range();
         self.advance();
         ParsedExpression {
-          handle: self.ast.add_expression(expr::LiteralNumber {
-            value: num,
-            value_sr,
-          }),
+          handle: self.ast.add_expression(expr::LiteralNumber { value: num }),
           type_: Type::Num,
         }
       }
       Token::String(str) => {
-        let value_sr = self.lex.previous_token_range();
         self.advance();
         let handle = self.ast.add_str(str);
         ParsedExpression {
-          handle: self
-            .ast
-            .add_expression(expr::LiteralString { handle, value_sr }),
+          handle: self.ast.add_expression(expr::LiteralString { handle }),
           type_: Type::Str,
         }
       }
       Token::True | Token::False => {
         let value = self.lookahead == Token::True;
-        let value_sr = self.lex.previous_token_range();
         self.advance();
         ParsedExpression {
-          handle: self
-            .ast
-            .add_expression(expr::LiteralBool { value, value_sr }),
+          handle: self.ast.add_expression(expr::LiteralBool { value }),
           type_: Type::Bool,
         }
       }
@@ -176,7 +166,6 @@ impl<'src> Parser<'src> {
             handle: self.ast.add_expression(expr::Id {
               id,
               id_type: id_type.clone(),
-              id_sr,
             }),
             type_: id_type.clone(),
           }
@@ -216,7 +205,6 @@ impl<'src> Parser<'src> {
       let arguments = check_arguments(&mut self.errors, &parameters, &arguments, call_sr);
       let handle = self.ast.add_expression(expr::FnCall {
         func: expr.handle,
-        call_sr,
         arguments,
         expr_type: return_type.clone(),
       });
@@ -234,7 +222,6 @@ impl<'src> Parser<'src> {
     &mut self,
     expr: &ParsedExpression,
     member_name: &str,
-    member_name_sr: SourceRange,
   ) -> Result<ParsedExpression, MemberGetError> {
     if let Type::Struct(struct_id) = expr.type_ {
       let s = self.env.get_struct(struct_id).unwrap();
@@ -242,7 +229,6 @@ impl<'src> Parser<'src> {
         let member_type = s.member_info(member_index).1.clone();
         let handle = self.ast.add_expression(expr::MemberGet {
           lhs: expr.handle,
-          rhs_sr: member_name_sr,
           member_index,
         });
         Ok(ParsedExpression {
@@ -286,7 +272,6 @@ impl<'src> Parser<'src> {
             function: id,
             lhs: expr.handle,
             arguments,
-            call_sr,
           });
           ParsedExpression {
             handle,
@@ -336,7 +321,7 @@ impl<'src> Parser<'src> {
 
     self.advance();
     let (name, name_sr) = self.match_id_or_err();
-    match self.try_parse_member_get(&expr, name, name_sr) {
+    match self.try_parse_member_get(&expr, name) {
       Ok(result) => result,
       Err(err) => self.try_resolve_dot_call(expr, name, name_sr, err),
     }
@@ -389,7 +374,6 @@ impl<'src> Parser<'src> {
       ParsedExpression {
         handle: self.ast.add_expression(expr::Unary {
           operator,
-          operator_sr: op_sr,
           right: right.handle,
           expr_type: result_type.clone(),
         }),
@@ -468,7 +452,6 @@ impl<'src> Parser<'src> {
         expr = self.ast.add_expression(expr::Binary {
           left: expr,
           operator,
-          operator_sr: op_sr,
           right: right.handle,
           expr_type: expr_type.clone(),
         })
@@ -527,7 +510,6 @@ impl<'src> Parser<'src> {
         expr = self.ast.add_expression(expr::Logical {
           left: expr,
           operator,
-          operator_sr: op_sr,
           right: right.handle,
           expr_type: expr_type.clone(),
         })
@@ -551,7 +533,6 @@ impl<'src> Parser<'src> {
           return ParsedExpression {
             handle: self.ast.add_expression(expr::Assignment {
               id: var_id,
-              id_sr: id.id_sr,
               value: value.handle,
               type_: id.id_type.clone(),
             }),
@@ -584,7 +565,6 @@ impl<'src> Parser<'src> {
         Expr::MemberGet(member) => ParsedExpression {
           handle: self.ast.add_expression(expr::MemberSet {
             member: member.clone(),
-            eq_sr,
             value: rhs.handle,
           }),
           type_: rhs.type_.clone(),
@@ -624,7 +604,6 @@ impl<'src> Parser<'src> {
 
     ParsedExpression {
       handle: self.ast.add_expression(expr::Lambda {
-        parameters_sr,
         captures,
         parameter_types,
         body: body.0,

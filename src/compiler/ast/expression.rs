@@ -5,7 +5,6 @@ pub mod expr {
   use crate::compiler::{
     ast::{ExprHandle, StmtHandle, StrHandle},
     identifier::{Identifier, VariableIdentifier},
-    lexer::SourceRange,
     types::Type,
   };
 
@@ -26,24 +25,20 @@ pub mod expr {
   };
 }
   expr_node!(LiteralString,
-    handle: StrHandle,
-    value_sr: SourceRange
+    handle: StrHandle
   );
 
   expr_node!(LiteralNumber,
-    value: f64,
-    value_sr: SourceRange
+    value: f64
   );
 
   expr_node!(LiteralBool,
-    value: bool,
-    value_sr: SourceRange
+    value: bool
   );
 
   expr_node!(Id,
     id: Identifier,
-    id_type: Type,
-    id_sr: SourceRange
+    id_type: Type
   );
 
   expr_node!(Paren,
@@ -53,14 +48,12 @@ pub mod expr {
   expr_node!(Assignment,
     id: VariableIdentifier,
     type_: Type,
-    id_sr: SourceRange,
     value: ExprHandle
   );
 
   expr_node!(Binary,
     left: ExprHandle,
     operator: BinaryOperator,
-    operator_sr: SourceRange,
     right: ExprHandle,
     expr_type: Type
   );
@@ -68,20 +61,17 @@ pub mod expr {
   expr_node!(Logical,
     left: ExprHandle,
     operator: LogicalOperator,
-    operator_sr: SourceRange,
     right: ExprHandle,
     expr_type: Type
   );
 
   expr_node!(Unary,
     operator: UnaryOperator,
-    operator_sr: SourceRange,
     right: ExprHandle,
     expr_type: Type
   );
 
   expr_node!(Lambda,
-    parameters_sr: SourceRange,
     captures: Vec<VariableIdentifier>,
     parameter_types: Vec<Type>,
     return_type: Type,
@@ -90,28 +80,24 @@ pub mod expr {
 
   expr_node!(FnCall,
     func: ExprHandle,
-    call_sr: SourceRange,
     arguments: Vec<ExprHandle>,
     expr_type: Type
   );
 
   expr_node!(MemberGet,
     lhs: ExprHandle,
-    rhs_sr: SourceRange,
     member_index: MemberIndex
   );
 
   expr_node!(MemberSet,
     member: MemberGet,
-    eq_sr: SourceRange,
     value: ExprHandle
   );
 
   expr_node!(DotCall,
     lhs: ExprHandle,
     function: VariableIdentifier,
-    arguments: Vec<ExprHandle>,
-    call_sr: SourceRange
+    arguments: Vec<ExprHandle>
   );
 
   expr_node!(Construct,

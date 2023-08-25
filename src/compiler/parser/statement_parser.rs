@@ -130,7 +130,6 @@ impl<'src> Parser<'src> {
     };
     return_kind.update(true_branch.return_kind.to_conditional());
     let handle = self.ast.add_statement(stmt::IfBranch {
-      if_sr,
       condition: condition.handle,
       true_branch: true_branch.handle,
       else_branch,
@@ -158,7 +157,6 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic(')'));
     let loop_body = self.parse_statement();
     let handle = self.ast.add_statement(stmt::While {
-      while_sr,
       condition: condition.handle,
       loop_body: loop_body.handle,
     });
@@ -183,7 +181,7 @@ impl<'src> Parser<'src> {
     }
     self.advance();
     self.match_or_err(Token::Basic(';'));
-    self.ast.add_statement(stmt::Break { sr }).into()
+    self.ast.add_statement(stmt::Break {}).into()
   }
 
   fn parse_function_return(&mut self) -> ParsedStatement {
@@ -214,7 +212,7 @@ impl<'src> Parser<'src> {
     }
 
     self.match_or_err(Token::Basic(';'));
-    let handle = self.ast.add_statement(stmt::Return { expr, return_sr });
+    let handle = self.ast.add_statement(stmt::Return { expr });
     ParsedStatement {
       handle,
       return_kind: ReturnKind::Unconditional,
@@ -274,7 +272,6 @@ impl<'src> Parser<'src> {
       .add_statement(stmt::VarDecl {
         identifier,
         var_type: expr.type_,
-        id_sr,
         init_expr: expr.handle,
       })
       .into()
@@ -340,7 +337,6 @@ impl<'src> Parser<'src> {
         .ast
         .add_statement(stmt::FunctionDeclaration {
           id,
-          name_sr,
           parameter_types,
           return_type,
         })
@@ -398,13 +394,7 @@ impl<'src> Parser<'src> {
         .define_struct(name, name_sr, member_names, member_types),
       StructId::relative(0)
     );
-    self
-      .ast
-      .add_statement(stmt::Struct {
-        id: name_id,
-        name_sr,
-      })
-      .into()
+    self.ast.add_statement(stmt::Struct { id: name_id }).into()
   }
 
   fn parse_extern_function(&mut self) -> ParsedStatement {
@@ -429,7 +419,6 @@ impl<'src> Parser<'src> {
       .ast
       .add_statement(stmt::ExternFunction {
         identifier,
-        name_sr,
         parameter_types,
         return_type,
       })

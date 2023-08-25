@@ -10,10 +10,10 @@ pub mod stmt {
   use super::Stmt;
 
   macro_rules! stmt_node {
-  ($name:tt, $($member:ident : $t:ty),+) => {
+  ($name:tt, $($member:ident : $t:ty),*) => {
     #[derive(Debug, Clone)]
 		pub struct $name {
-  		$(pub $member: $t),+
+  		$(pub $member: $t),*
 		}
 
     impl From<$name> for Stmt {
@@ -26,7 +26,6 @@ pub mod stmt {
 
   stmt_node!(VarDecl,
     identifier: VariableIdentifier,
-    id_sr: SourceRange,
     var_type: Type,
     init_expr: ExprHandle
   );
@@ -42,14 +41,12 @@ pub mod stmt {
   );
 
   stmt_node!(IfBranch,
-    if_sr: SourceRange,
     condition: ExprHandle,
     true_branch: StmtHandle,
     else_branch: Option<StmtHandle>
   );
 
   stmt_node!(While,
-    while_sr: SourceRange,
     condition: ExprHandle,
     loop_body: StmtHandle
   );
@@ -65,30 +62,24 @@ pub mod stmt {
 
   stmt_node!(FunctionDeclaration,
     id: VariableIdentifier,
-    name_sr: SourceRange,
     parameter_types: Vec<Type>,
     return_type: Type
   );
 
   stmt_node!(ExternFunction,
     identifier: ExternId,
-    name_sr: SourceRange,
     parameter_types: Vec<Type>,
     return_type: Type
   );
 
-  stmt_node!(Break,
-    sr: SourceRange
-  );
+  stmt_node!(Break,);
 
   stmt_node!(Return,
-    expr: Option<ExprHandle>,
-    return_sr: SourceRange
+    expr: Option<ExprHandle>
   );
 
   stmt_node!(Struct,
-    id: StructId,
-    name_sr: SourceRange
+    id: StructId
   );
 
   stmt_node!(Import,
