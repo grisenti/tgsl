@@ -362,7 +362,6 @@ impl<'src> Parser<'src> {
       .ast
       .add_statement(stmt::FunctionDefinition {
         id,
-        name_sr,
         parameter_types,
         captures,
         body: body.0,

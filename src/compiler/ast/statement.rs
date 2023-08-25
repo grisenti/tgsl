@@ -53,7 +53,6 @@ pub mod stmt {
 
   stmt_node!(FunctionDefinition,
     id: VariableIdentifier,
-    name_sr: SourceRange,
     captures: Vec<VariableIdentifier>,
     parameter_types: Vec<Type>,
     return_type: Type,
