@@ -739,4 +739,28 @@ mod test {
     let err = TestParser::new("1 = 2").parse_expression_error();
     assert_eq!(err.code(), "P009");
   }
+
+  #[test]
+  fn parse_empty_constructor() {
+    let constructor = TestParser::new("A{}")
+      .define_struct("A", vec![], vec![])
+      .parse_correct_expression();
+    assert!(!constructor["Constructor"].is_null());
+    assert!(constructor["Constructor"]["arguments"].is_empty());
+  }
+
+  #[test]
+  fn parse_non_empty_constructor() {
+    let constructor = TestParser::new("A{1, \"hello\"}")
+      .define_struct("A", vec!["a", "b"], vec![Type::Num, Type::Str])
+      .parse_correct_expression();
+    let constructor = &constructor["Constructor"];
+    assert!(!constructor.is_null());
+    assert_eq!(constructor["arguments"].len(), 2);
+    assert_eq!(constructor["arguments"][0]["LiteralNumber"]["value"], "1");
+    assert_eq!(
+      constructor["arguments"][1]["LiteralString"]["value"],
+      "hello"
+    );
+  }
 }

@@ -382,10 +382,27 @@ mod test {
       self
     }
 
+    pub fn define_struct(
+      mut self,
+      name: &'static str,
+      member_names: Vec<&str>,
+      member_types: Vec<Type>,
+    ) -> Self {
+      assert_eq!(member_types.len(), member_names.len());
+
+      let member_names = member_names.iter().map(|s| s.to_string()).collect();
+      self
+        .parser
+        .env
+        .define_struct(name, SourceRange::EMPTY, member_names, member_types)
+        .expect("could not define struct");
+      self
+    }
+
     pub fn parse_correct_expression(mut self) -> JsonValue {
       let expr = self.parser.parse_expression();
       if !self.parser.errors.is_empty() {
-        panic!("parsing error");
+        panic!("parsing error: {:?}", self.parser.errors);
       }
       let mut printer = ASTJSONPrinter {};
       printer.visit_expr(&self.parser.ast, expr.handle)
@@ -399,7 +416,7 @@ mod test {
     pub fn parse_correct_statement(mut self) -> JsonValue {
       let stmt = self.parser.parse_decl();
       if !self.parser.errors.is_empty() {
-        panic!("parsing error");
+        panic!("parsing error: {:?}", self.parser.errors);
       }
       let mut printer = ASTJSONPrinter {};
       printer.visit_stmt(&self.parser.ast, stmt.handle)
