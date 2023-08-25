@@ -56,7 +56,7 @@ fn check_arguments(
 
   let mut argument_exprs = Vec::with_capacity(parameters.len());
   for (index, (param, argument)) in parameters.iter().zip(arguments).enumerate() {
-    if *param != argument.type_ {
+    if *param != argument.type_ && *param != Type::Any {
       errors.push(ty_err::incorrect_function_argument_type(
         call_sr,
         index + 1,
