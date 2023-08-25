@@ -1,7 +1,3 @@
-use std::fmt::{write, Display, Formatter};
-
-use crate::compiler::lexer::Token;
-
 pub mod expr {
   use crate::compiler::global_env::MemberIndex;
   use crate::compiler::identifier::StructId;

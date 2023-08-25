@@ -2,7 +2,7 @@ use super::{
   identifier::{ExternId, GlobalVarId},
   operators::UnaryOperator,
 };
-use crate::compiler::operators::{BinaryOperator, LogicalOperator};
+use crate::compiler::operators::BinaryOperator;
 use core::fmt::Debug;
 
 #[repr(u8)]

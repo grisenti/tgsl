@@ -240,25 +240,25 @@ impl ExprVisitor<()> for BytecodeBuilder {
     }
   }
 
-  fn visit_literal_number(&mut self, ast: &AST, literal_number: &LiteralNumber) -> () {
+  fn visit_literal_number(&mut self, _ast: &AST, literal_number: &LiteralNumber) -> () {
     unsafe {
       self.push_constant(ConstantValue::Number(literal_number.value));
     }
   }
 
-  fn visit_literal_bool(&mut self, ast: &AST, literal_bool: &LiteralBool) {
+  fn visit_literal_bool(&mut self, _ast: &AST, literal_bool: &LiteralBool) {
     unsafe {
       self.push_constant(ConstantValue::Bool(literal_bool.value));
     }
   }
 
-  fn visit_id(&mut self, ast: &AST, id: &Id) -> () {
+  fn visit_id(&mut self, _ast: &AST, id: &Id) -> () {
     match id.id {
       Identifier::Variable(var_id) => unsafe { self.get_variable(var_id) },
       Identifier::ExternFunction(ext_id) => unsafe {
         self.push_constant(ConstantValue::ExternId(ext_id))
       },
-      Identifier::Struct(struct_id) => {}
+      Identifier::Struct(_struct_id) => {}
       Identifier::Invalid => panic!("invalid identifier"),
     }
   }
@@ -419,7 +419,7 @@ impl StmtVisitor<()> for BytecodeBuilder {
     // nothing
   }
 
-  fn visit_break(&mut self, ast: &AST, break_node: &Break) -> () {
+  fn visit_break(&mut self, _ast: &AST, _break_node: &Break) -> () {
     // TODO
   }
 
@@ -432,11 +432,11 @@ impl StmtVisitor<()> for BytecodeBuilder {
     unsafe { self.push_op(OpCode::Return) };
   }
 
-  fn visit_struct(&mut self, ast: &AST, struct_stmt: &Struct) -> () {
+  fn visit_struct(&mut self, _ast: &AST, _struct_stmt: &Struct) -> () {
     // nothing
   }
 
-  fn visit_import(&mut self, ast: &AST, import: &Import) -> () {
+  fn visit_import(&mut self, _ast: &AST, _import: &Import) -> () {
     // nothing
   }
 }

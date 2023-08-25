@@ -2,7 +2,7 @@ use core::panic;
 use std::collections::HashMap;
 
 use super::errors::{ge_err, CompilerResult};
-use super::identifier::{ExternId, GlobalIdentifier, GlobalVarId, Identifier, ModuleId, StructId};
+use super::identifier::{ExternId, GlobalIdentifier, GlobalVarId, ModuleId, StructId};
 use super::lexer::SourceRange;
 use super::parser::ParsedModule;
 use super::types::Type;
@@ -183,6 +183,6 @@ pub mod test {
   }
 
   impl GlobalEnv {
-    pub fn add_fake_module(&mut self, module: Module) {}
+    pub fn add_fake_module(&mut self, _module: Module) {}
   }
 }

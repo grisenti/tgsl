@@ -158,7 +158,6 @@ pub mod parser_err {
 pub mod ty_err {
   use super::{CompilerError, SourceRangeProvider};
   use crate::compiler::lexer::Token;
-  use crate::compiler::operators::{BinaryOperator, UnaryOperator};
 
   def_err!(
     type_specifier_expression_mismatch,

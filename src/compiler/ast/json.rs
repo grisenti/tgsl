@@ -1,7 +1,6 @@
 use crate::compiler::ast::ExprHandle;
 use json::object;
 use json::JsonValue;
-use std::fmt::format;
 
 use crate::compiler::identifier::VariableIdentifier;
 use crate::compiler::identifier::{Identifier, StructId};
@@ -67,7 +66,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_literal_number(&mut self, ast: &AST, literal_number: &expr::LiteralNumber) -> JsonValue {
+  fn visit_literal_number(&mut self, _ast: &AST, literal_number: &expr::LiteralNumber) -> JsonValue {
     object! {
       "LiteralNumber": {
         "value": literal_number.value.to_string()
@@ -75,7 +74,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_literal_bool(&mut self, ast: &AST, literal_bool: &expr::LiteralBool) -> JsonValue {
+  fn visit_literal_bool(&mut self, _ast: &AST, literal_bool: &expr::LiteralBool) -> JsonValue {
     object! {
       "LiteralBool": {
         "value": literal_bool.value
@@ -83,7 +82,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_id(&mut self, ast: &AST, id: &expr::Id) -> JsonValue {
+  fn visit_id(&mut self, _ast: &AST, id: &expr::Id) -> JsonValue {
     object! {
       "Id": {
         "id": id.id,
@@ -291,7 +290,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
 
   fn visit_function_declaration(
     &mut self,
-    ast: &AST,
+    _ast: &AST,
     function_declaration: &stmt::FunctionDeclaration,
   ) -> JsonValue {
     object! {
@@ -305,7 +304,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
 
   fn visit_extern_function(
     &mut self,
-    ast: &AST,
+    _ast: &AST,
     extern_function: &stmt::ExternFunction,
   ) -> JsonValue {
     object! {
@@ -317,7 +316,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_break(&mut self, ast: &AST, break_node: &stmt::Break) -> JsonValue {
+  fn visit_break(&mut self, _ast: &AST, _break_node: &stmt::Break) -> JsonValue {
     JsonValue::String("Break".to_string())
   }
 
@@ -334,7 +333,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_struct(&mut self, ast: &AST, struct_stmt: &stmt::Struct) -> JsonValue {
+  fn visit_struct(&mut self, _ast: &AST, struct_stmt: &stmt::Struct) -> JsonValue {
     object! {
       "Struct": {
         "id": format!("{:?}", struct_stmt.id),
@@ -342,7 +341,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_import(&mut self, ast: &AST, import: &stmt::Import) -> JsonValue {
+  fn visit_import(&mut self, _ast: &AST, import: &stmt::Import) -> JsonValue {
     object! {
       "Import": {
         "module id": format!("{}", import.module_id.0)

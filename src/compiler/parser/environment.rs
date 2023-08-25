@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::hash_map::Entry};
+use std::collections::hash_map::Entry;
 
 use crate::compiler::{
   errors::ge_err,
@@ -168,7 +168,7 @@ impl<'src> Environment<'src> {
     }
   }
 
-  pub fn get_struct_id(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<StructId> {
+  pub fn get_struct_id(&mut self, name: &str, _name_sr: SourceRange) -> CompilerResult<StructId> {
     let id = self.global_names.get(name).copied();
     if let Some(GlobalIdentifier::Struct(id)) = id {
       Ok(id)
@@ -337,7 +337,7 @@ impl<'src> Environment<'src> {
       .collect()
   }
 
-  fn ensure_name_available(&self, name: &str, name_sr: SourceRange) -> CompilerResult<()> {
+  fn ensure_name_available(&self, _name: &str, _name_sr: SourceRange) -> CompilerResult<()> {
     Ok(())
   }
 

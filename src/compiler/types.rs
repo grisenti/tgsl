@@ -1,7 +1,4 @@
-use std::borrow::Cow;
-use std::fmt::Display;
-
-use super::{global_env::GlobalEnv, identifier::StructId};
+use super::identifier::StructId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionSignature {
@@ -62,15 +59,16 @@ impl Type {
         let return_type = signature.get_return_type().print_pretty();
         format!("fn ({}) -> {}", parameters, return_type)
       }
-      other => format!("{:?}", self),
+      other => format!("{:?}", other),
     }
   }
 }
 
 #[cfg(test)]
 mod test {
-  use crate::compiler::types::Type;
   use json::JsonValue;
+
+  use crate::compiler::types::Type;
 
   impl PartialEq<JsonValue> for Type {
     fn eq(&self, other: &JsonValue) -> bool {

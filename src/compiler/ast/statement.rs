@@ -1,7 +1,7 @@
 pub mod stmt {
 
   use crate::compiler::{
-    ast::{ExprHandle, StmtHandle, StrHandle},
+    ast::{ExprHandle, StmtHandle},
     identifier::{ExternId, ModuleId, StructId, VariableIdentifier},
     lexer::SourceRange,
     types::Type,
