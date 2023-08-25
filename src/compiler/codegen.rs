@@ -7,7 +7,7 @@ use crate::compiler::ast::statement::stmt::{
   StmtExpr, Struct, VarDecl, While,
 };
 use crate::compiler::ast::visitor::{ExprVisitor, StmtVisitor};
-use crate::compiler::ast::AST;
+use crate::compiler::ast::{StmtHandle, AST};
 use crate::compiler::bytecode::OpCode;
 use crate::compiler::operators::LogicalOperator;
 use std::fmt::Debug;
@@ -17,19 +17,19 @@ use super::{
   identifier::{Identifier, VariableIdentifier},
 };
 
-pub struct Label(usize);
-pub struct JumpPoint(usize);
-pub struct Address(usize);
+struct Label(usize);
+struct JumpPoint(usize);
+struct Address(usize);
 
 #[derive(Default, Clone)]
-pub struct BytecodeBuilder {
+pub struct FunctionCode {
   code: Vec<u8>,
-  functions: Vec<BytecodeBuilder>,
+  functions: Vec<FunctionCode>,
   constants: Vec<ConstantValue>,
 }
 
-impl BytecodeBuilder {
-  pub unsafe fn push_constant(&mut self, val: ConstantValue) {
+impl FunctionCode {
+  unsafe fn push_constant(&mut self, val: ConstantValue) {
     let constant_offset = self.constants.len() as u8;
     let constant_type = if matches!(val, ConstantValue::Str(_)) {
       OpCode::ConstantStr
@@ -41,29 +41,29 @@ impl BytecodeBuilder {
     self.code.push(constant_offset);
   }
 
-  pub unsafe fn push_function(&mut self, func: BytecodeBuilder) {
+  unsafe fn push_function(&mut self, func: FunctionCode) {
     let offset = self.functions.len() as u8;
     self.functions.push(func);
     self.code.push(OpCode::Function as u8);
     self.code.push(offset);
   }
 
-  pub unsafe fn push_constant_none(&mut self) {
+  unsafe fn push_constant_none(&mut self) {
     self.code.push(OpCode::Constant as u8);
     self.code.push(0);
   }
 
-  pub unsafe fn push_op(&mut self, op: OpCode) {
+  unsafe fn push_op(&mut self, op: OpCode) {
     self.code.push(op as u8);
   }
 
   /// pushes opcode with additional data
-  pub unsafe fn push_op2(&mut self, op: OpCode, data: u8) {
+  unsafe fn push_op2(&mut self, op: OpCode, data: u8) {
     self.code.push(op as u8);
     self.code.push(data);
   }
 
-  pub unsafe fn push_jump(&mut self, jump_type: OpCode) -> JumpPoint {
+  unsafe fn push_jump(&mut self, jump_type: OpCode) -> JumpPoint {
     debug_assert!(matches!(
       jump_type,
       OpCode::Jump | OpCode::JumpIfFalsePop | OpCode::JumpIfFalseNoPop
@@ -75,7 +75,7 @@ impl BytecodeBuilder {
     JumpPoint(index)
   }
 
-  pub fn push_back_jump(&mut self, Label(to): Label) {
+  fn push_back_jump(&mut self, Label(to): Label) {
     assert!((self.code.len() - to + 2) <= u16::MAX as usize);
     unsafe { self.push_op(OpCode::BackJump) };
     // 2 added to skip jump point
@@ -84,7 +84,7 @@ impl BytecodeBuilder {
     self.code.push(split[1]);
   }
 
-  pub fn backpatch_current_instruction(&mut self, JumpPoint(jump_point): JumpPoint) {
+  fn backpatch_current_instruction(&mut self, JumpPoint(jump_point): JumpPoint) {
     assert!((self.code.len() - jump_point - 2) <= u16::MAX as usize);
     let split = ((self.code.len() - jump_point - 2) as u16).to_ne_bytes();
     // 2 removed to skip jump point
@@ -92,24 +92,19 @@ impl BytecodeBuilder {
     self.code[jump_point + 1] = split[1];
   }
 
-  pub fn get_next_instruction_label(&self) -> Label {
+  fn get_next_instruction_label(&self) -> Label {
     Label(self.code.len())
   }
 
-  pub fn get_next_instruction_address(&self) -> Address {
+  fn get_next_instruction_address(&self) -> Address {
     Address(self.code.len())
   }
 
-  pub unsafe fn swap(
-    &mut self,
-    Address(start): Address,
-    Address(mid): Address,
-    Address(end): Address,
-  ) {
+  fn swap(&mut self, Address(start): Address, Address(mid): Address, Address(end): Address) {
     self.code[start..end].rotate_left(mid - start);
   }
 
-  pub unsafe fn get_variable(&mut self, id: VariableIdentifier) {
+  unsafe fn get_variable(&mut self, id: VariableIdentifier) {
     match id {
       VariableIdentifier::Global(gid) => {
         self.push_constant(ConstantValue::GlobalId(gid));
@@ -125,7 +120,7 @@ impl BytecodeBuilder {
     }
   }
 
-  pub unsafe fn set_variable(&mut self, id: VariableIdentifier) {
+  unsafe fn set_variable(&mut self, id: VariableIdentifier) {
     match id {
       VariableIdentifier::Global(gid) => {
         self.push_constant(ConstantValue::GlobalId(gid));
@@ -141,16 +136,7 @@ impl BytecodeBuilder {
     }
   }
 
-  pub fn create_constructor(&mut self, members: u8) {
-    let mut constructor_code = Self::new();
-    unsafe {
-      constructor_code.push_op2(OpCode::Construct, members as u8);
-      constructor_code.push_op(OpCode::Return);
-      self.push_function(constructor_code);
-    }
-  }
-
-  pub unsafe fn maybe_create_closure(&mut self, captures: &[VariableIdentifier]) {
+  unsafe fn maybe_create_closure(&mut self, captures: &[VariableIdentifier]) {
     if !captures.is_empty() {
       self.push_op2(OpCode::MakeClosure, captures.len() as u8);
       for c in captures {
@@ -160,29 +146,12 @@ impl BytecodeBuilder {
     }
   }
 
-  pub fn into_parts(self) -> (Vec<u8>, Vec<BytecodeBuilder>, Vec<ConstantValue>) {
+  pub fn into_parts(self) -> (Vec<u8>, Vec<FunctionCode>, Vec<ConstantValue>) {
     (self.code, self.functions, self.constants)
-  }
-
-  pub fn new() -> Self {
-    Self {
-      code: Vec::new(),
-      constants: vec![ConstantValue::None],
-      functions: Vec::new(),
-    }
-  }
-
-  pub fn generate(ast: &AST) -> Self {
-    let mut generator = Self::default();
-    for stmt in ast.get_program() {
-      generator.visit_stmt(ast, *stmt);
-    }
-    unsafe { generator.push_op(OpCode::Return) };
-    generator
   }
 }
 
-impl Debug for BytecodeBuilder {
+impl Debug for FunctionCode {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let mut result = "".to_string();
     for (i, func) in self.functions.iter().enumerate() {
@@ -240,10 +209,31 @@ impl Debug for BytecodeBuilder {
   }
 }
 
-impl ExprVisitor<()> for BytecodeBuilder {
+#[derive(Default, Clone)]
+pub struct BytecodeGenerator {
+  code: FunctionCode,
+}
+
+impl BytecodeGenerator {
+  pub fn generate_program(ast: &AST) -> FunctionCode {
+    let mut code = Self::generate_function(ast.get_program(), &ast);
+    unsafe { code.push_op(OpCode::Return) };
+    code
+  }
+
+  fn generate_function(statements: &[StmtHandle], ast: &AST) -> FunctionCode {
+    let mut generator = Self::default();
+    for stmt in statements {
+      generator.visit_stmt(ast, *stmt);
+    }
+    generator.code
+  }
+}
+
+impl ExprVisitor<()> for BytecodeGenerator {
   fn visit_literal_string(&mut self, ast: &AST, literal_string: &LiteralString) {
     unsafe {
-      self.push_constant(ConstantValue::Str(
+      self.code.push_constant(ConstantValue::Str(
         literal_string.handle.get(ast).to_string(),
       ));
     }
@@ -251,21 +241,25 @@ impl ExprVisitor<()> for BytecodeBuilder {
 
   fn visit_literal_number(&mut self, _ast: &AST, literal_number: &LiteralNumber) -> () {
     unsafe {
-      self.push_constant(ConstantValue::Number(literal_number.value));
+      self
+        .code
+        .push_constant(ConstantValue::Number(literal_number.value));
     }
   }
 
   fn visit_literal_bool(&mut self, _ast: &AST, literal_bool: &LiteralBool) {
     unsafe {
-      self.push_constant(ConstantValue::Bool(literal_bool.value));
+      self
+        .code
+        .push_constant(ConstantValue::Bool(literal_bool.value));
     }
   }
 
   fn visit_id(&mut self, _ast: &AST, id: &Id) -> () {
     match id.id {
-      Identifier::Variable(var_id) => unsafe { self.get_variable(var_id) },
+      Identifier::Variable(var_id) => unsafe { self.code.get_variable(var_id) },
       Identifier::ExternFunction(ext_id) => unsafe {
-        self.push_constant(ConstantValue::ExternId(ext_id))
+        self.code.push_constant(ConstantValue::ExternId(ext_id))
       },
       Identifier::Struct(_struct_id) => {}
       Identifier::Invalid => panic!("invalid identifier"),
@@ -278,31 +272,31 @@ impl ExprVisitor<()> for BytecodeBuilder {
 
   fn visit_assignment(&mut self, ast: &AST, assignment: &Assignment) -> () {
     self.visit_expr(ast, assignment.value);
-    unsafe { self.set_variable(assignment.id) };
+    unsafe { self.code.set_variable(assignment.id) };
   }
 
   fn visit_binary(&mut self, ast: &AST, binary: &Binary) -> () {
     self.visit_expr(ast, binary.left);
     self.visit_expr(ast, binary.right);
-    unsafe { self.push_op(binary.operator.into()) };
+    unsafe { self.code.push_op(binary.operator.into()) };
   }
 
   fn visit_logical(&mut self, ast: &AST, logical: &Logical) -> () {
     self.visit_expr(ast, logical.left);
     match logical.operator {
       LogicalOperator::And => {
-        let jump = unsafe { self.push_jump(OpCode::JumpIfFalseNoPop) };
-        unsafe { self.push_op(OpCode::Pop) };
+        let jump = unsafe { self.code.push_jump(OpCode::JumpIfFalseNoPop) };
+        unsafe { self.code.push_op(OpCode::Pop) };
         self.visit_expr(ast, logical.right);
-        self.backpatch_current_instruction(jump);
+        self.code.backpatch_current_instruction(jump);
       }
       LogicalOperator::Or => {
-        let check_rhs = unsafe { self.push_jump(OpCode::JumpIfFalseNoPop) };
-        let skip_rhs_jump = unsafe { self.push_jump(OpCode::Jump) };
-        self.backpatch_current_instruction(check_rhs);
-        unsafe { self.push_op(OpCode::Pop) };
+        let check_rhs = unsafe { self.code.push_jump(OpCode::JumpIfFalseNoPop) };
+        let skip_rhs_jump = unsafe { self.code.push_jump(OpCode::Jump) };
+        self.code.backpatch_current_instruction(check_rhs);
+        unsafe { self.code.push_op(OpCode::Pop) };
         self.visit_expr(ast, logical.right);
-        self.backpatch_current_instruction(skip_rhs_jump);
+        self.code.backpatch_current_instruction(skip_rhs_jump);
       }
       _ => panic!(),
     };
@@ -310,17 +304,14 @@ impl ExprVisitor<()> for BytecodeBuilder {
 
   fn visit_unary(&mut self, ast: &AST, unary: &Unary) -> () {
     self.visit_expr(ast, unary.right);
-    unsafe { self.push_op(unary.operator.into()) };
+    unsafe { self.code.push_op(unary.operator.into()) };
   }
 
   fn visit_lambda(&mut self, ast: &AST, lambda: &Lambda) -> () {
-    let mut code = BytecodeBuilder::new();
-    for stmt in &lambda.body {
-      code.visit_stmt(ast, *stmt);
-    }
+    let function_code = BytecodeGenerator::generate_function(&lambda.body, ast);
     unsafe {
-      self.push_function(code);
-      self.maybe_create_closure(&lambda.captures);
+      self.code.push_function(function_code);
+      self.code.maybe_create_closure(&lambda.captures);
     }
   }
 
@@ -329,19 +320,27 @@ impl ExprVisitor<()> for BytecodeBuilder {
     for arg in &fn_call.arguments {
       self.visit_expr(ast, *arg);
     }
-    unsafe { self.push_op2(OpCode::Call, fn_call.arguments.len() as u8) };
+    unsafe {
+      self
+        .code
+        .push_op2(OpCode::Call, fn_call.arguments.len() as u8)
+    };
   }
 
   fn visit_member_get(&mut self, ast: &AST, member_get: &MemberGet) -> () {
     self.visit_expr(ast, member_get.lhs);
-    unsafe { self.push_op2(OpCode::GetMember, member_get.member_index.get_index() as u8) };
+    unsafe {
+      self
+        .code
+        .push_op2(OpCode::GetMember, member_get.member_index.get_index() as u8)
+    };
   }
 
   fn visit_member_set(&mut self, ast: &AST, member_set: &MemberSet) -> () {
     self.visit_expr(ast, member_set.member.lhs);
     self.visit_expr(ast, member_set.value);
     unsafe {
-      self.push_op2(
+      self.code.push_op2(
         OpCode::SetMember,
         member_set.member.member_index.get_index() as u8,
       )
@@ -349,26 +348,34 @@ impl ExprVisitor<()> for BytecodeBuilder {
   }
 
   fn visit_dot_call(&mut self, ast: &AST, dot_call: &DotCall) -> () {
-    unsafe { self.get_variable(dot_call.function) };
+    unsafe { self.code.get_variable(dot_call.function) };
     self.visit_expr(ast, dot_call.lhs);
     for arg in &dot_call.arguments {
       self.visit_expr(ast, *arg);
     }
-    unsafe { self.push_op2(OpCode::Call, dot_call.arguments.len() as u8 + 1) };
+    unsafe {
+      self
+        .code
+        .push_op2(OpCode::Call, dot_call.arguments.len() as u8 + 1)
+    };
   }
 
   fn visit_constructor(&mut self, ast: &AST, constructor: &Construct) -> () {
     for arg in &constructor.arguments {
       self.visit_expr(ast, *arg);
     }
-    unsafe { self.push_op2(OpCode::Construct, constructor.arguments.len() as u8) };
+    unsafe {
+      self
+        .code
+        .push_op2(OpCode::Construct, constructor.arguments.len() as u8)
+    };
   }
 }
 
-impl StmtVisitor<()> for BytecodeBuilder {
+impl StmtVisitor<()> for BytecodeGenerator {
   fn visit_var_decl(&mut self, ast: &AST, var_decl: &VarDecl) -> () {
     self.visit_expr(ast, var_decl.init_expr);
-    unsafe { self.set_variable(var_decl.identifier) };
+    unsafe { self.code.set_variable(var_decl.identifier) };
   }
 
   fn visit_stmt_expr(&mut self, ast: &AST, expr: &StmtExpr) -> () {
@@ -379,30 +386,30 @@ impl StmtVisitor<()> for BytecodeBuilder {
     for stmt in &block.statements {
       self.visit_stmt(ast, *stmt);
     }
-    unsafe { self.push_op2(OpCode::Pop, block.locals) };
+    unsafe { self.code.push_op2(OpCode::Pop, block.locals) };
   }
 
   fn visit_if_branch(&mut self, ast: &AST, if_branch: &IfBranch) -> () {
     self.visit_expr(ast, if_branch.condition);
-    let if_jump_point = unsafe { self.push_jump(OpCode::JumpIfFalsePop) };
+    let if_jump_point = unsafe { self.code.push_jump(OpCode::JumpIfFalsePop) };
     self.visit_stmt(ast, if_branch.true_branch);
     if let Some(stmt) = if_branch.else_branch {
-      let skip_else = unsafe { self.push_jump(OpCode::Jump) };
-      self.backpatch_current_instruction(if_jump_point);
+      let skip_else = unsafe { self.code.push_jump(OpCode::Jump) };
+      self.code.backpatch_current_instruction(if_jump_point);
       self.visit_stmt(ast, stmt);
-      self.backpatch_current_instruction(skip_else);
+      self.code.backpatch_current_instruction(skip_else);
     } else {
-      self.backpatch_current_instruction(if_jump_point);
+      self.code.backpatch_current_instruction(if_jump_point);
     };
   }
 
   fn visit_while(&mut self, ast: &AST, while_node: &While) -> () {
-    let label = self.get_next_instruction_label();
+    let label = self.code.get_next_instruction_label();
     self.visit_expr(ast, while_node.condition);
-    let loop_condition = unsafe { self.push_jump(OpCode::JumpIfFalsePop) };
+    let loop_condition = unsafe { self.code.push_jump(OpCode::JumpIfFalsePop) };
     self.visit_stmt(ast, while_node.loop_body);
-    self.push_back_jump(label);
-    self.backpatch_current_instruction(loop_condition);
+    self.code.push_back_jump(label);
+    self.code.backpatch_current_instruction(loop_condition);
   }
 
   fn visit_function_definition(
@@ -410,13 +417,10 @@ impl StmtVisitor<()> for BytecodeBuilder {
     ast: &AST,
     function_definition: &FunctionDefinition,
   ) -> () {
-    let mut code = BytecodeBuilder::new();
-    for stmt in &function_definition.body {
-      code.visit_stmt(ast, *stmt);
-    }
+    let function_code = BytecodeGenerator::generate_function(&function_definition.body, ast);
     unsafe {
-      self.push_function(code);
-      self.set_variable(function_definition.id);
+      self.code.push_function(function_code);
+      self.code.set_variable(function_definition.id);
     }
   }
 
@@ -436,9 +440,9 @@ impl StmtVisitor<()> for BytecodeBuilder {
     if let Some(expr) = return_stmt.expr {
       self.visit_expr(ast, expr);
     } else {
-      unsafe { self.push_constant_none() };
+      unsafe { self.code.push_constant_none() };
     }
-    unsafe { self.push_op(OpCode::Return) };
+    unsafe { self.code.push_op(OpCode::Return) };
   }
 
   fn visit_struct(&mut self, _ast: &AST, _struct_stmt: &Struct) -> () {

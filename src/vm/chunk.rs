@@ -1,9 +1,9 @@
 use std::mem::ManuallyDrop;
 
-use crate::compiler::{bytecode::ConstantValue, codegen::BytecodeBuilder};
+use crate::compiler::{bytecode::ConstantValue, codegen::FunctionCode};
 
 use super::{
-  address_table::{AddressTable},
+  address_table::AddressTable,
   value::{TaggedValue, Value, ValueType},
 };
 
@@ -144,7 +144,7 @@ impl Chunk {
     Default::default()
   }
 
-  pub fn new(builder: BytecodeBuilder, address_table: &AddressTable) -> Self {
+  pub fn new(builder: FunctionCode, address_table: &AddressTable) -> Self {
     let (code, function, constants) = builder.into_parts();
     let functions = function
       .into_iter()
