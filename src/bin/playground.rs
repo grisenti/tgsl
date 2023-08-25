@@ -1,6 +1,6 @@
 use std::fs;
 
-use language::compiler::{errors::ErrorPrinter, Compiler};
+
 use language::vm::VM;
 
 fn test() -> Result<(), String> {

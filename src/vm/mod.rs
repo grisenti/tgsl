@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashMap};
+use std::{collections::HashMap};
 
 use crate::{
   compiler::{errors::ErrorPrinter, identifier::ExternId, Compiler},

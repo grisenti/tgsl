@@ -1,8 +1,7 @@
-use json::parse;
+
 use std::collections::HashMap;
 
 use self::{
-  ast::AST,
   codegen::BytecodeBuilder,
   errors::CompilerError,
   global_env::GlobalEnv,
@@ -21,7 +20,7 @@ mod operators;
 mod parser;
 mod types;
 
-use crate::compiler::ast::visitor::ProgramVisitor;
+
 use ast::json::ASTJSONPrinter;
 
 pub struct CompiledModule {

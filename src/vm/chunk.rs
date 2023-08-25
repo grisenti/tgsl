@@ -3,7 +3,7 @@ use std::mem::ManuallyDrop;
 use crate::compiler::{bytecode::ConstantValue, codegen::BytecodeBuilder};
 
 use super::{
-  address_table::{self, AddressTable},
+  address_table::{AddressTable},
   value::{TaggedValue, Value, ValueType},
 };
 

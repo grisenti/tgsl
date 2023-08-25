@@ -1,6 +1,5 @@
 use crate::compiler::{
   identifier::{ExternId, GlobalVarId},
-  CompiledModule,
 };
 
 #[derive(Default)]
