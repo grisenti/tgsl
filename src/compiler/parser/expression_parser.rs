@@ -274,6 +274,7 @@ impl<'src> Parser<'src> {
         if parameters.first().is_some_and(|p1| *p1 == expr.type_) {
           let parsed_arguments = self.parse_arguments(call_start, ')');
           let call_end = self.lex.previous_token_range();
+          self.match_or_err(Token::Basic(')'));
           let call_sr = SourceRange::combine(call_start, call_end);
           let arguments = check_arguments(
             &mut self.errors,
