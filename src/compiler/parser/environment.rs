@@ -29,6 +29,7 @@ struct CaptureId {
 
 struct Function {
   captures: Vec<CaptureId>,
+  return_type: Option<Type>,
 }
 
 pub struct Environment<'src> {
@@ -257,16 +258,18 @@ impl<'src> Environment<'src> {
 
   pub fn define_function_return_type(&mut self, type_: Type) {
     self
-      .define_local_variable("<return_type>", SourceRange::EMPTY, type_)
-      .expect("could not define return type");
+      .functions_declaration_stack
+      .last_mut()
+      .unwrap()
+      .return_type = Some(type_);
   }
 
   pub fn get_function_return_type(&self) -> Option<&Type> {
     self
-      .locals
-      .iter()
-      .rfind(|local| local.name == "<return_type>")
-      .map(|local| &local.type_)
+      .functions_declaration_stack
+      .last()
+      .map(|func| func.return_type.as_ref())
+      .flatten()
   }
 
   pub fn define_variable(
@@ -315,6 +318,7 @@ impl<'src> Environment<'src> {
     self.push_scope();
     self.functions_declaration_stack.push(Function {
       captures: Vec::new(),
+      return_type: None,
     })
   }
 
