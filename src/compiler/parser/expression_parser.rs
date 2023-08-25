@@ -606,11 +606,7 @@ impl<'src> Parser<'src> {
     let parameters_sr_start = self.lex.previous_token_range();
     self.env.push_function();
     self.match_or_err(Token::Basic('('));
-    let parameter_types = if self.lookahead != Token::Basic(')') {
-      self.parse_function_params(parameters_sr_start)
-    } else {
-      Vec::new()
-    };
+    let parameter_types = self.parse_function_params(parameters_sr_start);
     self.match_or_err(Token::Basic(')'));
     let return_type = self.parse_function_return_type();
     self.env.define_function_return_type(return_type.clone());

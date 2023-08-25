@@ -284,7 +284,7 @@ impl<'src> Parser<'src> {
   pub(super) fn parse_function_params(&mut self, call_start: SourceRange) -> Vec<Type> {
     return_if_err!(self, vec![]);
     let mut parameter_types = Vec::new();
-    loop {
+    while self.lookahead != Token::Basic(')') {
       let (name, name_sr) = self.match_id_or_err();
       let param_type = self.parse_type_specifier_or_err();
       check_error!(
@@ -317,16 +317,12 @@ impl<'src> Parser<'src> {
   fn parse_function_decl(&mut self) -> ParsedStatement {
     assert_eq!(self.lookahead, Token::Fn);
 
-    self.advance(); // consume fun
+    self.advance(); // consume fn
     let (name, name_sr) = self.match_id_or_err();
     let call_start = self.lex.previous_token_range();
     self.env.push_function();
     self.match_or_err(Token::Basic('('));
-    let parameter_types = if self.lookahead != Token::Basic(')') {
-      self.parse_function_params(call_start)
-    } else {
-      Vec::new()
-    };
+    let parameter_types = self.parse_function_params(call_start);
     self.match_or_err(Token::Basic(')'));
     let return_type = self.parse_function_return_type();
     self.env.define_function_return_type(return_type.clone());
