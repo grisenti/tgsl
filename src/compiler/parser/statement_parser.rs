@@ -66,7 +66,7 @@ impl ParsedStatement {
 impl<'src> Parser<'src> {
   pub(super) fn parse_unscoped_block(&mut self) -> (Vec<StmtHandle>, ReturnKind) {
     return_if_err!(self, (vec![], ReturnKind::None));
-    // FIXME: this is very similar to the one below
+
     self.match_or_err(Token::Basic('{'));
     let mut statements = Vec::new();
     let mut return_kind = ReturnKind::None;
