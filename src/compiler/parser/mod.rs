@@ -339,3 +339,70 @@ impl<'parsing> Parser<'parsing> {
     }
   }
 }
+
+#[cfg(test)]
+mod test {
+  use crate::compiler::ast::json::ASTJSONPrinter;
+  use crate::compiler::ast::visitor::{ExprVisitor, StmtVisitor};
+  use crate::compiler::ast::AST;
+  use crate::compiler::errors::CompilerError;
+  use crate::compiler::global_env::test::EMPTY_GLOBAL_ENV;
+  use crate::compiler::lexer::{Lexer, SourceRange, Token};
+  use crate::compiler::parser::environment::Environment;
+  use crate::compiler::parser::{Parser, ParserState};
+  use crate::compiler::types::Type;
+  use json::JsonValue;
+
+  pub struct TestParser {
+    parser: Parser<'static>,
+  }
+
+  impl TestParser {
+    pub fn new(source: &'static str) -> Self {
+      let env = Environment::new(&EMPTY_GLOBAL_ENV);
+      let mut parser = Parser {
+        lex: Lexer::new(source),
+        lookahead: Token::EndOfFile,
+        ast: AST::new(),
+        env,
+        errors: Vec::new(),
+        state: ParserState::NoErrors,
+        loop_depth: 0,
+      };
+      parser.advance();
+      Self { parser }
+    }
+
+    pub fn declare_name(mut self, name: &'static str, type_: Type) -> Self {
+      self
+        .parser
+        .env
+        .define_variable(name, SourceRange::EMPTY, type_)
+        .expect("could not declare name");
+      self
+    }
+
+    pub fn parse_correct_expression(mut self) -> JsonValue {
+      let expr = self.parser.parse_expression();
+      if !self.parser.errors.is_empty() {
+        panic!("parsing error");
+      }
+      let mut printer = ASTJSONPrinter {};
+      printer.visit_expr(&self.parser.ast, expr.handle)
+    }
+
+    pub fn parse_expression_error(mut self) -> CompilerError {
+      self.parser.parse_expression();
+      self.parser.errors.first().expect("expected error").clone()
+    }
+
+    pub fn parse_correct_statement(mut self) -> JsonValue {
+      let stmt = self.parser.parse_decl();
+      if !self.parser.errors.is_empty() {
+        panic!("parsing error");
+      }
+      let mut printer = ASTJSONPrinter {};
+      printer.visit_stmt(&self.parser.ast, stmt.handle)
+    }
+  }
+}

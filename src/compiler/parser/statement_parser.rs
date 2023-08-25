@@ -485,45 +485,21 @@ impl<'src> Parser<'src> {
 mod test {
   use json::{array, JsonValue};
 
+  use crate::compiler::parser::test::TestParser;
   use crate::compiler::types::Type;
-  use crate::compiler::{
-    ast::{json::ASTJSONPrinter, visitor::StmtVisitor, AST},
-    errors::CompilerError,
-    global_env::GlobalEnv,
-    lexer::{Lexer, Token},
-    parser::{environment::Environment, Parser, ParserState},
-  };
 
-  fn parse_statement(expr: &str) -> Result<JsonValue, Vec<CompilerError>> {
-    let mut empty_global_env = GlobalEnv::new();
-    let mut parser = Parser {
-      lex: Lexer::new(expr),
-      lookahead: Token::EndOfFile,
-      ast: AST::new(),
-      env: Environment::new(&mut empty_global_env),
-      errors: Vec::new(),
-      state: ParserState::NoErrors,
-      loop_depth: 0,
-    };
-    parser.advance();
-    let stmt = parser.parse_decl();
-    if !parser.errors.is_empty() {
-      Err(parser.errors)
-    } else {
-      let mut printer = ASTJSONPrinter {};
-      Ok(printer.visit_stmt(&parser.ast, stmt.handle))
-    }
+  fn parse_correct_statement(stmt: &'static str) -> JsonValue {
+    TestParser::new(stmt).parse_correct_statement()
   }
 
   #[test]
   fn parse_function_declaration_with_parameter_names() {
-    let function_decl =
-      parse_statement("fn fwd_decl(a: num, b: str) -> num;").expect("parsing error");
+    let function_decl = parse_correct_statement("fn fwd_decl(a: num, b: str) -> num;");
     let function_decl = &function_decl["FunctionDeclaration"];
     assert_eq!(
       function_decl["parameter types"],
       array![&Type::Num, &Type::Str]
     );
-    assert_eq!(Type::Num, function_decl["return type"],)
+    assert_eq!(Type::Num, function_decl["return type"])
   }
 }

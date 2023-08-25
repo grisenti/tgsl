@@ -648,91 +648,53 @@ impl<'src> Parser<'src> {
 
 #[cfg(test)]
 mod test {
-  use json::{array, JsonValue};
-  use std::any::TypeId;
+  use json::JsonValue;
 
+  use crate::compiler::parser::test::TestParser;
   use crate::compiler::types::FunctionSignature;
-  use crate::compiler::{
-    ast::{json::ASTJSONPrinter, visitor::ExprVisitor, AST},
-    errors::CompilerError,
-    global_env::GlobalEnv,
-    lexer::{Lexer, SourceRange, Token},
-    parser::{environment::Environment, Parser, ParserState},
-    types::Type,
-  };
+  use crate::compiler::types::Type;
 
-  fn parse_expression_with_declared_names(
-    expr: &str,
-    names: Vec<(&str, Type)>,
-  ) -> Result<JsonValue, Vec<CompilerError>> {
-    let mut empty_global_env = GlobalEnv::new();
-    let mut env = Environment::new(&mut empty_global_env);
-    for (name, type_) in names {
-      env
-        .define_variable(name, SourceRange::EMPTY, type_)
-        .expect("name redeclarations");
-    }
-    let mut parser = Parser {
-      lex: Lexer::new(expr),
-      lookahead: Token::EndOfFile,
-      ast: AST::new(),
-      env,
-      errors: Vec::new(),
-      state: ParserState::NoErrors,
-      loop_depth: 0,
-    };
-    parser.advance();
-    let expr = parser.parse_expression();
-    if !parser.errors.is_empty() {
-      Err(parser.errors)
-    } else {
-      let mut printer = ASTJSONPrinter {};
-      Ok(printer.visit_expr(&parser.ast, expr.handle))
-    }
-  }
-
-  fn parse_expression(expr: &str) -> Result<JsonValue, Vec<CompilerError>> {
-    parse_expression_with_declared_names(expr, vec![])
+  fn parse_correct_expression(expr: &'static str) -> JsonValue {
+    TestParser::new(expr).parse_correct_expression()
   }
 
   #[test]
   fn literal_string() {
-    let literal = parse_expression("\"str\"").expect("parsing error");
+    let literal = parse_correct_expression("\"str\"");
     assert_eq!(literal["LiteralString"]["value"], "str");
   }
 
   #[test]
   fn literal_num() {
-    let literal = parse_expression("1").expect("parsing error");
+    let literal = parse_correct_expression("1");
     assert_eq!(literal["LiteralNumber"]["value"], "1");
   }
 
   #[test]
   fn literal_bool() {
-    let literal = parse_expression("true").expect("parsing error");
+    let literal = parse_correct_expression("true");
     assert_eq!(literal["LiteralBool"]["value"], true);
   }
 
   #[test]
   fn identifier_type() {
-    let id =
-      parse_expression_with_declared_names("x", vec![("x", Type::Str)]).expect("parsing error");
+    let id = TestParser::new("x")
+      .declare_name("x", Type::Str)
+      .parse_correct_expression();
     assert_eq!(Type::Str, id["Id"]["id_type"]);
   }
 
   #[test]
   fn literal_in_parenthesis() {
-    let literal = parse_expression("(1)").expect("parsing error");
+    let literal = parse_correct_expression("(1)");
     assert_eq!(literal["Paren"]["expr"]["LiteralNumber"]["value"], "1");
   }
 
   #[test]
   fn parse_empty_function_call() {
-    let call = parse_expression_with_declared_names(
-      "main()",
-      vec![("main", FunctionSignature::new(vec![], Type::Str).into())],
-    )
-    .expect("parsing error");
+    let call = TestParser::new("main()")
+      .declare_name("main", FunctionSignature::new(vec![], Type::Str).into())
+      .parse_correct_expression();
     let call = &call["FnCall"];
     assert!(!call["function"]["Id"].is_null());
     assert_eq!(call["arguments"], JsonValue::Array(vec![]));
@@ -741,14 +703,12 @@ mod test {
 
   #[test]
   fn parse_function_call_with_arguments() {
-    let call = parse_expression_with_declared_names(
-      "main(1, 1 + 1, \"hello\")",
-      vec![(
+    let call = TestParser::new("main(1, 2, \"str\")")
+      .declare_name(
         "main",
         FunctionSignature::new(vec![Type::Num, Type::Num, Type::Str], Type::Num).into(),
-      )],
-    )
-    .expect("parsing error");
+      )
+      .parse_correct_expression();
     let call = &call["FnCall"];
     assert!(!call["function"]["Id"].is_null());
     assert_eq!(call["arguments"].len(), 3);
@@ -757,30 +717,25 @@ mod test {
 
   #[test]
   fn binary_op() {
-    let bin_op = parse_expression("1 + 1").expect("parsing error");
-    assert_eq!(bin_op["Binary"]["operator"], "+");
-    assert_eq!(bin_op["Binary"]["left"]["LiteralNumber"]["value"], "1");
-    assert_eq!(bin_op["Binary"]["right"]["LiteralNumber"]["value"], "1");
+    let bin_op = parse_correct_expression("1 + 1");
+    let bin_op = &bin_op["Binary"];
+    assert_eq!(bin_op["operator"], "+");
+    assert_eq!(bin_op["left"]["LiteralNumber"]["value"], "1");
+    assert_eq!(bin_op["right"]["LiteralNumber"]["value"], "1");
   }
 
   #[test]
   fn logical_op() {
-    let logical_op = parse_expression("true and false").expect("parsing error");
-    assert_eq!(logical_op["Logical"]["operator"], "and");
-    assert_eq!(logical_op["Logical"]["left"]["LiteralBool"]["value"], true);
-    assert_eq!(
-      logical_op["Logical"]["right"]["LiteralBool"]["value"],
-      false
-    );
+    let logical_op = parse_correct_expression("true and false");
+    let logical_op = &logical_op["Logical"];
+    assert_eq!(logical_op["operator"], "and");
+    assert_eq!(logical_op["left"]["LiteralBool"]["value"], true);
+    assert_eq!(logical_op["right"]["LiteralBool"]["value"], false);
   }
 
   #[test]
   fn assign_to_lvalue_error() {
-    let err = parse_expression("1 = 2")
-      .expect_err("can assign to lvalue")
-      .first()
-      .unwrap()
-      .clone();
+    let err = TestParser::new("1 = 2").parse_expression_error();
     assert_eq!(err.code(), "P009");
   }
 }

@@ -174,37 +174,15 @@ impl GlobalEnv {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
   use super::{GlobalEnv, Module};
+  use lazy_static::lazy_static;
+
+  lazy_static! {
+    pub static ref EMPTY_GLOBAL_ENV: GlobalEnv = GlobalEnv::new();
+  }
 
   impl GlobalEnv {
     pub fn add_fake_module(&mut self, module: Module) {}
-  }
-}
-
-#[cfg(never)]
-mod test {
-  use crate::errors::SourceInfo;
-
-  use super::GlobalEnv;
-
-  #[test]
-  fn no_declaration_for_name() {
-    let mut env = GlobalEnv::new();
-    env.get_or_add(&[], "test", Sou).expect("error adding name");
-    env
-      .finalize_current_module()
-      .expect_err("absence of declaration not detected");
-  }
-
-  #[test]
-  fn no_declaration_for_name() {
-    let mut env = GlobalEnv::new();
-    env
-      .get_or_add(&[], "test", FAKE_SOURCE_INFO)
-      .expect("error adding name");
-    env
-      .finalize_current_module()
-      .expect_err("absence of declaration not detected");
   }
 }
