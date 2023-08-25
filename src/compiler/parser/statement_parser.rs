@@ -86,13 +86,12 @@ impl<'src> Parser<'src> {
   }
 
   fn parse_block(&mut self) -> ParsedStatement {
-    self.match_or_err(Token::Basic('{'));
     self.env.push_scope();
     let (statements, return_kind) = self.parse_unscoped_block();
     let locals = self.env.pop_scope();
     ParsedStatement {
       handle: self.ast.add_statement(stmt::Block { statements, locals }),
-      return_kind: return_kind,
+      return_kind,
     }
   }
 
