@@ -171,6 +171,15 @@ impl BytecodeBuilder {
       functions: Vec::new(),
     }
   }
+
+  pub fn generate(ast: &AST) -> Self {
+    let mut generator = Self::default();
+    for stmt in ast.get_program() {
+      generator.visit_stmt(ast, *stmt);
+    }
+    unsafe { generator.push_op(OpCode::Return) };
+    generator
+  }
 }
 
 impl Debug for BytecodeBuilder {
