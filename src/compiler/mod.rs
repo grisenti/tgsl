@@ -1,3 +1,4 @@
+use json::parse;
 use std::collections::HashMap;
 
 use self::{
@@ -54,16 +55,21 @@ impl Compiler {
       .collect()
   }
 
-  pub fn compile(&mut self, source: &str) -> Result<AST, Vec<CompilerError>> {
+  pub fn compile(&mut self, source: &str) -> Result<CompiledModule, Vec<CompilerError>> {
     let parsed_module = Parser::parse(source, &self.global_env)?;
     println!("{}", ASTJSONPrinter::print_to_string(&parsed_module.ast));
-    let bytecode = ProgramVisitor::new(BytecodeBuilder::new(), &parsed_module.ast).visit_program();
-    println!("{:?}", bytecode);
-    Ok(parsed_module.ast)
+    let code = BytecodeBuilder::generate(&parsed_module.ast);
+    println!("{:?}", code);
 
-    //let extern_functions = Self::module_extern_functions(&parsed_module.global_names);
-    //let globals_count = parsed_module.module_global_variable_types.len();
-    //let module_id = self.global_env.export_module(parsed_module);
+    let extern_functions = Self::module_extern_functions(&parsed_module.global_names);
+    let globals_count = parsed_module.module_global_variable_types.len() as u16;
+    let module_id = self.global_env.export_module(parsed_module);
+    Ok(CompiledModule {
+      code,
+      module_id,
+      globals_count,
+      extern_functions,
+    })
   }
 
   pub fn new() -> Self {

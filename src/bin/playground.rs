@@ -1,14 +1,12 @@
 use std::fs;
 
 use language::compiler::{errors::ErrorPrinter, Compiler};
+use language::vm::VM;
 
 fn test() -> Result<(), String> {
-  let mut compiler = Compiler::new();
+  let mut vm = VM::new();
   let source = fs::read_to_string("program.pr").unwrap();
-  match compiler.compile(&source) {
-    Err(errs) => println!("{}", ErrorPrinter::to_string(&errs, &source)),
-    _ => {}
-  }
+  vm.load_module(&source, vec![])?;
   Ok(())
 }
 
