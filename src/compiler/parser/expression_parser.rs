@@ -75,10 +75,15 @@ fn check_arguments(
 }
 
 impl<'src> Parser<'src> {
-  fn parse_arguments(&mut self, call_start: SourceRange) -> Vec<ParsedExpression> {
+  fn parse_arguments(
+    &mut self,
+    call_start: SourceRange,
+    terminator: char,
+  ) -> Vec<ParsedExpression> {
     return_if_err!(self, vec![]);
+
     let mut arguments = Vec::new();
-    loop {
+    while self.lookahead != Token::Basic(terminator) {
       arguments.push(self.parse_expression());
       if self.matches_alternatives(&[Token::Basic(',')]).is_none() {
         break;
@@ -100,7 +105,7 @@ impl<'src> Parser<'src> {
     return_if_err!(self, ParsedExpression::INVALID);
     let arguments_start = self.lex.previous_token_range();
     self.advance();
-    let arguments = self.parse_arguments(arguments_start);
+    let arguments = self.parse_arguments(arguments_start, '}');
     let arguments_end = self.lex.previous_token_range();
     let arguments_sr = SourceRange::combine(arguments_start, arguments_end);
     self.match_or_err(Token::Basic('}'));
@@ -202,11 +207,7 @@ impl<'src> Parser<'src> {
 
     let call_start_sr = self.lex.previous_token_range();
     self.advance();
-    let arguments = if self.lookahead != Token::Basic(')') {
-      self.parse_arguments(call_start_sr)
-    } else {
-      vec![]
-    };
+    let arguments = self.parse_arguments(call_start_sr, ')');
     let call_end_sr = self.lex.previous_token_range();
     self.match_or_err(Token::Basic(')'));
     let call_sr = SourceRange::combine(call_start_sr, call_end_sr);
@@ -271,7 +272,7 @@ impl<'src> Parser<'src> {
         let call_start = self.lex.previous_token_range();
         self.advance();
         if parameters.first().is_some_and(|p1| *p1 == expr.type_) {
-          let parsed_arguments = self.parse_arguments(call_start);
+          let parsed_arguments = self.parse_arguments(call_start, ')');
           let call_end = self.lex.previous_token_range();
           let call_sr = SourceRange::combine(call_start, call_end);
           let arguments = check_arguments(
