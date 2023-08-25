@@ -47,8 +47,6 @@ pub struct Parser<'parsing> {
 }
 
 type TokenPairOpt<'parsing> = Option<(Token<'parsing>, SourceRange)>;
-type ExprRes = CompilerResult<ExprHandle>;
-type StmtRes = CompilerResult<StmtHandle>;
 
 #[macro_export]
 macro_rules! return_if_err {

@@ -8,8 +8,6 @@ use crate::vm::{
   value::{Aggregate, Closure, Object, ObjectType, ObjectValue, TaggedValue, ValueType},
 };
 
-const OBJECT_SIZE: usize = std::mem::size_of::<Object>();
-
 pub struct GC {
   allocations: Vec<*mut Object>,
   next_collection: usize,

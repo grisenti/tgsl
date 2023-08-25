@@ -590,10 +590,8 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic(')'));
     let return_type = self.parse_function_return_type();
     self.env.define_function_return_type(return_type.clone());
-    let parameters_sr_end = self.lex.previous_token_range();
     let body = self.parse_unscoped_block();
     let captures = self.env.pop_function();
-    let parameters_sr = SourceRange::combine(parameters_sr_start, parameters_sr_end);
     let function = FunctionSignature::new(parameter_types.clone(), return_type.clone());
 
     if matches!(body.1, ReturnKind::Conditional | ReturnKind::None if return_type != Type::Nothing)
