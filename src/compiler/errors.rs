@@ -153,6 +153,12 @@ pub mod parser_err {
     "P014",
     "module declaration needs to be the first statement"
   );
+
+  def_err!(
+    missing_initialization_at_variable_declaration,
+    "P015",
+    "variable declaration requires initialization"
+  );
 }
 
 pub mod ty_err {

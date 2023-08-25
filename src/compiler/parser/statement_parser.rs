@@ -243,7 +243,13 @@ impl<'src> Parser<'src> {
     let (name, id_sr) = self.match_id_or_err();
 
     let type_specifier = self.parse_opt_type_specifier();
-    self.match_or_err(Token::Basic('='));
+    if self.lookahead != Token::Basic('=') {
+      self.emit_error(parser_err::missing_initialization_at_variable_declaration(
+        id_sr,
+      ));
+      return ParsedStatement::INVALID;
+    }
+    self.advance();
     let expr = self.parse_expression();
 
     if let Some(specifier) = type_specifier {
