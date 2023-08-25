@@ -692,28 +692,12 @@ mod test {
   }
 
   #[test]
-  fn parse_empty_function_call() {
-    let call = TestParser::new("main()")
-      .declare_name("main", FunctionSignature::new(vec![], Type::Str).into())
-      .parse_correct_expression();
-    let call = &call["FnCall"];
-    assert!(!call["function"]["Id"].is_null());
-    assert_eq!(call["arguments"], JsonValue::Array(vec![]));
-    assert_eq!(Type::Str, call["expr_type"]);
-  }
+  fn assignment() {}
 
   #[test]
-  fn parse_function_call_with_arguments() {
-    let call = TestParser::new("main(1, 2, \"str\")")
-      .declare_name(
-        "main",
-        FunctionSignature::new(vec![Type::Num, Type::Num, Type::Str], Type::Num).into(),
-      )
-      .parse_correct_expression();
-    let call = &call["FnCall"];
-    assert!(!call["function"]["Id"].is_null());
-    assert_eq!(call["arguments"].len(), 3);
-    assert_eq!(Type::Num, call["expr_type"]);
+  fn assign_to_lvalue_error() {
+    let err = TestParser::new("1 = 2").parse_expression_error();
+    assert_eq!(err.code(), "P009");
   }
 
   #[test]
@@ -735,9 +719,57 @@ mod test {
   }
 
   #[test]
-  fn assign_to_lvalue_error() {
-    let err = TestParser::new("1 = 2").parse_expression_error();
-    assert_eq!(err.code(), "P009");
+  fn parse_empty_function_call() {
+    let call = TestParser::new("main()")
+      .declare_name("main", FunctionSignature::new(vec![], Type::Str).into())
+      .parse_correct_expression();
+    let call = &call["FnCall"];
+    assert!(!call["function"]["Id"].is_null());
+    assert_eq!(call["arguments"], JsonValue::Array(vec![]));
+    assert_eq!(Type::Str, call["expr_type"]);
+  }
+
+  #[test]
+  fn parse_empty_dot_call_on_number() {
+    let call = TestParser::new("1.op()")
+      .declare_name(
+        "op",
+        FunctionSignature::new(vec![Type::Num], Type::Nothing).into(),
+      )
+      .parse_correct_expression();
+    let call = &call["DotCall"];
+    assert!(!call.is_null());
+    assert_eq!(call["lhs"]["LiteralNumber"]["value"], "1");
+    assert!(call["arguments"].is_empty());
+  }
+
+  #[test]
+  fn parse_dot_call_on_number_with_arguments() {
+    let call = TestParser::new("1.op(\"1234string\")")
+      .declare_name(
+        "op",
+        FunctionSignature::new(vec![Type::Num, Type::Str], Type::Nothing).into(),
+      )
+      .parse_correct_expression();
+    let call = &call["DotCall"];
+    assert!(!call.is_null());
+    assert_eq!(call["lhs"]["LiteralNumber"]["value"], "1");
+    assert_eq!(call["arguments"].len(), 1);
+    assert_eq!(call["arguments"][0]["LiteralString"]["value"], "1234string");
+  }
+
+  #[test]
+  fn parse_function_call_with_arguments() {
+    let call = TestParser::new("main(1, 2, \"str\")")
+      .declare_name(
+        "main",
+        FunctionSignature::new(vec![Type::Num, Type::Num, Type::Str], Type::Num).into(),
+      )
+      .parse_correct_expression();
+    let call = &call["FnCall"];
+    assert!(!call["function"]["Id"].is_null());
+    assert_eq!(call["arguments"].len(), 3);
+    assert_eq!(Type::Num, call["expr_type"]);
   }
 
   #[test]
