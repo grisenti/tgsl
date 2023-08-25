@@ -221,6 +221,8 @@ impl<'src> Environment<'src> {
     member_names: Vec<String>,
     member_types: Vec<Type>,
   ) -> CompilerResult<StructId> {
+    assert_eq!(member_types.len(), member_names.len());
+
     let id = StructId::relative(self.module_structs.len() as u32).into_public();
     self.declare_global(name, name_sr, id.into())?;
     self.module_structs.push(Some(Struct::new(
