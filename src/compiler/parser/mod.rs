@@ -3,6 +3,7 @@ mod expression_parser;
 mod statement_parser;
 
 use self::environment::Environment;
+use crate::compiler::parser::environment::ResolvedIdentifier;
 use crate::compiler::types::FunctionSignature;
 
 use super::ast::*;
@@ -127,11 +128,11 @@ impl<'parsing> Parser<'parsing> {
     )
   }
 
-  fn get_id(&mut self, name: &str, name_sr: SourceRange) -> (Identifier, Type) {
+  fn get_id(&mut self, name: &str, name_sr: SourceRange) -> ResolvedIdentifier {
     check_error!(
       self,
       self.env.get_id(name, name_sr),
-      (Identifier::Invalid, Type::Error)
+      ResolvedIdentifier::Error
     )
   }
 

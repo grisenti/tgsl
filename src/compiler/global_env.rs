@@ -1,3 +1,4 @@
+use crate::compiler::overload_set::OverloadSet;
 use core::panic;
 use std::collections::HashMap;
 
@@ -9,6 +10,7 @@ use super::types::Type;
 
 pub struct Module {
   pub global_names: HashMap<String, GlobalIdentifier>,
+  //pub overloads: Vec<OverloadSet>,
 }
 
 pub struct Struct {

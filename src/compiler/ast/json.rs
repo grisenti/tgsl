@@ -2,9 +2,9 @@ use crate::compiler::ast::ExprHandle;
 use json::object;
 use json::JsonValue;
 
-use crate::compiler::identifier::VariableIdentifier;
+use crate::compiler::identifier::{FunctionId, VariableIdentifier};
 use crate::compiler::identifier::{Identifier, StructId};
-use crate::compiler::types::Type;
+use crate::compiler::types::{FunctionSignature, Type};
 
 use super::expression::*;
 use super::statement::*;
@@ -27,6 +27,12 @@ impl From<VariableIdentifier> for JsonValue {
 
 impl From<StructId> for JsonValue {
   fn from(value: StructId) -> Self {
+    JsonValue::String(format!("{value:?}"))
+  }
+}
+
+impl From<FunctionId> for JsonValue {
+  fn from(value: FunctionId) -> Self {
     JsonValue::String(format!("{value:?}"))
   }
 }
@@ -66,7 +72,11 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_literal_number(&mut self, _ast: &AST, literal_number: &expr::LiteralNumber) -> JsonValue {
+  fn visit_literal_number(
+    &mut self,
+    _ast: &AST,
+    literal_number: &expr::LiteralNumber,
+  ) -> JsonValue {
     object! {
       "LiteralNumber": {
         "value": literal_number.value.to_string()

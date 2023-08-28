@@ -10,6 +10,7 @@ use crate::{
 use super::*;
 
 use crate::compiler::errors::sema_err;
+use crate::compiler::identifier::FunctionId;
 use crate::compiler::types::FunctionSignature;
 use ast::statement::*;
 
@@ -331,7 +332,7 @@ impl<'src> Parser<'src> {
         self
           .env
           .declare_global_function(name, name_sr, function_type),
-        VariableIdentifier::Invalid
+        FunctionId::relative(0) // FIXME
       );
       return self
         .ast
@@ -347,7 +348,7 @@ impl<'src> Parser<'src> {
       self
         .env
         .define_global_function(name, name_sr, function_type),
-      VariableIdentifier::Invalid
+      FunctionId::relative(0) // FIXME
     );
     let body = self.parse_unscoped_block();
     let captures = self.env.pop_function();

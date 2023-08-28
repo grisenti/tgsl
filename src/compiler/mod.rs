@@ -18,6 +18,7 @@ mod lexer;
 mod operators;
 mod parser;
 mod types;
+mod overload_set;
 
 use crate::compiler::codegen::BytecodeGenerator;
 use ast::json::ASTJSONPrinter;

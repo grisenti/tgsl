@@ -1,0 +1,104 @@
+use crate::compiler::identifier::FunctionId;
+use crate::compiler::types::{FunctionSignature, Type};
+
+#[derive(Default, Debug, Clone)]
+pub struct OverloadSet {
+  functions: Vec<(FunctionSignature, FunctionId)>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct ResolvedOverload<'a> {
+  pub return_type: &'a Type,
+  pub function_id: FunctionId,
+}
+
+impl OverloadSet {
+  pub fn find(&self, arguments: &[Type]) -> Option<ResolvedOverload> {
+    self
+      .functions
+      .iter()
+      .find(|(signature, _)| signature.get_parameters() == arguments)
+      .map(|(signature, id)| ResolvedOverload {
+        return_type: signature.get_return_type(),
+        function_id: *id,
+      })
+  }
+
+  pub fn insert(&mut self, signature: FunctionSignature, function_id: FunctionId) {
+    debug_assert!(!self.find(signature.get_parameters()).is_some());
+
+    self.functions.push((signature, function_id));
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use crate::compiler::identifier::FunctionId;
+  use crate::compiler::overload_set::{OverloadSet, ResolvedOverload};
+  use crate::compiler::types::{FunctionSignature, Type};
+
+  #[test]
+  fn insert_overload_into_empty_set() {
+    let mut overload_set = OverloadSet::default();
+    overload_set.insert(
+      FunctionSignature::new(vec![], Type::Nothing),
+      FunctionId::relative(0),
+    );
+  }
+
+  #[test]
+  fn find_empty_function_in_siglet_set() {
+    let mut overload_set = OverloadSet::default();
+    overload_set.insert(
+      FunctionSignature::new(vec![], Type::Nothing),
+      FunctionId::relative(0),
+    );
+    assert_eq!(
+      overload_set.find(&vec![]),
+      Some(ResolvedOverload {
+        function_id: FunctionId::relative(0),
+        return_type: &Type::Nothing
+      })
+    );
+  }
+
+  #[test]
+  fn find_non_empty_function_in_siglet_set() {
+    let mut overload_set = OverloadSet::default();
+    overload_set.insert(
+      FunctionSignature::new(vec![Type::Bool, Type::Num], Type::Str),
+      FunctionId::relative(0),
+    );
+    assert_eq!(
+      overload_set.find(&vec![Type::Bool, Type::Num]),
+      Some(ResolvedOverload {
+        function_id: FunctionId::relative(0),
+        return_type: &Type::Str
+      })
+    );
+  }
+
+  #[test]
+  fn find_function_in_set() {
+    let mut overload_set = OverloadSet::default();
+    overload_set.insert(
+      FunctionSignature::new(vec![Type::Num, Type::Num], Type::Str),
+      FunctionId::relative(0),
+    );
+    overload_set.insert(
+      FunctionSignature::new(vec![Type::Str, Type::Bool], Type::Bool),
+      FunctionId::relative(1),
+    );
+    overload_set.insert(
+      FunctionSignature::new(vec![Type::Bool, Type::Num], Type::Nothing),
+      FunctionId::relative(2),
+    );
+    assert_eq!(
+      overload_set.find(&vec![Type::Str, Type::Bool]),
+      Some(ResolvedOverload {
+        function_id: FunctionId::relative(1),
+        return_type: &Type::Bool
+      })
+    );
+  }
+}

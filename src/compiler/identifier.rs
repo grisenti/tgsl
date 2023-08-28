@@ -1,5 +1,6 @@
 pub type CaptureId = u8;
 pub type LocalId = u8;
+pub type OverloadId = u32;
 
 macro_rules! define_identifier {
   ($name:ident) => {
@@ -46,6 +47,7 @@ macro_rules! define_identifier {
 define_identifier!(GlobalVarId);
 define_identifier!(ExternId);
 define_identifier!(StructId);
+define_identifier!(FunctionId);
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub enum VariableIdentifier {
@@ -66,6 +68,7 @@ pub enum Identifier {
   Variable(VariableIdentifier),
   ExternFunction(ExternId),
   Struct(StructId),
+  Function(FunctionId),
   Invalid,
 }
 
@@ -98,6 +101,7 @@ pub enum GlobalIdentifier {
   Variable(GlobalVarId),
   ExternFunction(ExternId),
   Struct(StructId),
+  OverloadId(OverloadId),
   Invalid,
 }
 

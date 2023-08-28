@@ -1,5 +1,6 @@
 pub mod stmt {
 
+  use crate::compiler::identifier::FunctionId;
   use crate::compiler::{
     ast::{ExprHandle, StmtHandle},
     identifier::{ExternId, ModuleId, StructId, VariableIdentifier},
@@ -52,7 +53,7 @@ pub mod stmt {
   );
 
   stmt_node!(FunctionDefinition,
-    id: VariableIdentifier,
+    id: FunctionId,
     captures: Vec<VariableIdentifier>,
     parameter_types: Vec<Type>,
     return_type: Type,
@@ -60,7 +61,7 @@ pub mod stmt {
   );
 
   stmt_node!(FunctionDeclaration,
-    id: VariableIdentifier,
+    id: FunctionId,
     parameter_types: Vec<Type>,
     return_type: Type
   );

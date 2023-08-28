@@ -2,6 +2,7 @@ use crate::{compiler::errors::ty_err, return_if_err};
 
 use super::*;
 use crate::compiler::ast::expression::expr::DotCall;
+use crate::compiler::identifier::OverloadId;
 use crate::compiler::operators::{BinaryOperator, LogicalOperator, UnaryOperator};
 use crate::compiler::parser::statement_parser::ReturnKind;
 use crate::compiler::types::FunctionSignature;
@@ -39,60 +40,78 @@ enum MemberGetError {
   NotAMember,
 }
 
+enum ParsedPrimary {
+  Expr(ParsedExpression),
+  UnresolvedOverload(OverloadId),
+  Error,
+}
+
+impl From<ParsedExpression> for ParsedPrimary {
+  fn from(value: ParsedExpression) -> Self {
+    ParsedPrimary::Expr(value)
+  }
+}
+
+impl ParsedPrimary {
+  fn get_type(&self) -> &Type {
+    match self {
+      ParsedPrimary::Expr(expr) => &expr.type_,
+      ParsedPrimary::UnresolvedOverload(_) => &Type::UnresolvedOverload,
+      ParsedPrimary::Error => &Type::Error,
+    }
+  }
+}
+
+#[derive(Default)]
+struct ParsedArguments {
+  expressions: Vec<ExprHandle>,
+  types: Vec<Type>,
+}
+
 fn check_arguments(
   errors: &mut Vec<CompilerError>,
   parameters: &[Type],
-  arguments: &[ParsedExpression],
+  arguments: &[Type],
   call_sr: SourceRange,
-) -> Vec<ExprHandle> {
+) {
   if parameters.len() != arguments.len() {
     errors.push(ty_err::incorrect_function_argument_number(
       call_sr,
       parameters.len(),
       arguments.len(),
     ));
-    return vec![];
+    return;
   }
 
-  let mut argument_exprs = Vec::with_capacity(parameters.len());
   for (index, (param, argument)) in parameters.iter().zip(arguments).enumerate() {
-    if *param != argument.type_ && *param != Type::Any {
+    if *param != *argument && *param != Type::Any {
       errors.push(ty_err::incorrect_function_argument_type(
         call_sr,
         index + 1,
-        argument.type_.print_pretty(),
+        argument.print_pretty(),
         param.print_pretty(),
       ));
-    } else {
-      argument_exprs.push(argument.handle);
     }
-  }
-  if argument_exprs.len() < parameters.len() {
-    vec![]
-  } else {
-    argument_exprs
   }
 }
 
 impl<'src> Parser<'src> {
-  fn parse_arguments(
-    &mut self,
-    call_start: SourceRange,
-    terminator: char,
-  ) -> Vec<ParsedExpression> {
-    return_if_err!(self, vec![]);
+  fn parse_arguments(&mut self, call_start: SourceRange, terminator: char) -> ParsedArguments {
+    return_if_err!(self, ParsedArguments::default());
 
-    let mut arguments = Vec::new();
+    let mut arguments = ParsedArguments::default();
     while self.lookahead != Token::Basic(terminator) {
-      arguments.push(self.parse_expression());
+      let expr = self.parse_expression();
+      arguments.expressions.push(expr.handle);
+      arguments.types.push(expr.type_);
       if self.matches_alternatives(&[Token::Basic(',')]).is_none() {
         break;
       }
     }
-    if arguments.len() >= 255 {
+    if arguments.expressions.len() >= 255 {
       let err = parser_err::too_many_function_arguments(call_start);
       self.emit_error(err);
-      vec![]
+      ParsedArguments::default()
     } else {
       arguments
     }
@@ -110,15 +129,15 @@ impl<'src> Parser<'src> {
     let arguments_sr = SourceRange::combine(arguments_start, arguments_end);
     self.match_or_err(Token::Basic('}'));
     if let Some(struct_) = self.env.get_struct(struct_id) {
-      let arguments = check_arguments(
+      check_arguments(
         &mut self.errors,
         struct_.get_member_types(),
-        &arguments,
+        &arguments.types,
         arguments_sr,
       );
       ParsedExpression {
         handle: self.ast.add_expression(expr::Construct {
-          arguments,
+          arguments: arguments.expressions,
           struct_id,
         }),
         type_: Struct(struct_id),
@@ -128,8 +147,8 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_primary(&mut self) -> ParsedExpression {
-    return_if_err!(self, ParsedExpression::INVALID);
+  fn parse_primary(&mut self) -> ParsedPrimary {
+    return_if_err!(self, ParsedPrimary::Error);
 
     match self.lookahead {
       Token::Number(num) => {
@@ -138,6 +157,7 @@ impl<'src> Parser<'src> {
           handle: self.ast.add_expression(expr::LiteralNumber { value: num }),
           type_: Type::Num,
         }
+        .into()
       }
       Token::String(str) => {
         self.advance();
@@ -146,6 +166,7 @@ impl<'src> Parser<'src> {
           handle: self.ast.add_expression(expr::LiteralString { handle }),
           type_: Type::Str,
         }
+        .into()
       }
       Token::True | Token::False => {
         let value = self.lookahead == Token::True;
@@ -154,20 +175,28 @@ impl<'src> Parser<'src> {
           handle: self.ast.add_expression(expr::LiteralBool { value }),
           type_: Type::Bool,
         }
+        .into()
       }
       Token::Id(id) => {
         let id_sr = self.lex.previous_token_range();
         self.advance();
         if let Token::Basic('{') = self.lookahead {
-          self.parse_constructor(id, id_sr)
+          ParsedPrimary::Expr(self.parse_constructor(id, id_sr))
         } else {
-          let (id, id_type) = self.get_id(id, id_sr);
-          ParsedExpression {
-            handle: self.ast.add_expression(expr::Id {
-              id,
-              id_type: id_type.clone(),
-            }),
-            type_: id_type.clone(),
+          let resolved_id = self.get_id(id, id_sr);
+          match resolved_id {
+            ResolvedIdentifier::ResolvedIdentifier { id, type_ } => ParsedExpression {
+              handle: self.ast.add_expression(expr::Id {
+                id,
+                id_type: type_.clone(),
+              }),
+              type_: type_.clone(),
+            }
+            .into(),
+            ResolvedIdentifier::UnresolvedOverload(overload_id) => {
+              ParsedPrimary::UnresolvedOverload(overload_id)
+            }
+            _ => ParsedPrimary::Error,
           }
         }
       }
@@ -181,17 +210,18 @@ impl<'src> Parser<'src> {
           }),
           type_: parsed_expression.type_,
         }
+        .into()
       }
       _ => {
         let err = parser_err::expected_primary(&self.lex, self.lookahead);
         self.emit_error(err);
-        ParsedExpression::INVALID
+        ParsedPrimary::Error
       }
     }
   }
 
-  fn parse_function_call(&mut self, expr: ParsedExpression) -> ParsedExpression {
-    return_if_err!(self, ParsedExpression::INVALID);
+  fn parse_function_call(&mut self, expr: ParsedPrimary) -> ParsedPrimary {
+    return_if_err!(self, ParsedExpression::INVALID.into());
     assert_eq!(self.lookahead, Token::Basic('('));
 
     let call_start_sr = self.lex.previous_token_range();
@@ -200,29 +230,60 @@ impl<'src> Parser<'src> {
     let call_end_sr = self.lex.previous_token_range();
     self.match_or_err(Token::Basic(')'));
     let call_sr = SourceRange::combine(call_start_sr, call_end_sr);
-    if let Type::Function(signature) = expr.type_ {
-      let (parameters, return_type) = signature.into_parts();
-      let arguments = check_arguments(&mut self.errors, &parameters, &arguments, call_sr);
-      let handle = self.ast.add_expression(expr::FnCall {
-        func: expr.handle,
-        arguments,
-        expr_type: return_type.clone(),
-      });
-      ParsedExpression {
-        handle,
-        type_: return_type,
+    match expr {
+      ParsedPrimary::Expr(expr) => {
+        if let Type::Function(signature) = expr.type_ {
+          let (parameters, return_type) = signature.into_parts();
+          check_arguments(&mut self.errors, &parameters, &arguments.types, call_sr);
+          let handle = self.ast.add_expression(expr::FnCall {
+            func: expr.handle,
+            arguments: arguments.expressions,
+            expr_type: return_type.clone(),
+          });
+          ParsedExpression {
+            handle,
+            type_: return_type,
+          }
+          .into()
+        } else {
+          self.emit_error(ty_err::cannot_call_type(call_sr, expr.type_.print_pretty()));
+          ParsedPrimary::Error
+        }
       }
-    } else {
-      self.emit_error(ty_err::cannot_call_type(call_sr, expr.type_.print_pretty()));
-      ParsedExpression::INVALID
+      ParsedPrimary::UnresolvedOverload(overload_id) => {
+        let resolved_function = self.env.resolve_overload(overload_id, &arguments.types);
+        if let Some(resolved_function) = resolved_function {
+          let id_expr_node_handle = self.ast.add_expression(expr::Id {
+            id: Identifier::Function(resolved_function.function_id),
+            id_type: Type::Nothing,
+          });
+          ParsedExpression {
+            handle: self.ast.add_expression(expr::FnCall {
+              func: id_expr_node_handle,
+              arguments: arguments.expressions,
+              expr_type: Type::Nothing,
+            }),
+            type_: Type::Nothing,
+          }
+          .into()
+        } else {
+          todo!() // no valid overload
+        }
+      }
+      ParsedPrimary::Error => ParsedPrimary::Error,
     }
   }
 
   fn try_parse_member_get(
     &mut self,
-    expr: &ParsedExpression,
+    primary: &ParsedPrimary,
     member_name: &str,
-  ) -> Result<ParsedExpression, MemberGetError> {
+  ) -> Result<ParsedPrimary, MemberGetError> {
+    let expr = if let ParsedPrimary::Expr(expr) = primary {
+      expr
+    } else {
+      return Err(MemberGetError::NotAStruct);
+    };
     if let Type::Struct(struct_id) = expr.type_ {
       let s = self.env.get_struct(struct_id).unwrap();
       if let Some(member_index) = s.get_member_index(member_name) {
@@ -231,10 +292,13 @@ impl<'src> Parser<'src> {
           lhs: expr.handle,
           member_index,
         });
-        Ok(ParsedExpression {
-          handle,
-          type_: member_type,
-        })
+        Ok(
+          ParsedExpression {
+            handle,
+            type_: member_type,
+          }
+          .into(),
+        )
       } else {
         Err(MemberGetError::NotAMember)
       }
@@ -245,85 +309,98 @@ impl<'src> Parser<'src> {
 
   fn try_resolve_dot_call(
     &mut self,
-    expr: ParsedExpression,
+    primary: ParsedPrimary,
     name: &str,
     name_sr: SourceRange,
     member_get_error: MemberGetError,
-  ) -> ParsedExpression {
+  ) -> ParsedPrimary {
     if let Token::Basic('(') = self.lookahead {
       let (id, id_type) = self.get_variable_id(name, name_sr);
-      return_if_err!(self, ParsedExpression::INVALID);
+      return_if_err!(self, ParsedPrimary::Error);
+
       if let Type::Function(signature) = id_type {
         let (parameters, return_type) = signature.into_parts();
         let call_start = self.lex.previous_token_range();
         self.advance();
-        if parameters.first().is_some_and(|p1| *p1 == expr.type_) {
+        if parameters
+          .first()
+          .is_some_and(|p1| *p1 == *primary.get_type())
+        {
+          let expr = if let ParsedPrimary::Expr(expr) = primary {
+            expr
+          } else {
+            return ParsedPrimary::Error;
+          };
           let parsed_arguments = self.parse_arguments(call_start, ')');
           let call_end = self.lex.previous_token_range();
           self.match_or_err(Token::Basic(')'));
           let call_sr = SourceRange::combine(call_start, call_end);
-          let arguments = check_arguments(
+          check_arguments(
             &mut self.errors,
             &parameters[1..parameters.len()],
-            &parsed_arguments,
+            &parsed_arguments.types,
             call_sr,
           );
           let handle = self.ast.add_expression(DotCall {
             function: id,
             lhs: expr.handle,
-            arguments,
+            arguments: parsed_arguments.expressions,
           });
           ParsedExpression {
             handle,
             type_: return_type,
           }
+          .into()
         } else {
           match member_get_error {
             MemberGetError::NotAStruct => self.emit_error(ty_err::no_member_and_no_function_found(
               name_sr,
               name,
-              expr.type_.print_pretty(),
+              primary.get_type().print_pretty(),
             )),
             MemberGetError::NotAMember => {
               self.emit_error(ty_err::could_not_find_function_for_dot_call(
                 name_sr,
                 name,
-                expr.type_.print_pretty(),
+                primary.get_type().print_pretty(),
               ))
             }
           }
-          ParsedExpression::INVALID
+          ParsedPrimary::Error
         }
       } else {
         self.emit_error(ty_err::cannot_call_type(name_sr, id_type.print_pretty()));
-        ParsedExpression::INVALID
+        ParsedPrimary::Error
       }
     } else {
       match member_get_error {
-        MemberGetError::NotAStruct => self.emit_error(
-          ty_err::cannot_access_member_of_non_struct_type(name_sr, expr.type_.print_pretty()),
-        ),
+        MemberGetError::NotAStruct => {
+          self.emit_error(ty_err::cannot_access_member_of_non_struct_type(
+            name_sr,
+            primary.get_type().print_pretty(),
+          ))
+        }
         MemberGetError::NotAMember => self.emit_error(ty_err::not_a_member(
           name_sr,
           name,
-          expr.type_.print_pretty(),
+          primary.get_type().print_pretty(),
         )),
       }
-      ParsedExpression::INVALID
+      ParsedPrimary::Error
     }
   }
 
-  fn parse_dot(&mut self, expr: ParsedExpression) -> ParsedExpression {
-    return_if_err!(self, ParsedExpression::INVALID);
+  fn parse_dot(&mut self, primary: ParsedPrimary) -> ParsedPrimary {
+    return_if_err!(self, ParsedPrimary::Error);
     assert_eq!(self.lookahead, Token::Basic('.'));
     // if its lhs is an object and name is a member, get the member
     // if name is a function, try to call the function
 
     self.advance();
     let (name, name_sr) = self.match_id_or_err();
-    match self.try_parse_member_get(&expr, name) {
+    match self.try_parse_member_get(&primary, name) {
       Ok(result) => result,
-      Err(err) => self.try_resolve_dot_call(expr, name, name_sr, err),
+      Err(err) => self.try_resolve_dot_call(primary, name, name_sr, err),
     }
   }
 
@@ -331,7 +408,7 @@ impl<'src> Parser<'src> {
     return_if_err!(self, ParsedExpression::INVALID);
 
     let mut expr = self.parse_primary();
-
+    // if its a unresolved overload, try to get an expression
     loop {
       return_if_err!(self, ParsedExpression::INVALID);
       match self.lookahead {
@@ -344,7 +421,14 @@ impl<'src> Parser<'src> {
         _ => break,
       }
     }
-    expr
+    match expr {
+      ParsedPrimary::Expr(expr) => expr,
+      ParsedPrimary::UnresolvedOverload(_) => ParsedExpression {
+        handle: ExprHandle::INVALID,
+        type_: Type::UnresolvedOverload,
+      },
+      ParsedPrimary::Error => ParsedExpression::INVALID,
+    }
   }
 
   fn check_unary(&mut self, sr: SourceRange, op: Token, rhs: Type) -> (Type, UnaryOperator) {
@@ -546,7 +630,9 @@ impl<'src> Parser<'src> {
           ));
         }
       }
-      Identifier::ExternFunction(_) => self.emit_error(ty_err::cannot_assign_to_function(eq_sr)),
+      Identifier::ExternFunction(_) | Identifier::Function(_) => {
+        self.emit_error(ty_err::cannot_assign_to_function(eq_sr))
+      }
       Identifier::Struct(_) => self.emit_error(ty_err::cannot_assing_to_type(eq_sr)),
       Identifier::Invalid => {} // error already handled
     }
@@ -594,7 +680,8 @@ impl<'src> Parser<'src> {
     let captures = self.env.pop_function();
     let function = FunctionSignature::new(parameter_types.clone(), return_type.clone());
 
-    if matches!(body.1, ReturnKind::Conditional | ReturnKind::None if return_type != Type::Nothing)
+    if (body.1 == ReturnKind::Conditional || body.1 == ReturnKind::None)
+      && return_type != Type::Nothing
     {
       self.emit_error(ty_err::no_unconditional_return(SourceRange::EMPTY)); //FIXME: provide proper sr
       return ParsedExpression::INVALID;

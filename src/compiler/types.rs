@@ -41,6 +41,7 @@ pub enum Type {
   Bool,
   Struct(StructId),
   Function(FunctionSignature),
+  UnresolvedOverload,
   Unknown,
   Nothing,
   Error,

@@ -261,7 +261,8 @@ impl ExprVisitor<()> for BytecodeGenerator {
       Identifier::ExternFunction(ext_id) => unsafe {
         self.code.push_constant(ConstantValue::ExternId(ext_id))
       },
-      Identifier::Struct(_struct_id) => {}
+      Identifier::Function(function_id) => todo!(),
+      Identifier::Struct(_) => {}
       Identifier::Invalid => panic!("invalid identifier"),
     }
   }
@@ -420,7 +421,7 @@ impl StmtVisitor<()> for BytecodeGenerator {
     let function_code = BytecodeGenerator::generate_function(&function_definition.body, ast);
     unsafe {
       self.code.push_function(function_code);
-      self.code.set_variable(function_definition.id);
+      //self.code.set_variable(function_definition.id);
     }
   }
 

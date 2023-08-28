@@ -1,5 +1,7 @@
 use std::collections::hash_map::Entry;
 
+use crate::compiler::identifier::{FunctionId, OverloadId};
+use crate::compiler::overload_set::{OverloadSet, ResolvedOverload};
 use crate::compiler::{
   errors::ge_err,
   global_env::{GlobalEnv, Struct},
@@ -9,6 +11,12 @@ use crate::compiler::{
 };
 
 use super::*;
+
+pub enum ResolvedIdentifier {
+  UnresolvedOverload(OverloadId),
+  ResolvedIdentifier { id: Identifier, type_: Type },
+  Error,
+}
 
 #[derive(Debug, Clone)]
 struct Local<'src> {
@@ -40,18 +48,24 @@ pub struct Environment<'src> {
   last_local_id: u8,
   names_in_current_scope: u8,
   functions_declaration_stack: Vec<Function>,
+  declared_functions: u32,
 
   pub global_names: HashMap<String, GlobalIdentifier>,
   pub module_global_variables_types: Vec<Type>,
   pub extern_function_types: Vec<Type>,
   pub module_structs: Vec<Option<Struct>>,
+  pub overloads: Vec<OverloadSet>,
 }
-
-impl<'src> Environment<'src> {}
 
 impl<'src> Environment<'src> {
   pub fn in_global_scope(&self) -> bool {
     self.scope_depth == 0
+  }
+
+  fn new_function_id(&mut self) -> FunctionId {
+    let id = self.declared_functions;
+    self.declared_functions += 1;
+    FunctionId::relative(id)
   }
 
   fn find_local(&self, local_name: &str) -> Option<usize> {
@@ -100,7 +114,7 @@ impl<'src> Environment<'src> {
     (capture_id, &local.type_)
   }
 
-  fn get_global(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<(Identifier, Type)> {
+  fn get_global(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<ResolvedIdentifier> {
     if let Some(&global_variable) = self.global_names.get(name) {
       let type_ = match global_variable {
         GlobalIdentifier::Variable(var_id) => {
@@ -118,9 +132,15 @@ impl<'src> Environment<'src> {
           }
         }
         GlobalIdentifier::Struct(struct_id) => Type::Struct(struct_id),
+        GlobalIdentifier::OverloadId(overload_id) => {
+          return Ok(ResolvedIdentifier::UnresolvedOverload(overload_id));
+        }
         GlobalIdentifier::Invalid => panic!(),
       };
-      Ok((global_variable.into(), type_.clone()))
+      Ok(ResolvedIdentifier::ResolvedIdentifier {
+        id: global_variable.into(),
+        type_: type_.clone(),
+      })
     } else {
       Err(ge_err::undeclared_global(name_sr))
     }
@@ -140,10 +160,13 @@ impl<'src> Environment<'src> {
     }
   }
 
-  pub fn get_id(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<(Identifier, Type)> {
+  pub fn get_id(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<ResolvedIdentifier> {
     if let Some(local) = self.find_local(name) {
       let (local_id, type_) = self.capture(local);
-      Ok((local_id.into(), type_.clone()))
+      Ok(ResolvedIdentifier::ResolvedIdentifier {
+        id: local_id.into(),
+        type_: type_.clone(),
+      })
     } else {
       self.get_global(name, name_sr)
     }
@@ -182,14 +205,29 @@ impl<'src> Environment<'src> {
     &mut self,
     name: &str,
     name_sr: SourceRange,
-    type_: Type,
-  ) -> CompilerResult<VariableIdentifier> {
-    debug_assert!(matches!(type_, Type::Function(_)));
+    signature: FunctionSignature,
+  ) -> CompilerResult<FunctionId> {
+    self.declare_global_function(name, name_sr, signature)
+  }
 
-    match self.global_names.get(name).copied() {
-      Some(GlobalIdentifier::Variable(var_id)) => Ok(VariableIdentifier::Global(var_id)),
-      None => self.declare_global_function(name, name_sr, type_),
-      _ => panic!(),
+  fn get_or_create_overload_id(
+    &mut self,
+    name: &str,
+    name_sr: SourceRange,
+  ) -> CompilerResult<OverloadId> {
+    if let Some(id) = self.global_names.get(name) {
+      if let GlobalIdentifier::OverloadId(overload_id) = id {
+        Ok(*overload_id)
+      } else {
+        panic!()
+      }
+    } else {
+      let overload_id = self.overloads.len() as u32;
+      self.overloads.push(OverloadSet::default());
+      self
+        .global_names
+        .insert(name.to_string(), GlobalIdentifier::OverloadId(overload_id));
+      Ok(overload_id as OverloadId)
     }
   }
 
@@ -197,14 +235,28 @@ impl<'src> Environment<'src> {
     &mut self,
     name: &str,
     name_sr: SourceRange,
-    type_: Type,
-  ) -> CompilerResult<VariableIdentifier> {
-    debug_assert!(matches!(type_, Type::Function(_)));
+    signature: FunctionSignature,
+  ) -> CompilerResult<FunctionId> {
+    let overload_id = self.get_or_create_overload_id(name, name_sr)?;
+    if let Some(overload) = &self.overloads[overload_id as usize].find(signature.get_parameters()) {
+      if overload.return_type != signature.get_return_type() {
+        panic!()
+      } else {
+        Ok(overload.function_id)
+      }
+    } else {
+      let function_id = self.new_function_id();
+      self.overloads[overload_id as usize].insert(signature, function_id);
+      Ok(function_id)
+    }
+  }
 
-    let id = GlobalVarId::relative(self.module_global_variables_types.len() as u32);
-    self.declare_global(name, name_sr, id.into())?;
-    self.module_global_variables_types.push(type_);
-    Ok(VariableIdentifier::Global(id))
+  pub fn resolve_overload(
+    &self,
+    overload_id: OverloadId,
+    parameters: &[Type],
+  ) -> Option<ResolvedOverload> {
+    self.overloads[overload_id as usize].find(parameters)
   }
 
   pub fn get_struct(&self, id: StructId) -> Option<&Struct> {
@@ -381,11 +433,13 @@ impl<'src> Environment<'src> {
       last_local_id: 0,
       names_in_current_scope: 0,
       functions_declaration_stack: Vec::new(),
+      declared_functions: 0,
 
       global_names: HashMap::new(),
       module_global_variables_types: Vec::new(),
       extern_function_types: Vec::new(),
       module_structs: Vec::new(),
+      overloads: Vec::new(),
     }
   }
 }
