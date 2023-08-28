@@ -1,0 +1,12 @@
+import assert;
+
+fn f(x: num) -> num {
+    return 1;
+}
+
+fn f(s: str) -> bool {
+    return false;
+}
+
+assert(f(1) == 1);
+assert(!f("str"));

@@ -73,3 +73,9 @@ test_files!(ufc,
   repeated,
   in_local_scope
 );
+
+#[rustfmt::skip]
+test_files!(overloading,
+  resolve_dot_call,
+  resolve_simple
+);

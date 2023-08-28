@@ -1,0 +1,12 @@
+import assert;
+
+fn not(x: bool) -> bool {
+    return !x;
+}
+
+fn not(s: str) -> str {
+    return "not " + s;
+}
+
+assert(false.not());
+assert("works".not() == "not works");
