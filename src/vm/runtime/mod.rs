@@ -1,7 +1,10 @@
 use std::mem::ManuallyDrop;
+use std::ptr;
 
+use crate::compiler::codegen::bytecode::OpCode;
+use crate::vm::chunk::GlobalChunk;
 use crate::{
-  compiler::{bytecode::OpCode, identifier::ExternId},
+  compiler::identifier::ExternId,
   vm::value::{Value, ValueType},
 };
 
@@ -48,9 +51,9 @@ pub struct RunTime {
   stack: [TaggedValue; MAX_STACK],
   call_stack: [CallFrame; MAX_CALLS],
   gc: GC,
-  loaded_functions: Vec<Function>,
   function_call: usize,
   globals: Vec<TaggedValue>,
+  functions: Vec<Function>,
   extern_functions: Vec<ExternFunction>,
 }
 
@@ -62,7 +65,7 @@ impl RunTime {
       sp: self.stack.as_mut_ptr(),
       pc: global_env.code.code.as_ptr(),
       function,
-      captures: std::ptr::null_mut(),
+      captures: ptr::null_mut(),
     };
     loop {
       if self.gc.should_run() {
@@ -84,23 +87,18 @@ impl RunTime {
           let allocated_string = self.gc.alloc_string(const_str.clone());
           frame.push(TaggedValue::object(allocated_string))
         }
-        OpCode::Function => {
-          let f = frame.read_local_function();
-          frame.push(f);
-        }
         OpCode::MakeClosure => {
           let func = frame.pop();
-          debug_assert!(func.kind == ValueType::Function);
+          debug_assert!(func.kind == ValueType::FunctionId);
           let captures = frame.read_byte();
-          frame.push(TaggedValue::object(
-            self
-              .gc
-              .alloc_closure(unsafe { func.value.function }, captures as usize),
-          ))
+          frame.push(TaggedValue::object(self.gc.alloc_closure(
+            ptr::addr_of!(self.functions[unsafe { func.value.id }]),
+            captures as usize,
+          )))
         }
         OpCode::GetGlobal => {
           let id = unsafe { frame.pop().value.id };
-          let value = unsafe { self.globals.get_unchecked(id as usize) };
+          let value = unsafe { self.globals.get_unchecked(id) };
           if value.kind == ValueType::None {
             panic!("trying to access undefined global variable");
           }
@@ -213,9 +211,9 @@ impl RunTime {
           let arguments = frame.read_byte() as usize;
           let function_value = unsafe { *frame.sp.sub(arguments + 1) };
           let (function, captures) = match function_value.kind {
-            ValueType::Function => (
-              unsafe { function_value.value.function },
-              std::ptr::null_mut(),
+            ValueType::FunctionId => (
+              ptr::addr_of!(self.functions[unsafe { function_value.value.id }]),
+              ptr::null_mut(),
             ),
             ValueType::Object => (
               unsafe { (*function_value.value.object).value.closure.function },
@@ -316,7 +314,7 @@ impl RunTime {
 
   pub fn interpret(
     &mut self,
-    chunk: Chunk,
+    global_chunk: GlobalChunk,
     extern_functions: Vec<(ExternId, ExternFunction)>,
     globals_count: u32,
   ) {
@@ -327,9 +325,8 @@ impl RunTime {
       self.globals.len() + globals_count as usize,
       TaggedValue::none(),
     );
-    let func = Function { code: chunk };
-    self.run(&func);
-    self.loaded_functions.push(func);
+    self.functions.extend(global_chunk.functions);
+    self.run(&global_chunk.global_code);
   }
 }
 
@@ -342,7 +339,7 @@ impl Default for RunTime {
       function_call: 0,
       gc: Default::default(),
       globals: Default::default(),
-      loaded_functions: Default::default(),
+      functions: Default::default(),
     }
   }
 }

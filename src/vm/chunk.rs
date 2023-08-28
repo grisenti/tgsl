@@ -1,6 +1,8 @@
 use std::mem::ManuallyDrop;
 
-use crate::compiler::{bytecode::ConstantValue, codegen::FunctionCode};
+use crate::compiler::codegen::bytecode::ConstantValue;
+use crate::compiler::codegen::function_code::FunctionCode;
+use crate::compiler::codegen::ModuleCode;
 
 use super::{
   address_table::AddressTable,
@@ -80,7 +82,6 @@ pub struct Function {
 #[derive(Clone)]
 pub struct Chunk {
   pub code: Vec<u8>,
-  pub functions: Vec<Function>,
   pub constants: Vec<TaggedConstant>,
 }
 
@@ -89,7 +90,6 @@ impl Default for Chunk {
     Self {
       code: Vec::new(),
       constants: vec![TaggedValue::none().into()],
-      functions: Vec::new(),
     }
   }
 }
@@ -110,7 +110,7 @@ fn convert_constant(value: ConstantValue, address_table: &AddressTable) -> Tagge
       let id = address_table.resolve_variable(id);
       TaggedValue {
         kind: ValueType::GlobalId,
-        value: Value { id },
+        value: Value { id: id as usize },
       }
     }
     .into(),
@@ -118,7 +118,15 @@ fn convert_constant(value: ConstantValue, address_table: &AddressTable) -> Tagge
       let id = address_table.resolve_extern_function(id);
       TaggedValue {
         kind: ValueType::ExternFunctionId,
-        value: Value { id: id as u32 },
+        value: Value { id: id as usize },
+      }
+      .into()
+    }
+    ConstantValue::FunctionId(function_id) => {
+      let id = address_table.resolve_global_function(function_id);
+      TaggedValue {
+        kind: ValueType::FunctionId,
+        value: Value { id: id as usize },
       }
       .into()
     }
@@ -136,30 +144,40 @@ impl Chunk {
     &self.constants[index].value.string
   }
 
-  pub fn get_function(&self, index: usize) -> *const Function {
-    std::ptr::addr_of!(self.functions[index])
-  }
-
   pub fn empty() -> Self {
     Default::default()
   }
 
-  pub fn new(builder: FunctionCode, address_table: &AddressTable) -> Self {
-    let (code, function, constants) = builder.into_parts();
-    let functions = function
-      .into_iter()
-      .map(|func_code| Function {
-        code: Self::new(func_code, address_table),
-      })
-      .collect::<Vec<_>>();
+  pub fn new(function_code: FunctionCode, address_table: &AddressTable) -> Self {
+    let (code, constants) = function_code.into_parts();
     let constants = constants
       .into_iter()
       .map(|c| convert_constant(c, address_table))
       .collect::<Vec<TaggedConstant>>();
+    Self { code, constants }
+  }
+}
+
+pub struct GlobalChunk {
+  pub global_code: Function,
+  pub functions: Vec<Function>,
+}
+
+impl GlobalChunk {
+  pub fn new(module_code: ModuleCode, address_table: &AddressTable) -> Self {
+    let functions = module_code
+      .functions
+      .into_iter()
+      .map(|func_code| Function {
+        code: Chunk::new(func_code, address_table),
+      })
+      .collect::<Vec<_>>();
+    let global_code = Function {
+      code: Chunk::new(module_code.global_code, address_table),
+    };
     Self {
-      code,
       functions,
-      constants,
+      global_code,
     }
   }
 }

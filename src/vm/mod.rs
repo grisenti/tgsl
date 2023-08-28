@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use crate::{
   compiler::{errors::ErrorPrinter, identifier::ExternId, Compiler},
@@ -50,16 +50,18 @@ impl VM {
       Ok(module) => module,
     };
     let globals_count = compiled_module.globals_count;
+    let functions_count = compiled_module.code.functions.len();
     let external_functions =
       self.process_extern_functions(&compiled_module.extern_functions, extern_functions)?;
     self.run_time.interpret(
-      Chunk::new(compiled_module.code, &self.address_table),
+      GlobalChunk::new(compiled_module.code, &self.address_table),
       external_functions,
       globals_count as u32,
     );
     self.address_table.update_table(
       globals_count as u32,
       compiled_module.extern_functions.len() as u32,
+      functions_count as u32,
     );
     Ok(())
   }

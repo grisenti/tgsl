@@ -1,8 +1,9 @@
-use super::{
+use crate::compiler::identifier::FunctionId;
+use crate::compiler::operators::BinaryOperator;
+use crate::compiler::{
   identifier::{ExternId, GlobalVarId},
   operators::UnaryOperator,
 };
-use crate::compiler::operators::BinaryOperator;
 use core::fmt::Debug;
 
 #[repr(u8)]
@@ -12,7 +13,6 @@ pub enum OpCode {
 
   Constant,
   ConstantStr,
-  Function,
 
   GetGlobal,
   SetGlobal,
@@ -112,6 +112,7 @@ pub enum ConstantValue {
   Number(f64),
   GlobalId(GlobalVarId),
   ExternId(ExternId),
+  FunctionId(FunctionId),
   Bool(bool),
   Str(String),
   None,

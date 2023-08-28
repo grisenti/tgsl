@@ -686,9 +686,11 @@ impl<'src> Parser<'src> {
       self.emit_error(ty_err::no_unconditional_return(SourceRange::EMPTY)); //FIXME: provide proper sr
       return ParsedExpression::INVALID;
     }
+    let id = self.env.new_function_id();
 
     ParsedExpression {
       handle: self.ast.add_expression(expr::Lambda {
+        id,
         captures,
         parameter_types,
         body: body.0,

@@ -1,6 +1,6 @@
 pub mod expr {
   use crate::compiler::global_env::MemberIndex;
-  use crate::compiler::identifier::StructId;
+  use crate::compiler::identifier::{FunctionId, StructId};
   use crate::compiler::operators::{BinaryOperator, LogicalOperator, UnaryOperator};
   use crate::compiler::{
     ast::{ExprHandle, StmtHandle, StrHandle},
@@ -72,6 +72,7 @@ pub mod expr {
   );
 
   expr_node!(Lambda,
+    id: FunctionId,
     captures: Vec<VariableIdentifier>,
     parameter_types: Vec<Type>,
     return_type: Type,

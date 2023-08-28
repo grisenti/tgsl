@@ -159,6 +159,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
       .collect::<Vec<_>>();
     object! {
       "Lambda": {
+        "id": lambda.id,
         "captures": lambda.captures.as_slice(),
         "return_type": &lambda.return_type,
         "parameter_types": type_list_to_json(&lambda.parameter_types),

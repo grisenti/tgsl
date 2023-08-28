@@ -1,4 +1,3 @@
-
 use std::{fmt::Debug, mem::ManuallyDrop};
 
 use super::chunk::Function;
@@ -62,6 +61,7 @@ pub enum ValueType {
   Bool,
   GlobalId,
   Function,
+  FunctionId,
   ExternFunctionId,
   Object,
 
@@ -71,9 +71,8 @@ pub enum ValueType {
 #[derive(Clone, Copy)]
 pub union Value {
   pub number: f64,
-  pub id: u32,
+  pub id: usize,
   pub boolean: bool,
-  pub function: *const Function,
   pub object: *mut Object,
   pub none: (),
 }
@@ -89,13 +88,6 @@ impl TaggedValue {
     Self {
       kind: ValueType::Object,
       value: Value { object },
-    }
-  }
-
-  pub fn function(function: *const Function) -> Self {
-    TaggedValue {
-      kind: ValueType::Function,
-      value: Value { function },
     }
   }
 
@@ -117,6 +109,7 @@ impl ToString for TaggedValue {
       ValueType::None => "<none>".to_string(),
       ValueType::ExternFunctionId => unsafe { format!("<extern {}>", self.value.id) },
       ValueType::Object => unsafe { (*self.value.object).to_string() },
+      ValueType::FunctionId => unsafe { format!("<function {}>", self.value.id) },
     }
   }
 }

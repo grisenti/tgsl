@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use self::{
-  codegen::FunctionCode,
   errors::CompilerError,
   global_env::GlobalEnv,
   identifier::{ExternId, GlobalIdentifier, ModuleId},
@@ -9,25 +8,24 @@ use self::{
 };
 
 pub mod ast;
-pub mod bytecode;
 pub mod codegen;
 pub mod errors;
 mod global_env;
 pub mod identifier;
 mod lexer;
 mod operators;
+mod overload_set;
 mod parser;
 mod types;
-mod overload_set;
 
-use crate::compiler::codegen::BytecodeGenerator;
+use crate::compiler::codegen::ModuleCode;
 use ast::json::ASTJSONPrinter;
 
 pub struct CompiledModule {
   pub module_id: Option<ModuleId>,
   pub globals_count: u16,
   pub extern_functions: HashMap<String, ExternId>,
-  pub code: FunctionCode,
+  pub code: ModuleCode,
 }
 
 pub struct Compiler {
@@ -57,7 +55,7 @@ impl Compiler {
   pub fn compile(&mut self, source: &str) -> Result<CompiledModule, Vec<CompilerError>> {
     let parsed_module = Parser::parse(source, &self.global_env)?;
     println!("{}", ASTJSONPrinter::print_to_string(&parsed_module.ast));
-    let code = BytecodeGenerator::generate_program(&parsed_module.ast);
+    let code = ModuleCode::generate_program(&parsed_module.ast);
     println!("{:?}", code);
 
     let extern_functions = Self::module_extern_functions(&parsed_module.global_names);

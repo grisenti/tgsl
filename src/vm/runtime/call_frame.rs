@@ -1,7 +1,5 @@
-use crate::{
-  compiler::bytecode::OpCode,
-  vm::{chunk::Function, runtime::MAX_LOCALS, value::TaggedValue},
-};
+use crate::compiler::codegen::bytecode::OpCode;
+use crate::vm::{chunk::Function, runtime::MAX_LOCALS, value::TaggedValue};
 
 #[derive(Clone, Copy)]
 pub struct CallFrame {
@@ -63,11 +61,6 @@ impl CallFrame {
   pub fn read_string_constant(&mut self) -> &String {
     let index = self.read_byte();
     unsafe { (*self.function).code.get_string_constant(index as usize) }
-  }
-
-  pub fn read_local_function(&mut self) -> TaggedValue {
-    let index = self.read_byte();
-    unsafe { TaggedValue::function((*self.function).code.get_function(index as usize)) }
   }
 
   pub fn get_stack_value(&self, offset: u8) -> TaggedValue {

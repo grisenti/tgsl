@@ -62,7 +62,7 @@ impl<'src> Environment<'src> {
     self.scope_depth == 0
   }
 
-  fn new_function_id(&mut self) -> FunctionId {
+  pub fn new_function_id(&mut self) -> FunctionId {
     let id = self.declared_functions;
     self.declared_functions += 1;
     FunctionId::relative(id)

@@ -1,0 +1,180 @@
+use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
+use crate::compiler::identifier::VariableIdentifier;
+use std::fmt::Debug;
+
+pub struct Label(usize);
+pub struct JumpPoint(usize);
+pub struct Address(usize);
+
+#[derive(Default, Clone)]
+pub struct FunctionCode {
+  code: Vec<u8>,
+  constants: Vec<ConstantValue>,
+}
+
+impl FunctionCode {
+  pub unsafe fn push_constant(&mut self, val: ConstantValue) {
+    let constant_offset = self.constants.len() as u8;
+    let constant_type = if matches!(val, ConstantValue::Str(_)) {
+      OpCode::ConstantStr
+    } else {
+      OpCode::Constant
+    };
+    self.constants.push(val);
+    self.code.push(constant_type as u8);
+    self.code.push(constant_offset);
+  }
+
+  pub unsafe fn push_constant_none(&mut self) {
+    self.code.push(OpCode::Constant as u8);
+    self.code.push(0);
+  }
+
+  pub unsafe fn push_op(&mut self, op: OpCode) {
+    self.code.push(op as u8);
+  }
+
+  /// pushes opcode with additional data
+  pub unsafe fn push_op2(&mut self, op: OpCode, data: u8) {
+    self.code.push(op as u8);
+    self.code.push(data);
+  }
+
+  pub unsafe fn push_jump(&mut self, jump_type: OpCode) -> JumpPoint {
+    debug_assert!(matches!(
+      jump_type,
+      OpCode::Jump | OpCode::JumpIfFalsePop | OpCode::JumpIfFalseNoPop
+    ));
+    unsafe { self.push_op(jump_type) };
+    let index = self.code.len();
+    self.code.push(0);
+    self.code.push(0);
+    JumpPoint(index)
+  }
+
+  pub fn push_back_jump(&mut self, Label(to): Label) {
+    assert!((self.code.len() - to + 2) <= u16::MAX as usize);
+    unsafe { self.push_op(OpCode::BackJump) };
+    // 2 added to skip jump point
+    let split = ((self.code.len() - to + 2) as u16).to_ne_bytes();
+    self.code.push(split[0]);
+    self.code.push(split[1]);
+  }
+
+  pub fn backpatch_current_instruction(&mut self, JumpPoint(jump_point): JumpPoint) {
+    assert!((self.code.len() - jump_point - 2) <= u16::MAX as usize);
+    let split = ((self.code.len() - jump_point - 2) as u16).to_ne_bytes();
+    // 2 removed to skip jump point
+    self.code[jump_point] = split[0];
+    self.code[jump_point + 1] = split[1];
+  }
+
+  pub fn get_next_instruction_label(&self) -> Label {
+    Label(self.code.len())
+  }
+
+  pub fn get_next_instruction_address(&self) -> Address {
+    Address(self.code.len())
+  }
+
+  pub fn swap(&mut self, Address(start): Address, Address(mid): Address, Address(end): Address) {
+    self.code[start..end].rotate_left(mid - start);
+  }
+
+  pub unsafe fn get_variable(&mut self, id: VariableIdentifier) {
+    match id {
+      VariableIdentifier::Global(gid) => {
+        self.push_constant(ConstantValue::GlobalId(gid));
+        self.push_op(OpCode::GetGlobal);
+      }
+      VariableIdentifier::Local(id) => {
+        self.push_op2(OpCode::GetLocal, id);
+      }
+      VariableIdentifier::Capture(id) => {
+        self.push_op2(OpCode::GetCapture, id);
+      }
+      VariableIdentifier::Invalid => panic!("codegen with invalid ast"),
+    }
+  }
+
+  pub unsafe fn set_variable(&mut self, id: VariableIdentifier) {
+    match id {
+      VariableIdentifier::Global(gid) => {
+        self.push_constant(ConstantValue::GlobalId(gid));
+        self.push_op(OpCode::SetGlobal);
+      }
+      VariableIdentifier::Capture(id) => {
+        self.push_op2(OpCode::SetCapture, id);
+      }
+      VariableIdentifier::Local(id) => {
+        self.push_op2(OpCode::SetLocal, id);
+      }
+      VariableIdentifier::Invalid => panic!("codegen with invalid ast"),
+    }
+  }
+
+  pub unsafe fn maybe_create_closure(&mut self, captures: &[VariableIdentifier]) {
+    if !captures.is_empty() {
+      self.push_op2(OpCode::MakeClosure, captures.len() as u8);
+      for c in captures {
+        self.get_variable(*c);
+        self.push_op(OpCode::Capture);
+      }
+    }
+  }
+
+  pub fn into_parts(self) -> (Vec<u8>, Vec<ConstantValue>) {
+    (self.code, self.constants)
+  }
+}
+
+impl Debug for FunctionCode {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let mut result = "".to_string();
+    let mut index = 0;
+    while index < self.code.len() {
+      let code = unsafe { std::mem::transmute::<u8, OpCode>(self.code[index]) };
+      result += &format!("{index}: ");
+      match code {
+        OpCode::Constant | OpCode::ConstantStr => {
+          index += 1;
+          result += &format!(
+            "Constant: {:?}\n",
+            self.constants[self.code[index] as usize]
+          );
+        }
+        OpCode::Call => {
+          index += 1;
+          result += &format!("Call: {}\n", self.code[index]);
+        }
+        OpCode::JumpIfFalsePop | OpCode::Jump | OpCode::JumpIfFalseNoPop => {
+          index += 2;
+          let jump_point = u16::from_ne_bytes([self.code[index - 1], self.code[index]]);
+          result += &format!("{code:?}: {}\n", index + 1 + jump_point as usize);
+        }
+        OpCode::BackJump => {
+          index += 2;
+          let jump_point = u16::from_ne_bytes([self.code[index - 1], self.code[index]]);
+          result += &format!("{code:?}: {}\n", index + 1 - jump_point as usize);
+        }
+        OpCode::GetLocal
+        | OpCode::SetLocal
+        | OpCode::GetCapture
+        | OpCode::SetCapture
+        | OpCode::GetMember
+        | OpCode::SetMember
+        | OpCode::Construct => {
+          index += 1;
+          result += &format!("{code:?}: {}\n", self.code[index])
+        }
+        OpCode::MakeClosure => {
+          index += 1;
+          result += &format!("MakeClosure, captures: {}\n", self.code[index])
+        }
+        code => result += &format!("{code:?}\n"),
+      }
+      index += 1;
+    }
+    write!(f, "{result}")
+  }
+}
