@@ -18,7 +18,7 @@ impl FunctionSignature {
   }
 
   pub fn get_parameters(&self) -> &[Type] {
-    &self.signature[0..self.signature.len()]
+    &self.signature[0..self.signature.len()-1]
   }
 
   pub fn into_parts(mut self) -> (Vec<Type>, Type) {
