@@ -4,7 +4,7 @@ use crate::compiler::ast::visitor::{ExprVisitor, StmtVisitor};
 use crate::compiler::ast::{StmtHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::codegen::function_code::FunctionCode;
-use crate::compiler::identifier::Identifier;
+use crate::compiler::identifier::{FunctionId, Identifier};
 use crate::compiler::operators::LogicalOperator;
 
 pub struct BytecodeGenerator<'g> {
@@ -26,6 +26,21 @@ impl<'g> BytecodeGenerator<'g> {
       generator.visit_stmt(ast, *stmt);
     }
     generator.code
+  }
+
+  fn set_function(&mut self, id: FunctionId, code: FunctionCode) {
+    assert!(id.is_relative());
+    let function_id = id.get_id() as usize;
+    if function_id == self.functions.len() {
+      self.functions.push(code);
+    } else if function_id > self.functions.len() {
+      self
+        .functions
+        .resize(function_id + 1, FunctionCode::default());
+      self.functions[function_id] = code;
+    } else {
+      self.functions[function_id] = code;
+    }
   }
 }
 
@@ -114,9 +129,7 @@ impl ExprVisitor<()> for BytecodeGenerator<'_> {
   fn visit_lambda(&mut self, ast: &AST, lambda: &expr::Lambda) -> () {
     let function_code =
       BytecodeGenerator::generate_function(&lambda.body, ast, &mut self.functions);
-    let function_id = lambda.id.get_id() as usize;
-    assert_eq!(self.functions.len(), function_id);
-    self.functions.push(function_code);
+    self.set_function(lambda.id, function_code);
     unsafe {
       self
         .code
@@ -231,27 +244,11 @@ impl StmtVisitor<()> for BytecodeGenerator<'_> {
 
     let function_code =
       BytecodeGenerator::generate_function(&function_definition.body, ast, &mut self.functions);
-    let function_id = function_definition.id.get_id() as usize;
-    if function_id < self.functions.len() {
-      self.functions[function_id] = function_code;
-    } else {
-      assert_eq!(function_id, self.functions.len());
-      self.functions.push(function_code);
-    }
+    self.set_function(function_definition.id, function_code);
   }
 
-  fn visit_function_declaration(
-    &mut self,
-    _: &AST,
-    function_declaration: &stmt::FunctionDeclaration,
-  ) -> () {
-    let function_id = function_declaration.id.get_id() as usize;
-    // cannot be bigger, otherwise declarations are not ordered
-    assert!(function_id <= self.functions.len());
-    if function_id == self.functions.len() {
-      // first function declaration. If function_id > self.functions.len()
-      self.functions.push(FunctionCode::default());
-    }
+  fn visit_function_declaration(&mut self, _: &AST, _: &stmt::FunctionDeclaration) -> () {
+    //nothing
   }
 
   fn visit_extern_function(&mut self, _: &AST, _: &stmt::ExternFunction) -> () {
