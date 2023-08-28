@@ -220,7 +220,57 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_function_call(&mut self, expr: ParsedPrimary) -> ParsedPrimary {
+  fn parse_expr_call(
+    &mut self,
+    expr: ParsedExpression,
+    arguments: ParsedArguments,
+    call_sr: SourceRange,
+  ) -> ParsedExpression {
+    if let Type::Function(signature) = expr.type_ {
+      let (parameters, return_type) = signature.into_parts();
+      check_arguments(&mut self.errors, &parameters, &arguments.types, call_sr);
+      let handle = self.ast.add_expression(expr::FnCall {
+        func: expr.handle,
+        arguments: arguments.expressions,
+        expr_type: return_type.clone(),
+      });
+      ParsedExpression {
+        handle,
+        type_: return_type,
+      }
+    } else {
+      self.emit_error(ty_err::cannot_call_type(call_sr, expr.type_.print_pretty()));
+      ParsedExpression::INVALID
+    }
+  }
+
+  fn parse_overloaded_call(
+    &mut self,
+    overload_id: OverloadId,
+    arguments: ParsedArguments,
+    call_sr: SourceRange,
+  ) -> ParsedExpression {
+    let resolved_function = self.env.resolve_overload(overload_id, &arguments.types);
+    if let Some(resolved_function) = resolved_function {
+      let id_expr_node_handle = self.ast.add_expression(expr::Id {
+        id: Identifier::Function(resolved_function.function_id),
+        id_type: resolved_function.function_signature.clone().into(),
+      });
+      let return_type = resolved_function.function_signature.get_return_type();
+      ParsedExpression {
+        handle: self.ast.add_expression(expr::FnCall {
+          func: id_expr_node_handle,
+          arguments: arguments.expressions,
+          expr_type: return_type.clone(),
+        }),
+        type_: return_type.clone(),
+      }
+    } else {
+      todo!() // no valid overload
+    }
+  }
+
+  fn parse_function_call(&mut self, primary: ParsedPrimary) -> ParsedPrimary {
     return_if_err!(self, ParsedExpression::INVALID.into());
     assert_eq!(self.lookahead, Token::Basic('('));
 
@@ -230,47 +280,11 @@ impl<'src> Parser<'src> {
     let call_end_sr = self.lex.previous_token_range();
     self.match_or_err(Token::Basic(')'));
     let call_sr = SourceRange::combine(call_start_sr, call_end_sr);
-    match expr {
-      ParsedPrimary::Expr(expr) => {
-        if let Type::Function(signature) = expr.type_ {
-          let (parameters, return_type) = signature.into_parts();
-          check_arguments(&mut self.errors, &parameters, &arguments.types, call_sr);
-          let handle = self.ast.add_expression(expr::FnCall {
-            func: expr.handle,
-            arguments: arguments.expressions,
-            expr_type: return_type.clone(),
-          });
-          ParsedExpression {
-            handle,
-            type_: return_type,
-          }
-          .into()
-        } else {
-          self.emit_error(ty_err::cannot_call_type(call_sr, expr.type_.print_pretty()));
-          ParsedPrimary::Error
-        }
-      }
-      ParsedPrimary::UnresolvedOverload(overload_id) => {
-        let resolved_function = self.env.resolve_overload(overload_id, &arguments.types);
-        if let Some(resolved_function) = resolved_function {
-          let id_expr_node_handle = self.ast.add_expression(expr::Id {
-            id: Identifier::Function(resolved_function.function_id),
-            id_type: resolved_function.function_signature.clone().into(),
-          });
-          let return_type = resolved_function.function_signature.get_return_type();
-          ParsedExpression {
-            handle: self.ast.add_expression(expr::FnCall {
-              func: id_expr_node_handle,
-              arguments: arguments.expressions,
-              expr_type: return_type.clone(),
-            }),
-            type_: return_type.clone(),
-          }
-          .into()
-        } else {
-          todo!() // no valid overload
-        }
-      }
+    match primary {
+      ParsedPrimary::Expr(expr) => self.parse_expr_call(expr, arguments, call_sr).into(),
+      ParsedPrimary::UnresolvedOverload(overload_id) => self
+        .parse_overloaded_call(overload_id, arguments, call_sr)
+        .into(),
       ParsedPrimary::Error => ParsedPrimary::Error,
     }
   }
