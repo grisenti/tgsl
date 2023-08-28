@@ -1,6 +1,6 @@
 import assert;
 
-var x;
+var x = 0;
 if (2 < 3)
 	x = 1;
 else
