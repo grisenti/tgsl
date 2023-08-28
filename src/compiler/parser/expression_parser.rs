@@ -255,15 +255,16 @@ impl<'src> Parser<'src> {
         if let Some(resolved_function) = resolved_function {
           let id_expr_node_handle = self.ast.add_expression(expr::Id {
             id: Identifier::Function(resolved_function.function_id),
-            id_type: Type::Nothing,
+            id_type: resolved_function.function_signature.clone().into(),
           });
+          let return_type = resolved_function.function_signature.get_return_type();
           ParsedExpression {
             handle: self.ast.add_expression(expr::FnCall {
               func: id_expr_node_handle,
               arguments: arguments.expressions,
-              expr_type: Type::Nothing,
+              expr_type: return_type.clone(),
             }),
-            type_: Type::Nothing,
+            type_: return_type.clone(),
           }
           .into()
         } else {

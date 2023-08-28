@@ -8,7 +8,7 @@ pub struct OverloadSet {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct ResolvedOverload<'a> {
-  pub return_type: &'a Type,
+  pub function_signature: &'a FunctionSignature,
   pub function_id: FunctionId,
 }
 
@@ -19,7 +19,7 @@ impl OverloadSet {
       .iter()
       .find(|(signature, _)| signature.get_parameters() == arguments)
       .map(|(signature, id)| ResolvedOverload {
-        return_type: signature.get_return_type(),
+        function_signature: &signature,
         function_id: *id,
       })
   }
@@ -57,7 +57,7 @@ mod test {
       overload_set.find(&vec![]),
       Some(ResolvedOverload {
         function_id: FunctionId::relative(0),
-        return_type: &Type::Nothing
+        function_signature: &FunctionSignature::new(vec![], Type::Nothing)
       })
     );
   }
@@ -73,7 +73,7 @@ mod test {
       overload_set.find(&vec![Type::Bool, Type::Num]),
       Some(ResolvedOverload {
         function_id: FunctionId::relative(0),
-        return_type: &Type::Str
+        function_signature: &FunctionSignature::new(vec![Type::Bool, Type::Num], Type::Str)
       })
     );
   }
@@ -97,7 +97,7 @@ mod test {
       overload_set.find(&vec![Type::Str, Type::Bool]),
       Some(ResolvedOverload {
         function_id: FunctionId::relative(1),
-        return_type: &Type::Bool
+        function_signature: &FunctionSignature::new(vec![Type::Str, Type::Bool], Type::Bool)
       })
     );
   }

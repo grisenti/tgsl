@@ -239,7 +239,7 @@ impl<'src> Environment<'src> {
   ) -> CompilerResult<FunctionId> {
     let overload_id = self.get_or_create_overload_id(name, name_sr)?;
     if let Some(overload) = &self.overloads[overload_id as usize].find(signature.get_parameters()) {
-      if overload.return_type != signature.get_return_type() {
+      if overload.function_signature.get_return_type() != signature.get_return_type() {
         panic!()
       } else {
         Ok(overload.function_id)
