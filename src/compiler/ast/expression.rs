@@ -97,7 +97,7 @@ pub mod expr {
 
   expr_node!(DotCall,
     lhs: ExprHandle,
-    function: VariableIdentifier,
+    function: Identifier,
     arguments: Vec<ExprHandle>
   );
 

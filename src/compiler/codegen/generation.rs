@@ -6,6 +6,7 @@ use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::identifier::{FunctionId, Identifier};
 use crate::compiler::operators::LogicalOperator;
+use std::env::var;
 
 pub struct BytecodeGenerator<'g> {
   code: FunctionCode,
@@ -171,7 +172,18 @@ impl ExprVisitor<()> for BytecodeGenerator<'_> {
   }
 
   fn visit_dot_call(&mut self, ast: &AST, dot_call: &expr::DotCall) -> () {
-    unsafe { self.code.get_variable(dot_call.function) };
+    match dot_call.function {
+      Identifier::Variable(var_id) => unsafe { self.code.get_variable(var_id) },
+      Identifier::ExternFunction(extern_id) => unsafe {
+        self.code.push_constant(ConstantValue::ExternId(extern_id))
+      },
+      Identifier::Function(function_id) => unsafe {
+        self
+          .code
+          .push_constant(ConstantValue::FunctionId(function_id))
+      },
+      _ => panic!("invalid identifier in dot call {:?}", dot_call.function),
+    }
     self.visit_expr(ast, dot_call.lhs);
     for arg in &dot_call.arguments {
       self.visit_expr(ast, *arg);
