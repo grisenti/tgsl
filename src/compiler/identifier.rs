@@ -96,6 +96,12 @@ impl From<StructId> for Identifier {
   }
 }
 
+impl From<FunctionId> for Identifier {
+  fn from(value: FunctionId) -> Self {
+    Identifier::Function(value)
+  }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub enum GlobalIdentifier {
   Variable(GlobalVarId),
