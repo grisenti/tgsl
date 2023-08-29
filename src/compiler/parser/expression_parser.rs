@@ -266,7 +266,8 @@ impl<'src> Parser<'src> {
         type_: return_type.clone(),
       }
     } else {
-      todo!() // no valid overload
+      self.emit_error(ty_err::no_available_oveload(call_sr));
+      ParsedExpression::INVALID
     }
   }
 
@@ -327,6 +328,7 @@ impl<'src> Parser<'src> {
     overload_id: OverloadId,
     parsed_arguments: ParsedArguments,
     expr: ParsedExpression,
+    call_sr: SourceRange,
   ) -> ParsedPrimary {
     let mut argument_types = parsed_arguments.types.clone();
     argument_types.insert(0, expr.type_);
@@ -346,7 +348,8 @@ impl<'src> Parser<'src> {
       }
       .into()
     } else {
-      panic!() // no valid overload
+      self.emit_error(ty_err::no_available_oveload(call_sr));
+      ParsedPrimary::Error
     }
   }
 
@@ -375,7 +378,7 @@ impl<'src> Parser<'src> {
 
     match identifier {
       ResolvedIdentifier::UnresolvedOverload(overload_id) => {
-        self.resolve_overloaded_dot_call(overload_id, parsed_arguments, expr)
+        self.resolve_overloaded_dot_call(overload_id, parsed_arguments, expr, call_sr)
       }
       ResolvedIdentifier::ResolvedIdentifier { id, type_: id_type } => {
         if let Type::Function(signature) = id_type {

@@ -282,6 +282,8 @@ pub mod ty_err {
     "cannot use value of type {} in a condition",
     conditional_type: String
   );
+
+  def_err!(no_available_oveload, "TY017", "no available overload");
 }
 
 pub mod ge_err {
