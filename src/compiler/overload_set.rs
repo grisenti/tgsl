@@ -29,6 +29,37 @@ impl OverloadSet {
 
     self.functions.push((signature, function_id));
   }
+
+  pub fn merge(&mut self, other: &Self) -> bool {
+    for (signature, function_id) in &other.functions {
+      if self.find(signature.get_parameters()).is_some() {
+        return false;
+      } else {
+        self.functions.push((signature.clone(), *function_id));
+      }
+    }
+    true
+  }
+
+  pub fn export_set(self, function_id_start: u32) -> (Self, usize) {
+    let mut exported = Vec::new();
+    for (signature, func_id) in self.functions {
+      assert!(func_id.is_relative());
+      if func_id.is_public() {
+        exported.push((
+          signature,
+          FunctionId::absolute(func_id.get_id() + function_id_start),
+        ));
+      }
+    }
+    let count = exported.len();
+    (
+      Self {
+        functions: exported,
+      },
+      count,
+    )
+  }
 }
 
 #[cfg(test)]

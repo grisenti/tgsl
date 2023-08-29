@@ -1,3 +1,9 @@
-import "hello"
+module mod1;
 
-hello();
+fn not(x: bool) -> bool {
+    return !x;
+}
+
+fn not(s: str) -> str {
+    return "not " + s;
+}

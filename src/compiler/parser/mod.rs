@@ -3,6 +3,7 @@ mod expression_parser;
 mod statement_parser;
 
 use self::environment::Environment;
+use crate::compiler::overload_set::OverloadSet;
 use crate::compiler::parser::environment::ResolvedIdentifier;
 use crate::compiler::types::FunctionSignature;
 
@@ -34,6 +35,7 @@ pub struct ParsedModule {
   pub global_names: HashMap<String, GlobalIdentifier>,
   pub module_global_variable_types: Vec<Type>,
   pub module_extern_functions_types: Vec<Type>,
+  pub module_overloads: Vec<OverloadSet>,
   pub module_structs: Vec<Option<Struct>>,
 }
 
@@ -323,6 +325,7 @@ impl<'parsing> Parser<'parsing> {
         global_names: parser.env.global_names,
         module_global_variable_types: parser.env.module_global_variables_types,
         module_extern_functions_types: parser.env.extern_function_types,
+        module_overloads: parser.env.overloads,
         module_structs: parser.env.module_structs,
       })
     } else {

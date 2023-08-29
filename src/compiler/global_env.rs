@@ -10,7 +10,7 @@ use super::types::Type;
 
 pub struct Module {
   pub global_names: HashMap<String, GlobalIdentifier>,
-  //pub overloads: Vec<OverloadSet>,
+  pub overloads: Vec<OverloadSet>,
 }
 
 pub struct Struct {
@@ -69,6 +69,7 @@ pub struct GlobalEnv {
   global_variables_count: u32,
   extern_functions_count: u32,
   structs_count: u32,
+  exported_functions: u32,
 }
 
 impl GlobalEnv {
@@ -144,14 +145,30 @@ impl GlobalEnv {
               exported_structs += 1;
             }
           }
+          GlobalIdentifier::OverloadId(overload_id) => {
+            module_names.insert(name, GlobalIdentifier::OverloadId(overload_id));
+          }
           _ => panic!(),
         }
       }
+      let mut exported_functions = 0;
+      let overloads = parsed_module
+        .module_overloads
+        .into_iter()
+        .map(|overload_set| {
+          let (set, count) = overload_set.export_set(self.exported_functions);
+          exported_functions += count;
+          set
+        })
+        .collect();
+
       self.global_variables_count += exported_variables;
       self.extern_functions_count += exported_extern_functions;
       self.structs_count += exported_structs;
+      self.exported_functions += exported_functions as u32;
       self.modules.push(Module {
         global_names: module_names,
+        overloads,
       });
       Some(ModuleId(module_id))
     } else {

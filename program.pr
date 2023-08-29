@@ -1,14 +1,5 @@
-fn f() -> fn() -> fn() -> num {
-  var y = 1;
-  return fn () -> fn () -> num {
-	return fn () -> num {
-		y = y + 1;
-		return y;
-	};
-  };
-}
+import std_io;
+import mod1;
 
-var g1 = f();
-var g2 = f();
-var z = g1();
-var w = g1();
+println(false.not());
+println("works".not() == "not works");

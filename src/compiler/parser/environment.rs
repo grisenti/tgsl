@@ -65,7 +65,7 @@ impl<'src> Environment<'src> {
   pub fn new_function_id(&mut self) -> FunctionId {
     let id = self.declared_functions;
     self.declared_functions += 1;
-    FunctionId::relative(id)
+    FunctionId::relative(id).into_public()
   }
 
   fn find_local(&self, local_name: &str) -> Option<usize> {
@@ -417,10 +417,36 @@ impl<'src> Environment<'src> {
     let module_id = self.global_env.get_module_id(name, name_sr)?;
     let module = self.global_env.get_module(module_id);
     // FIXME: does not check for double declarations
-    self
-      .global_names
-      .extend(module.global_names.iter().map(|(k, v)| (k.clone(), *v)));
-
+    for (name, global_id) in &module.global_names {
+      match global_id {
+        GlobalIdentifier::OverloadId(module_overload_id) => {
+          if let Some(global_id) = self.global_names.get(name).copied() {
+            if let GlobalIdentifier::OverloadId(overload_id) = global_id {
+              if !self.overloads[overload_id as usize]
+                .merge(&module.overloads[*module_overload_id as usize])
+              {
+                panic!() // cannot merge
+              }
+              self.global_names.insert(name.clone(), global_id);
+            } else {
+              panic!() // overload in one name is something else in this module
+            }
+          } else {
+            let overload_id = self.overloads.len();
+            self
+              .overloads
+              .push(module.overloads[*module_overload_id as usize].clone());
+            self.global_names.insert(
+              name.clone(),
+              GlobalIdentifier::OverloadId(overload_id as u32),
+            );
+          }
+        }
+        other => {
+          self.global_names.insert(name.clone(), *other);
+        }
+      }
+    }
     Ok(module_id)
   }
 
