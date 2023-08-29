@@ -322,6 +322,105 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn resolve_overloaded_dot_call(
+    &mut self,
+    overload_id: OverloadId,
+    parsed_arguments: ParsedArguments,
+    expr: ParsedExpression,
+  ) -> ParsedPrimary {
+    let mut argument_types = parsed_arguments.types.clone();
+    argument_types.insert(0, expr.type_);
+    let resolved_overload = self.env.resolve_overload(overload_id, &argument_types);
+    if let Some(resolved_overload) = resolved_overload {
+      let handle = self.ast.add_expression(DotCall {
+        function: resolved_overload.function_id.into(),
+        lhs: expr.handle,
+        arguments: parsed_arguments.expressions,
+      });
+      ParsedExpression {
+        handle,
+        type_: resolved_overload
+          .function_signature
+          .get_return_type()
+          .clone(),
+      }
+      .into()
+    } else {
+      panic!() // no valid overload
+    }
+  }
+
+  fn resolve_dot_call(
+    &mut self,
+    primary: ParsedPrimary,
+    name: &str,
+    name_sr: SourceRange,
+    member_get_error: MemberGetError,
+  ) -> ParsedPrimary {
+    let identifier = self.get_id(name, name_sr);
+    return_if_err!(self, ParsedPrimary::Error);
+
+    let call_start = self.lex.previous_token_range();
+    self.advance();
+    let parsed_arguments = self.parse_arguments(call_start, ')');
+    let call_end = self.lex.previous_token_range();
+    self.match_or_err(Token::Basic(')'));
+    let call_sr = SourceRange::combine(call_start, call_end);
+
+    let expr = if let ParsedPrimary::Expr(expr) = primary {
+      expr
+    } else {
+      return ParsedPrimary::Error;
+    };
+
+    match identifier {
+      ResolvedIdentifier::UnresolvedOverload(overload_id) => {
+        self.resolve_overloaded_dot_call(overload_id, parsed_arguments, expr)
+      }
+      ResolvedIdentifier::ResolvedIdentifier { id, type_: id_type } => {
+        if let Type::Function(signature) = id_type {
+          let (parameters, return_type) = signature.into_parts();
+          if parameters.first().is_some_and(|p1| *p1 == expr.type_) {
+            check_arguments(
+              &mut self.errors,
+              &parameters[1..parameters.len()],
+              &parsed_arguments.types,
+              call_sr,
+            );
+            let handle = self.ast.add_expression(DotCall {
+              function: id,
+              lhs: expr.handle,
+              arguments: parsed_arguments.expressions,
+            });
+            ParsedExpression {
+              handle,
+              type_: return_type,
+            }
+            .into()
+          } else {
+            match member_get_error {
+              MemberGetError::NotAStruct => self.emit_error(
+                ty_err::no_member_and_no_function_found(name_sr, name, expr.type_.print_pretty()),
+              ),
+              MemberGetError::NotAMember => {
+                self.emit_error(ty_err::could_not_find_function_for_dot_call(
+                  name_sr,
+                  name,
+                  expr.type_.print_pretty(),
+                ))
+              }
+            }
+            ParsedPrimary::Error
+          }
+        } else {
+          self.emit_error(ty_err::cannot_call_type(name_sr, id_type.print_pretty()));
+          ParsedPrimary::Error
+        }
+      }
+      ResolvedIdentifier::Error => ParsedPrimary::Error,
+    }
+  }
+
   fn try_resolve_dot_call(
     &mut self,
     primary: ParsedPrimary,
@@ -330,87 +429,7 @@ impl<'src> Parser<'src> {
     member_get_error: MemberGetError,
   ) -> ParsedPrimary {
     if let Token::Basic('(') = self.lookahead {
-      let identifier = self.get_id(name, name_sr);
-      return_if_err!(self, ParsedPrimary::Error);
-
-      let call_start = self.lex.previous_token_range();
-      self.advance();
-      let parsed_arguments = self.parse_arguments(call_start, ')');
-      let call_end = self.lex.previous_token_range();
-      self.match_or_err(Token::Basic(')'));
-      let call_sr = SourceRange::combine(call_start, call_end);
-
-      let expr = if let ParsedPrimary::Expr(expr) = primary {
-        expr
-      } else {
-        return ParsedPrimary::Error;
-      };
-
-      match identifier {
-        ResolvedIdentifier::UnresolvedOverload(overload_id) => {
-          let mut argument_types = parsed_arguments.types.clone();
-          argument_types.insert(0, expr.type_);
-          let resolved_overload = self.env.resolve_overload(overload_id, &argument_types);
-          if let Some(resolved_overload) = resolved_overload {
-            let handle = self.ast.add_expression(DotCall {
-              function: resolved_overload.function_id.into(),
-              lhs: expr.handle,
-              arguments: parsed_arguments.expressions,
-            });
-            ParsedExpression {
-              handle,
-              type_: resolved_overload
-                .function_signature
-                .get_return_type()
-                .clone(),
-            }
-            .into()
-          } else {
-            panic!() // no valid overload
-          }
-        }
-        ResolvedIdentifier::ResolvedIdentifier { id, type_: id_type } => {
-          if let Type::Function(signature) = id_type {
-            let (parameters, return_type) = signature.into_parts();
-            if parameters.first().is_some_and(|p1| *p1 == expr.type_) {
-              check_arguments(
-                &mut self.errors,
-                &parameters[1..parameters.len()],
-                &parsed_arguments.types,
-                call_sr,
-              );
-              let handle = self.ast.add_expression(DotCall {
-                function: id,
-                lhs: expr.handle,
-                arguments: parsed_arguments.expressions,
-              });
-              ParsedExpression {
-                handle,
-                type_: return_type,
-              }
-              .into()
-            } else {
-              match member_get_error {
-                MemberGetError::NotAStruct => self.emit_error(
-                  ty_err::no_member_and_no_function_found(name_sr, name, expr.type_.print_pretty()),
-                ),
-                MemberGetError::NotAMember => {
-                  self.emit_error(ty_err::could_not_find_function_for_dot_call(
-                    name_sr,
-                    name,
-                    expr.type_.print_pretty(),
-                  ))
-                }
-              }
-              ParsedPrimary::Error
-            }
-          } else {
-            self.emit_error(ty_err::cannot_call_type(name_sr, id_type.print_pretty()));
-            ParsedPrimary::Error
-          }
-        }
-        ResolvedIdentifier::Error => ParsedPrimary::Error,
-      }
+      self.resolve_dot_call(primary, name, name_sr, member_get_error)
     } else {
       match member_get_error {
         MemberGetError::NotAStruct => {
