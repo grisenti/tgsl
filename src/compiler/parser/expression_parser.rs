@@ -147,6 +147,43 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn parse_id(&mut self, id: &str) -> ParsedPrimary {
+    let id_sr = self.lex.previous_token_range();
+    self.advance();
+    if let Token::Basic('{') = self.lookahead {
+      ParsedPrimary::Expr(self.parse_constructor(id, id_sr))
+    } else {
+      let resolved_id = self.get_id(id, id_sr);
+      match resolved_id {
+        ResolvedIdentifier::ResolvedIdentifier { id, type_ } => ParsedExpression {
+          handle: self.ast.add_expression(expr::Id {
+            id,
+            id_type: type_.clone(),
+          }),
+          type_: type_.clone(),
+        }
+        .into(),
+        ResolvedIdentifier::UnresolvedOverload(overload_id) => {
+          ParsedPrimary::UnresolvedOverload(overload_id)
+        }
+        _ => ParsedPrimary::Error,
+      }
+    }
+  }
+
+  fn parse_paren(&mut self) -> ParsedPrimary {
+    self.advance();
+    let parsed_expression = self.parse_expression();
+    self.match_or_err(Token::Basic(')'));
+    ParsedExpression {
+      handle: self.ast.add_expression(expr::Paren {
+        inner: parsed_expression.handle,
+      }),
+      type_: parsed_expression.type_,
+    }
+    .into()
+  }
+
   fn parse_primary(&mut self) -> ParsedPrimary {
     return_if_err!(self, ParsedPrimary::Error);
 
@@ -177,41 +214,8 @@ impl<'src> Parser<'src> {
         }
         .into()
       }
-      Token::Id(id) => {
-        let id_sr = self.lex.previous_token_range();
-        self.advance();
-        if let Token::Basic('{') = self.lookahead {
-          ParsedPrimary::Expr(self.parse_constructor(id, id_sr))
-        } else {
-          let resolved_id = self.get_id(id, id_sr);
-          match resolved_id {
-            ResolvedIdentifier::ResolvedIdentifier { id, type_ } => ParsedExpression {
-              handle: self.ast.add_expression(expr::Id {
-                id,
-                id_type: type_.clone(),
-              }),
-              type_: type_.clone(),
-            }
-            .into(),
-            ResolvedIdentifier::UnresolvedOverload(overload_id) => {
-              ParsedPrimary::UnresolvedOverload(overload_id)
-            }
-            _ => ParsedPrimary::Error,
-          }
-        }
-      }
-      Token::Basic(c) if c == '(' => {
-        self.advance();
-        let parsed_expression = self.parse_expression();
-        self.match_or_err(Token::Basic(')'));
-        ParsedExpression {
-          handle: self.ast.add_expression(expr::Paren {
-            inner: parsed_expression.handle,
-          }),
-          type_: parsed_expression.type_,
-        }
-        .into()
-      }
+      Token::Id(id) => self.parse_id(id),
+      Token::Basic(c) if c == '(' => self.parse_paren(),
       _ => {
         let err = parser_err::expected_primary(&self.lex, self.lookahead);
         self.emit_error(err);
