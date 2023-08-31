@@ -1,0 +1,11 @@
+import assert;
+
+var variable = "global";
+{
+    var variable = "local";
+    assert(variable == "local");
+}
+assert(variable == "global");
+{
+    assert(variable == "global");
+}

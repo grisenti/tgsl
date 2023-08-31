@@ -1,0 +1,6 @@
+import assert;
+
+var x = true;
+assert(x);
+x = false;
+assert(!x);

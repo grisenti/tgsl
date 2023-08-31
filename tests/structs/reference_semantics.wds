@@ -1,0 +1,15 @@
+import assert;
+
+struct MyNum { value: num }
+
+fn f(my_num: MyNum) {
+  my_num.value = 1;
+}
+
+var x = MyNum{0};
+f(x);
+assert(x.value == 1);
+
+var y = x;
+y.value = 2;
+assert(x.value == 2);

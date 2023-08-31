@@ -1,0 +1,9 @@
+import assert;
+
+var x = 0;
+var y = "hello";
+var z = true;
+
+assert(x == 0);
+assert(y == "hello");
+assert(z);

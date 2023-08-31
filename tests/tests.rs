@@ -63,7 +63,8 @@ test_files!(structs,
   definition,
   member_access,
   member_set,
-  nesting
+  nesting,
+  reference_semantics
 );
 
 #[rustfmt::skip]
@@ -78,4 +79,11 @@ test_files!(ufc,
 test_files!(overloading,
   resolve_dot_call,
   resolve_simple
+);
+
+#[rustfmt::skip]
+test_files!(variables,
+  assign_to_variable,
+  scope_resolution,
+  variable_declaration
 );
