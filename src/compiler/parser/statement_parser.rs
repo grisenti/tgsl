@@ -371,6 +371,13 @@ impl<'src> Parser<'src> {
       .into()
   }
 
+  fn parse_member(&mut self, member_names: &mut Vec<String>, member_types: &mut Vec<Type>) {
+    let name = self.id_str_or_err().to_string();
+    let member_type = self.parse_type_specifier_or_err();
+    member_names.push(name);
+    member_types.push(member_type);
+  }
+
   fn parse_struct_decl(&mut self) -> ParsedStatement {
     assert_eq!(self.lookahead, Token::Struct);
     self.advance();
@@ -379,12 +386,12 @@ impl<'src> Parser<'src> {
     self.match_or_err(Token::Basic('{'));
     let mut member_names = Vec::new();
     let mut member_types = Vec::new();
+    self.parse_member(&mut member_names, &mut member_types);
     while self.lookahead != Token::Basic('}') {
-      let name = self.id_str_or_err().to_string();
-      let member_type = self.parse_type_specifier_or_err();
-      member_names.push(name);
-      member_types.push(member_type);
       self.match_or_err(Token::Basic(','));
+      if self.lookahead != Token::Basic('}') {
+        self.parse_member(&mut member_names, &mut member_types);
+      }
     }
     self.match_or_err(Token::Basic('}'));
     let name_id = check_error!(
