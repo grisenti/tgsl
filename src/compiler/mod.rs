@@ -1,35 +1,33 @@
+use crate::compiler::ast::json::ASTJSONPrinter;
+use crate::compiler::ast::AST;
+use crate::compiler::errors::ErrorPrinter;
 use std::collections::HashMap;
 
 use self::{
   errors::CompilerError,
-  global_env::GlobalEnv,
-  identifier::{ExternId, GlobalIdentifier, ModuleId},
+  identifier::{ExternId, GlobalIdentifier},
   parser::Parser,
 };
 
 pub mod ast;
-pub mod codegen;
 pub mod errors;
-mod global_env;
+//mod global_env;
 pub mod identifier;
 mod lexer;
-mod operators;
-mod overload_set;
+
 mod parser;
-mod types;
+//mod semantics;
+//mod types;
 
-use crate::compiler::codegen::ModuleCode;
-use ast::json::ASTJSONPrinter;
-
-pub struct CompiledModule {
+/*pub struct CompiledModule {
   pub module_id: Option<ModuleId>,
   pub globals_count: u16,
   pub extern_functions: HashMap<String, ExternId>,
   pub code: ModuleCode,
-}
+}*/
 
 pub struct Compiler {
-  global_env: GlobalEnv,
+  //global_env: GlobalEnv,
 }
 
 impl Compiler {
@@ -52,7 +50,16 @@ impl Compiler {
       .collect()
   }
 
-  pub fn compile(&mut self, source: &str) -> Result<CompiledModule, Vec<CompilerError>> {
+  pub fn compile<'src>(&mut self, source: &'src str) -> Result<AST<'src>, String> {
+    match Parser::parse_program(source) {
+      Ok(ast) => {
+        println!("{}", ASTJSONPrinter::print_to_string(&ast));
+        Ok(ast)
+      }
+      Err(errs) => Err(ErrorPrinter::to_string(&errs, source)),
+    }
+
+    /*
     let parsed_module = Parser::parse(source, &self.global_env)?;
     println!("{}", ASTJSONPrinter::print_to_string(&parsed_module.ast));
     let code = ModuleCode::generate_program(&parsed_module.ast);
@@ -66,12 +73,12 @@ impl Compiler {
       module_id,
       globals_count,
       extern_functions,
-    })
+    })*/
   }
 
   pub fn new() -> Self {
     Self {
-      global_env: GlobalEnv::new(),
+      //global_env: GlobalEnv::new(),
     }
   }
 }

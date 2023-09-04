@@ -1,10 +1,14 @@
-use crate::compiler::ast::ExprHandle;
+use crate::compiler::ast::expression::expr::Dot;
+use crate::compiler::ast::parsed_type::ParsedFunctionType;
+use crate::compiler::ast::statement::stmt::ModuleDecl;
+use crate::compiler::ast::visitor::ParsedTypeVisitor;
+use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle};
 use json::object;
 use json::JsonValue;
 
 use crate::compiler::identifier::{FunctionId, VariableIdentifier};
 use crate::compiler::identifier::{Identifier, StructId};
-use crate::compiler::types::{FunctionSignature, Type};
+use crate::compiler::lexer::Token;
 
 use super::expression::*;
 use super::statement::*;
@@ -37,18 +41,10 @@ impl From<FunctionId> for JsonValue {
   }
 }
 
-impl From<&Type> for JsonValue {
-  fn from(value: &Type) -> Self {
+impl From<Token<'_>> for JsonValue {
+  fn from(value: Token) -> Self {
     JsonValue::String(format!("{:?}", value))
   }
-}
-
-fn type_list_to_json(types: &[Type]) -> JsonValue {
-  types
-    .iter()
-    .map(|ty| JsonValue::String(format!("{:?}", ty)))
-    .collect::<Vec<_>>()
-    .into()
 }
 
 fn expr_list_to_json(expressions: &[ExprHandle], ast: &AST) -> JsonValue {
@@ -61,33 +57,33 @@ fn expr_list_to_json(expressions: &[ExprHandle], ast: &AST) -> JsonValue {
   )
 }
 
+fn stmt_list_to_json(statements: &[StmtHandle], ast: &AST) -> JsonValue {
+  let mut printer = ASTJSONPrinter {};
+  JsonValue::Array(
+    statements
+      .iter()
+      .map(|&s| printer.visit_stmt(ast, s))
+      .collect::<Vec<_>>(),
+  )
+}
+
+fn parsed_type_list_to_json(parsed_types: &[TypeHandle], ast: &AST) -> JsonValue {
+  let mut printer = ASTJSONPrinter {};
+  JsonValue::Array(
+    parsed_types
+      .iter()
+      .map(|&t| printer.visit_parsed_type(ast, t))
+      .collect::<Vec<_>>(),
+  )
+}
+
 pub struct ASTJSONPrinter {}
 
 impl ExprVisitor<JsonValue> for ASTJSONPrinter {
-  fn visit_literal_string(&mut self, ast: &AST, literal_string: &expr::LiteralString) -> JsonValue {
+  fn visit_literal(&mut self, ast: &AST, literal: &expr::Literal) -> JsonValue {
     object! {
-      "LiteralString": {
-        "value": literal_string.handle.get(ast).to_string()
-      }
-    }
-  }
-
-  fn visit_literal_number(
-    &mut self,
-    _ast: &AST,
-    literal_number: &expr::LiteralNumber,
-  ) -> JsonValue {
-    object! {
-      "LiteralNumber": {
-        "value": literal_number.value.to_string()
-      }
-    }
-  }
-
-  fn visit_literal_bool(&mut self, _ast: &AST, literal_bool: &expr::LiteralBool) -> JsonValue {
-    object! {
-      "LiteralBool": {
-        "value": literal_bool.value
+      "Literal": {
+        "value": literal.value
       }
     }
   }
@@ -95,8 +91,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
   fn visit_id(&mut self, _ast: &AST, id: &expr::Id) -> JsonValue {
     object! {
       "Id": {
-        "id": id.id,
-        "id_type": format!("{:?}", id.id_type)
+        "id": id.id
       }
     }
   }
@@ -112,9 +107,8 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
   fn visit_assignment(&mut self, ast: &AST, assignment: &expr::Assignment) -> JsonValue {
     object! {
       "Assignment": {
-        "id": assignment.id,
-        "value": self.visit_expr(ast, assignment.value),
-        "type_": &assignment.type_
+        lhs: self.visit_expr(ast, assignment.lhs),
+        rhs: self.visit_expr(ast, assignment.rhs),
       }
     }
   }
@@ -122,21 +116,9 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
   fn visit_binary(&mut self, ast: &AST, binary: &expr::Binary) -> JsonValue {
     object! {
       "Binary": {
-        "operator": format!("{}", binary.operator),
-        "left": self.visit_expr(ast, binary.left),
-        "right": self.visit_expr(ast, binary.right),
-        "expr_type": &binary.expr_type
-      }
-    }
-  }
-
-  fn visit_logical(&mut self, ast: &AST, logical: &expr::Logical) -> JsonValue {
-    object! {
-      "Logical": {
-        "operator": format!("{}", logical.operator),
-        "left": self.visit_expr(ast, logical.left),
-        "right": self.visit_expr(ast, logical.right),
-        "expr_type": &logical.expr_type
+        left: self.visit_expr(ast, binary.left),
+        operator: binary.operator,
+        right: self.visit_expr(ast, binary.right)
       }
     }
   }
@@ -144,77 +126,46 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
   fn visit_unary(&mut self, ast: &AST, unary: &expr::Unary) -> JsonValue {
     object! {
       "Unary": {
-        "operator": format!("{}", unary.operator),
+        "operator": unary.operator,
         "right": self.visit_expr(ast, unary.right),
-        "expr_type": &unary.expr_type,
       }
     }
   }
 
   fn visit_lambda(&mut self, ast: &AST, lambda: &expr::Lambda) -> JsonValue {
-    let body = lambda
-      .body
-      .iter()
-      .map(|&stmt| self.visit_stmt(ast, stmt))
-      .collect::<Vec<_>>();
     object! {
       "Lambda": {
-        "id": lambda.id,
-        "captures": lambda.captures.as_slice(),
-        "return_type": &lambda.return_type,
-        "parameter_types": type_list_to_json(&lambda.parameter_types),
-        "body": body
+        "parameter_names": lambda.parameter_names.clone(),
+        "parameter_types": parsed_type_list_to_json(&lambda.parameter_types, ast),
+        "return_type": self.visit_parsed_type(ast, lambda.return_type),
+        "body": stmt_list_to_json(&lambda.body, ast)
       }
     }
   }
 
   fn visit_fn_call(&mut self, ast: &AST, fn_call: &expr::FnCall) -> JsonValue {
-    let arguments = expr_list_to_json(&fn_call.arguments, ast);
     object! {
       "FnCall": {
-        "function": self.visit_expr(ast, fn_call.func),
-        "arguments": arguments,
-        "expr_type": &fn_call.expr_type,
+        "func": self.visit_expr(ast, fn_call.func),
+        "arguments": expr_list_to_json(&fn_call.arguments, ast)
       }
     }
   }
 
-  fn visit_member_get(&mut self, ast: &AST, member_get: &expr::MemberGet) -> JsonValue {
+  fn visit_dot(&mut self, ast: &AST, dot: &Dot) -> JsonValue {
     object! {
-      "MemberGet": {
-        "lhs": self.visit_expr(ast, member_get.lhs),
-        "member_index": format!("{:?}", member_get.member_index)
-      }
-    }
-  }
-
-  fn visit_member_set(&mut self, ast: &AST, member_set: &expr::MemberSet) -> JsonValue {
-    object! {
-      "MemberSet": {
-        member: self.visit_member_get(ast, &member_set.member),
-        value: self.visit_expr(ast, member_set.value),
-
-      }
-    }
-  }
-
-  fn visit_dot_call(&mut self, ast: &AST, dot_call: &expr::DotCall) -> JsonValue {
-    let arguments = expr_list_to_json(&dot_call.arguments, ast);
-    object! {
-      "DotCall": {
-        "lhs": self.visit_expr(ast, dot_call.lhs),
-        "function": dot_call.function,
-        "arguments": arguments
+      "Dot": {
+        lhs: self.visit_expr(ast, dot.lhs),
+        rhs: dot.rhs
       }
     }
   }
 
   fn visit_constructor(&mut self, ast: &AST, constructor: &expr::Construct) -> JsonValue {
-    let arguments = expr_list_to_json(&constructor.arguments, ast);
     object! {
       "Constructor": {
-        "struct_id": constructor.struct_id,
-        "arguments": arguments
+        "type_name": constructor.type_name,
+        "arguments": expr_list_to_json(&constructor.arguments, ast)
       }
     }
   }
@@ -224,9 +175,9 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
   fn visit_var_decl(&mut self, ast: &AST, var_decl: &stmt::VarDecl) -> JsonValue {
     object! {
       "VarDecl": {
-        "id": var_decl.identifier,
-        "type": format!("{:?}", var_decl.var_type),
-        "init expr": self.visit_expr(ast, var_decl.init_expr)
+        "name": var_decl.name,
+        "specified_type": self.visit_parsed_type(ast, var_decl.specified_type),
+        "init_expr": self.visit_expr(ast, var_decl.init_expr)
       }
     }
   }
@@ -235,21 +186,14 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     object! {
       "StmtExpr": {
         "expr": self.visit_expr(ast, expr.expr),
-        "expr_type": &expr.expr_type
       }
     }
   }
 
   fn visit_block(&mut self, ast: &AST, block: &stmt::Block) -> JsonValue {
-    let stmts = block
-      .statements
-      .iter()
-      .map(|&s| self.visit_stmt(ast, s))
-      .collect::<Vec<_>>();
     object! {
       "Block": {
-        "locals": format!("{}", block.locals),
-        "statements": stmts
+        "statements": stmt_list_to_json(&block.statements, ast)
       }
     }
   }
@@ -283,51 +227,48 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     ast: &AST,
     function_definition: &stmt::FunctionDefinition,
   ) -> JsonValue {
-    let body = function_definition
-      .body
-      .iter()
-      .map(|&stmt| self.visit_stmt(ast, stmt))
-      .collect::<Vec<_>>();
     object! {
       "FunctionDefinition": {
-        "id": function_definition.id,
-        "captures": function_definition.captures.as_slice(),
-        "parameter types": type_list_to_json(&function_definition.parameter_types),
-        "return type": &function_definition.return_type,
-        "body": body
+        "name": function_definition.name,
+        "parameter_names": function_definition.parameter_names.clone(),
+        "parameter_types": parsed_type_list_to_json(&function_definition.parameter_types, ast),
+        "return_type": self.visit_parsed_type(ast, function_definition.return_type),
+        "body": stmt_list_to_json(&function_definition.body, ast)
       }
     }
   }
 
   fn visit_function_declaration(
     &mut self,
-    _ast: &AST,
+    ast: &AST,
     function_declaration: &stmt::FunctionDeclaration,
   ) -> JsonValue {
     object! {
-      "FunctionDeclaration": {
-        "id": function_declaration.id,
-        "parameter types": type_list_to_json(&function_declaration.parameter_types),
-        "return type": &function_declaration.return_type,
-      }
+        "FunctionDeclaration": {
+          "name": function_declaration.name,
+          "parameter_names": function_declaration.parameter_names.clone(),
+          "parameter_types": parsed_type_list_to_json(&function_declaration.parameter_types, ast),
+          "return_type": self.visit_parsed_type(ast, function_declaration.return_type)
+        }
     }
   }
 
   fn visit_extern_function(
     &mut self,
-    _ast: &AST,
+    ast: &AST,
     extern_function: &stmt::ExternFunction,
   ) -> JsonValue {
     object! {
       "ExternalFunction": {
-        "identifier": format!("{:?}", extern_function.identifier),
-        "parameter_types": type_list_to_json(&extern_function.parameter_types),
-        "return_type": &extern_function.return_type,
+        "name": extern_function.name,
+        "parameter_names": extern_function.parameter_names.clone(),
+        "parameter_types": parsed_type_list_to_json(&extern_function.parameter_types, ast),
+        "return_type": self.visit_parsed_type(ast, extern_function.return_type)
       }
     }
   }
 
-  fn visit_break(&mut self, _ast: &AST, _break_node: &stmt::Break) -> JsonValue {
+  fn visit_break(&mut self, _ast: &AST) -> JsonValue {
     JsonValue::String("Break".to_string())
   }
 
@@ -344,10 +285,12 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_struct(&mut self, _ast: &AST, struct_stmt: &stmt::Struct) -> JsonValue {
+  fn visit_struct(&mut self, ast: &AST, struct_stmt: &stmt::Struct) -> JsonValue {
     object! {
       "Struct": {
-        "id": format!("{:?}", struct_stmt.id),
+        "name": struct_stmt.name,
+        "member_names": struct_stmt.member_names.clone(),
+        "member_types": parsed_type_list_to_json(&struct_stmt.member_types, ast)
       }
     }
   }
@@ -355,7 +298,50 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
   fn visit_import(&mut self, _ast: &AST, import: &stmt::Import) -> JsonValue {
     object! {
       "Import": {
-        "module id": format!("{}", import.module_id.0)
+        "module_name": import.module_name
+      }
+    }
+  }
+
+  fn visit_module_decl(&mut self, ast: &AST, module_decl: &ModuleDecl) -> JsonValue {
+    object! {
+      "ModuleDecl": {
+        "name": module_decl.name
+      }
+    }
+  }
+}
+
+impl ParsedTypeVisitor<JsonValue> for ASTJSONPrinter {
+  fn visit_num(&mut self, ast: &AST) -> JsonValue {
+    JsonValue::String("num".to_string())
+  }
+
+  fn visit_str(&mut self, ast: &AST) -> JsonValue {
+    JsonValue::String("str".to_string())
+  }
+
+  fn visit_bool(&mut self, ast: &AST) -> JsonValue {
+    JsonValue::String("bool".to_string())
+  }
+
+  fn visit_nothing(&mut self, ast: &AST) -> JsonValue {
+    JsonValue::String("nothing".to_string())
+  }
+
+  fn visit_any(&mut self, ast: &AST) -> JsonValue {
+    JsonValue::String("any".to_string())
+  }
+
+  fn visit_named(&mut self, ast: &AST, name: &str) -> JsonValue {
+    object! {named: name}
+  }
+
+  fn visit_function(&mut self, ast: &AST, function: &ParsedFunctionType) -> JsonValue {
+    object! {
+      "Function": {
+        "parameters": parsed_type_list_to_json(&function.signature(), ast),
+        "return_type": self.visit_parsed_type(ast, function.return_type()),
       }
     }
   }

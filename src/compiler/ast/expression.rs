@@ -1,44 +1,45 @@
 pub mod expr {
-  use crate::compiler::global_env::MemberIndex;
-  use crate::compiler::identifier::{FunctionId, StructId};
-  use crate::compiler::operators::{BinaryOperator, LogicalOperator, UnaryOperator};
-  use crate::compiler::{
-    ast::{ExprHandle, StmtHandle, StrHandle},
-    identifier::{Identifier, VariableIdentifier},
-    types::Type,
-  };
+  use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle};
+  use crate::compiler::lexer::Token;
 
   use super::Expr;
 
   macro_rules! expr_node {
-  ($name:tt, $($member:ident : $t:ty),+) => {
-    #[derive(Debug, Clone)]
-		pub struct $name {
-  		$(pub $member: $t),+
-		}
-
-    impl From<$name> for Expr {
-      fn from(value: $name) -> Self {
-        Self::$name(value)
+    ($name:tt, $($member:ident : $t:ty),+) => {
+      #[derive(Debug, Clone)]
+      pub struct $name {
+        $(pub $member: $t),+
       }
-    }
-  };
-}
-  expr_node!(LiteralString,
-    handle: StrHandle
+
+      impl<'src> From<$name> for Expr<'src> {
+        fn from(value: $name) -> Self {
+          Self::$name(value)
+        }
+      }
+    };
+  }
+
+  macro_rules! src_expr_node {
+    ($name:tt, $($member:ident : $t:ty),+) => {
+      #[derive(Debug, Clone)]
+      pub struct $name<'src> {
+        $(pub $member: $t),+
+      }
+
+      impl<'src> From<$name<'src>> for Expr<'src> {
+        fn from(value: $name<'src>) -> Self {
+          Self::$name(value)
+        }
+      }
+    };
+  }
+
+  src_expr_node!(Literal,
+    value: Token<'src>
   );
 
-  expr_node!(LiteralNumber,
-    value: f64
-  );
-
-  expr_node!(LiteralBool,
-    value: bool
-  );
-
-  expr_node!(Id,
-    id: Identifier,
-    id_type: Type
+  src_expr_node!(Id,
+    id: &'src str
   );
 
   expr_node!(Paren,
@@ -46,63 +47,40 @@ pub mod expr {
   );
 
   expr_node!(Assignment,
-    id: VariableIdentifier,
-    type_: Type,
-    value: ExprHandle
+    lhs: ExprHandle,
+    rhs: ExprHandle
   );
 
-  expr_node!(Binary,
+  src_expr_node!(Binary,
     left: ExprHandle,
-    operator: BinaryOperator,
-    right: ExprHandle,
-    expr_type: Type
+    operator: Token<'src>,
+    right: ExprHandle
   );
 
-  expr_node!(Logical,
-    left: ExprHandle,
-    operator: LogicalOperator,
-    right: ExprHandle,
-    expr_type: Type
+  src_expr_node!(Unary,
+    operator: Token<'src>,
+    right: ExprHandle
   );
 
-  expr_node!(Unary,
-    operator: UnaryOperator,
-    right: ExprHandle,
-    expr_type: Type
-  );
-
-  expr_node!(Lambda,
-    id: FunctionId,
-    captures: Vec<VariableIdentifier>,
-    parameter_types: Vec<Type>,
-    return_type: Type,
+  src_expr_node!(Lambda,
+    parameter_names: Vec<&'src str>,
+    parameter_types: Vec<TypeHandle>,
+    return_type: TypeHandle,
     body: Vec<StmtHandle>
   );
 
   expr_node!(FnCall,
     func: ExprHandle,
-    arguments: Vec<ExprHandle>,
-    expr_type: Type
-  );
-
-  expr_node!(MemberGet,
-    lhs: ExprHandle,
-    member_index: MemberIndex
-  );
-
-  expr_node!(MemberSet,
-    member: MemberGet,
-    value: ExprHandle
-  );
-
-  expr_node!(DotCall,
-    lhs: ExprHandle,
-    function: Identifier,
     arguments: Vec<ExprHandle>
   );
 
-  expr_node!(Construct,
-    struct_id: StructId,
+  src_expr_node!(Dot,
+    lhs: ExprHandle,
+    rhs: &'src str
+  );
+
+  src_expr_node!(Construct,
+    type_name: &'src str,
     arguments: Vec<ExprHandle>
   );
 }
@@ -110,20 +88,15 @@ pub mod expr {
 use expr::*;
 
 #[derive(Debug, Clone)]
-pub enum Expr {
-  LiteralString(LiteralString),
-  LiteralNumber(LiteralNumber),
-  LiteralBool(LiteralBool),
-  Id(Id),
+pub enum Expr<'src> {
+  Literal(Literal<'src>),
+  Id(Id<'src>),
   Paren(Paren),
   Assignment(Assignment),
-  Binary(Binary),
-  Logical(Logical),
-  Unary(Unary),
-  Lambda(Lambda),
+  Binary(Binary<'src>),
+  Unary(Unary<'src>),
+  Lambda(Lambda<'src>),
   FnCall(FnCall),
-  MemberGet(MemberGet),
-  MemberSet(MemberSet),
-  DotCall(DotCall),
-  Construct(Construct),
+  Dot(Dot<'src>),
+  Construct(Construct<'src>),
 }

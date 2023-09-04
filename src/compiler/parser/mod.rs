@@ -1,26 +1,12 @@
-mod environment;
 mod expression_parser;
 mod statement_parser;
 
-use self::environment::Environment;
-use crate::compiler::overload_set::OverloadSet;
-use crate::compiler::parser::environment::ResolvedIdentifier;
-use crate::compiler::types::FunctionSignature;
-
 use super::ast::*;
-use super::errors::ge_err;
 use super::errors::parser_err;
 use super::errors::CompilerError;
-use super::errors::CompilerResult;
-use super::global_env::GlobalEnv;
-use super::global_env::Struct;
-use super::identifier::GlobalIdentifier;
-use super::identifier::Identifier;
-use super::identifier::StructId;
-use super::identifier::VariableIdentifier;
 use super::lexer::*;
-use super::types::Type;
 use super::*;
+use crate::compiler::ast::parsed_type::{ParsedFunctionType, ParsedType};
 
 #[derive(PartialEq, Eq)]
 enum ParserState {
@@ -29,24 +15,12 @@ enum ParserState {
   UnrecoverableError,
 }
 
-pub struct ParsedModule {
-  pub module_name: Option<String>,
-  pub ast: AST,
-  pub global_names: HashMap<String, GlobalIdentifier>,
-  pub module_global_variable_types: Vec<Type>,
-  pub module_extern_functions_types: Vec<Type>,
-  pub module_overloads: Vec<OverloadSet>,
-  pub module_structs: Vec<Option<Struct>>,
-}
-
-pub struct Parser<'parsing> {
-  env: Environment<'parsing>,
-  lex: Lexer<'parsing>,
-  lookahead: Token<'parsing>,
-  ast: AST,
+pub struct Parser<'src> {
+  lex: Lexer<'src>,
+  lookahead: Token<'src>,
+  ast: AST<'src>,
   errors: Vec<CompilerError>,
   state: ParserState,
-  loop_depth: u32,
 }
 
 type TokenPairOpt<'parsing> = Option<(Token<'parsing>, SourceRange)>;
@@ -74,7 +48,7 @@ macro_rules! check_error {
   };
 }
 
-impl<'parsing> Parser<'parsing> {
+impl<'src> Parser<'src> {
   fn is_at_end(&self) -> bool {
     self.lookahead == Token::EndOfFile
   }
@@ -111,48 +85,20 @@ impl<'parsing> Parser<'parsing> {
     self.state = ParserState::NoErrors;
   }
 
-  fn get_variable_id(&mut self, name: &str, name_sr: SourceRange) -> (VariableIdentifier, Type) {
-    check_error!(
-      self,
-      self
-        .env
-        .get_variable_id(name, name_sr)
-        .map(|(id, type_)| (id, type_.clone())),
-      (VariableIdentifier::Invalid, Type::Error)
-    )
-  }
-
-  fn get_struct_id(&mut self, name: &str, name_sr: SourceRange) -> StructId {
-    check_error!(
-      self,
-      self.env.get_struct_id(name, name_sr),
-      StructId::relative(0)
-    )
-  }
-
-  fn get_id(&mut self, name: &str, name_sr: SourceRange) -> ResolvedIdentifier {
-    check_error!(
-      self,
-      self.env.get_id(name, name_sr),
-      ResolvedIdentifier::Error
-    )
-  }
-
-  fn match_id_or_err(&mut self) -> (&'parsing str, SourceRange) {
-    const ERROR_RESULT: (&'static str, SourceRange) = ("<ERROR>", SourceRange::EMPTY);
-    return_if_err!(self, ERROR_RESULT);
+  fn match_id(&mut self) -> &'src str {
+    const ERROR_ID: &'static str = "<ERROR>";
+    return_if_err!(self, ERROR_ID);
 
     if let Token::Id(name) = self.lookahead {
-      let name_sr = self.lex.previous_token_range();
       self.advance();
-      (name, name_sr)
+      name
     } else {
       self.emit_error(parser_err::expected_identifier(&self.lex, self.lookahead));
-      ERROR_RESULT
+      ERROR_ID
     }
   }
 
-  fn advance(&mut self) -> Token<'parsing> {
+  fn advance(&mut self) -> Token<'src> {
     match self.lex.next_token() {
       Ok(next) => {
         self.lookahead = next;
@@ -175,7 +121,7 @@ impl<'parsing> Parser<'parsing> {
     self.emit_error(err);
   }
 
-  fn matches_alternatives(&mut self, alternatives: &[Token<'static>]) -> TokenPairOpt<'parsing> {
+  fn matches_alternatives(&mut self, alternatives: &[Token<'static>]) -> TokenPairOpt<'src> {
     return_if_err!(self, None);
     if alternatives.contains(&self.lookahead) {
       let res = (self.lookahead, self.lex.previous_token_range());
@@ -186,11 +132,11 @@ impl<'parsing> Parser<'parsing> {
     }
   }
 
-  fn match_next(&mut self, tok: Token<'static>) -> TokenPairOpt<'parsing> {
+  fn match_next(&mut self, tok: Token<'static>) -> TokenPairOpt<'src> {
     self.matches_alternatives(&[tok])
   }
 
-  fn match_or_err(&mut self, token: Token) {
+  fn match_token(&mut self, token: Token) {
     return_if_err!(self, ());
     if self.lookahead == token {
       self.advance();
@@ -199,93 +145,111 @@ impl<'parsing> Parser<'parsing> {
     }
   }
 
-  fn id_str_or_err(&mut self) -> &str {
-    return_if_err!(self, "<ERROR>");
+  fn parse_function_parameters(&mut self) -> (Vec<TypeHandle>, Vec<&'src str>) {
+    return_if_err!(self, (vec![], vec![]));
 
-    if let Token::Id(name) = self.lookahead {
-      self.advance();
-      name
-    } else {
-      self.emit_error(parser_err::expected_identifier(&self.lex, self.lookahead));
-      "<ERROR>"
-    }
-  }
-
-  fn parse_function_param_types(&mut self) -> Vec<Type> {
-    return_if_err!(self, vec![]);
-    self.match_or_err(Token::Basic('('));
-    let mut result = Vec::new();
-    if self.lookahead != Token::Basic(')') {
-      loop {
-        result.push(self.match_type_name_or_err());
-        if self.match_next(Token::Basic(',')).is_none() {
-          break;
-        }
+    let call_start = self.lex.previous_token_range();
+    self.match_token(Token::Basic('('));
+    let mut types = Vec::new();
+    let mut names = Vec::new();
+    while self.lookahead != Token::Basic(')') {
+      names.push(self.match_id());
+      types.push(self.parse_type_specifier());
+      if self.match_next(Token::Basic(',')).is_none() {
+        break;
       }
     }
-    self.match_or_err(Token::Basic(')'));
-    result
+    let call_end = self.lex.previous_token_range();
+    self.match_token(Token::Basic(')'));
+    if types.len() > 255 {
+      self.emit_error(parser_err::too_many_function_parameters(
+        SourceRange::combine(call_start, call_end),
+      ));
+      (vec![], vec![])
+    } else {
+      (types, names)
+    }
   }
 
-  fn match_type_name_or_err(&mut self) -> Type {
-    return_if_err!(self, Type::Error);
+  fn parse_type_list(&mut self) -> Vec<TypeHandle> {
+    return_if_err!(self, vec![]);
+
+    let mut type_list = vec![];
+    self.match_token(Token::Basic('('));
+    while self.lookahead != Token::Basic(')') {
+      let parsed_type = self.match_type_name();
+      type_list.push(parsed_type);
+      if self.matches_alternatives(&[Token::Basic(',')]).is_none() {
+        break;
+      }
+    }
+    self.match_token(Token::Basic(')'));
+    type_list
+  }
+
+  pub fn parse_function_return_type(&mut self) -> TypeHandle {
+    return_if_err!(self, TypeHandle::INVALID);
+    if self.match_next(Token::ThinArrow).is_some() {
+      self.match_type_name()
+    } else {
+      TypeHandle::NOTHING
+    }
+  }
+
+  fn match_type_name(&mut self) -> TypeHandle {
+    return_if_err!(self, TypeHandle::INVALID);
     match self.lookahead {
       Token::Id(type_name) => {
         self.advance();
         match type_name {
-          "any" => Type::Any,
-          "str" => Type::Str,
-          "num" => Type::Num,
-          "bool" => Type::Bool,
-          other => {
-            let struct_sr = self.lex.previous_token_range();
-            let struct_id = self.get_struct_id(other, struct_sr);
-            Type::Struct(struct_id)
-          }
+          "any" => TypeHandle::ANY,
+          "str" => TypeHandle::STR,
+          "num" => TypeHandle::NUM,
+          "bool" => TypeHandle::BOOL,
+          other => self.ast.add_parsed_type(ParsedType::Named(other)),
         }
       }
       Token::Fn => {
         self.advance();
-        let parameters = self.parse_function_param_types();
-        self.match_or_err(Token::ThinArrow);
-        let return_type = self.match_type_name_or_err();
-        Type::Function(FunctionSignature::new(parameters, return_type))
+        let parameters = self.parse_type_list();
+        let return_type = self.parse_function_return_type();
+        self
+          .ast
+          .add_parsed_type(ParsedType::Function(ParsedFunctionType::new(
+            parameters,
+            return_type,
+          )))
       }
       _ => {
         let err = parser_err::expected_type_name(&self.lex, self.lookahead);
         self.emit_error(err);
-        Type::Error
+        TypeHandle::INVALID
       }
     }
   }
 
-  fn parse_type_specifier_or_err(&mut self) -> Type {
-    return_if_err!(self, Type::Error);
-    self.match_or_err(Token::Basic(':'));
-    self.match_type_name_or_err()
+  fn parse_type_specifier(&mut self) -> TypeHandle {
+    return_if_err!(self, TypeHandle::INVALID);
+    self.match_token(Token::Basic(':'));
+    self.match_type_name()
   }
 
-  fn parse_opt_type_specifier(&mut self) -> Option<Type> {
-    return_if_err!(self, Some(Type::Error));
+  fn parse_opt_type_specifier(&mut self) -> Option<TypeHandle> {
+    return_if_err!(self, Some(TypeHandle::INVALID));
 
     if self.match_next(Token::Basic(':')).is_some() {
-      Some(self.match_type_name_or_err())
+      Some(self.match_type_name())
     } else {
       None
     }
   }
 
-  fn parse_module_name(&mut self, global_env: &GlobalEnv) -> Option<String> {
+  fn parse_module_name(&mut self) -> Option<String> {
     if self.match_next(Token::Module).is_some() {
       if let Token::Id(module_name) = self.lookahead {
         let id_sr = self.lex.previous_token_range();
         self.advance();
         self.match_next(Token::Basic(';'));
-        if global_env.is_module_name_available(module_name) {
-          return Some(module_name.to_string());
-        } else {
-          self.emit_error(ge_err::trying_to_redeclare_a_module(id_sr, module_name));
-        }
       } else {
         self.emit_error(parser_err::expected_module_identifier(
           &self.lex,
@@ -296,38 +260,24 @@ impl<'parsing> Parser<'parsing> {
     None
   }
 
-  pub fn parse(
-    source: &'parsing str,
-    global_env: &'parsing GlobalEnv,
-  ) -> Result<ParsedModule, Vec<CompilerError>> {
+  pub fn parse_program(source: &'src str) -> Result<AST<'src>, Vec<CompilerError>> {
     let mut parser = Self {
       lex: Lexer::new(source),
       lookahead: Token::EndOfFile,
       ast: AST::new(),
-      env: Environment::new(global_env),
       errors: Vec::new(),
       state: ParserState::NoErrors,
-      loop_depth: 0,
     };
     parser.advance();
-    let module_name = parser.parse_module_name(global_env);
     while !parser.is_at_end() && parser.state != ParserState::UnrecoverableError {
       let stmt = parser.parse_decl();
-      parser.ast.program_push(stmt.handle);
+      parser.ast.program_push(stmt);
       if parser.in_panic_state() {
         parser.recover_from_errors();
       }
     }
     if parser.errors.is_empty() {
-      Ok(ParsedModule {
-        module_name,
-        ast: parser.ast,
-        global_names: parser.env.global_names,
-        module_global_variable_types: parser.env.module_global_variables_types,
-        module_extern_functions_types: parser.env.extern_function_types,
-        module_overloads: parser.env.overloads,
-        module_structs: parser.env.module_structs,
-      })
+      Ok(parser.ast)
     } else {
       Err(parser.errors)
     }

@@ -1,471 +1,300 @@
-use crate::{
-  check_error,
-  compiler::{
-    errors::{ty_err, SourceRangeProvider},
-    identifier::{ExternId, StructId, VariableIdentifier},
-  },
-  return_if_err,
-};
+use crate::{compiler::errors::SourceRangeProvider, return_if_err};
 
 use super::*;
-
-use crate::compiler::errors::sema_err;
-use crate::compiler::identifier::FunctionId;
-use crate::compiler::types::FunctionSignature;
 use ast::statement::*;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum ReturnKind {
-  None,
-  Conditional,
-  Unconditional,
-}
-
-impl ReturnKind {
-  fn update(&mut self, other: Self) {
-    // one is unconditional -> unconditional
-    // one is conditional other is none -> conditional
-    // both are conditional -> conditional
-    // both are none -> none
-    *self = match (self.clone(), other) {
-      (ReturnKind::None, ReturnKind::None) => ReturnKind::None,
-      (ReturnKind::Unconditional, _) | (_, ReturnKind::Unconditional) => ReturnKind::Unconditional,
-      (ReturnKind::Conditional, _) | (_, ReturnKind::Conditional) => ReturnKind::Conditional,
-    }
-  }
-
-  fn to_conditional(self) -> ReturnKind {
-    if self != ReturnKind::None {
-      ReturnKind::Conditional
-    } else {
-      self
-    }
-  }
-}
-
-pub struct ParsedStatement {
-  pub handle: StmtHandle,
-  pub return_kind: ReturnKind,
-}
-
-impl From<StmtHandle> for ParsedStatement {
-  fn from(value: StmtHandle) -> Self {
-    Self {
-      handle: value,
-      return_kind: ReturnKind::None,
-    }
-  }
-}
-
-impl ParsedStatement {
-  const INVALID: ParsedStatement = ParsedStatement {
-    handle: StmtHandle::INVALID,
-    return_kind: ReturnKind::None,
-  };
-}
-
 impl<'src> Parser<'src> {
-  pub(super) fn parse_unscoped_block(&mut self) -> (Vec<StmtHandle>, ReturnKind) {
-    return_if_err!(self, (vec![], ReturnKind::None));
+  pub(super) fn parse_block_components(&mut self) -> (Vec<StmtHandle>, SourceRange) {
+    return_if_err!(self, (vec![], SourceRange::EMPTY));
 
-    self.match_or_err(Token::Basic('{'));
+    let block_start = self.lex.previous_token_range();
+    self.match_token(Token::Basic('{'));
     let mut statements = Vec::new();
-    let mut return_kind = ReturnKind::None;
     while self.lookahead != Token::Basic('}')
       && !self.is_at_end()
       && self.state != ParserState::UnrecoverableError
     {
       let stmt = self.parse_decl();
-      return_kind.update(stmt.return_kind);
-      statements.push(stmt.handle);
+      statements.push(stmt);
       if self.in_panic_state() {
         self.recover_from_errors();
       }
     }
-    self.match_or_err(Token::Basic('}'));
-    (statements, return_kind)
+    let block_end = self.lex.previous_token_range();
+    self.match_token(Token::Basic('}'));
+    (statements, SourceRange::combine(block_start, block_end))
   }
 
-  fn parse_block(&mut self) -> ParsedStatement {
-    self.env.push_scope();
-    let (statements, return_kind) = self.parse_unscoped_block();
-    let locals = self.env.pop_scope();
-    ParsedStatement {
-      handle: self.ast.add_statement(stmt::Block { statements, locals }),
-      return_kind,
-    }
+  fn parse_block(&mut self) -> StmtHandle {
+    let (statements, source_range) = self.parse_block_components();
+    self
+      .ast
+      .add_statement(stmt::Block { statements }, source_range)
   }
 
-  fn parse_expr_stmt(&mut self) -> ParsedStatement {
-    return_if_err!(self, ParsedStatement::INVALID);
+  fn parse_expr_stmt(&mut self) -> StmtHandle {
+    return_if_err!(self, StmtHandle::INVALID);
 
+    let stmt_start = self.lex.previous_token_range();
     let expr = self.parse_expression();
-    let handle = self.ast.add_statement(stmt::StmtExpr {
-      expr: expr.handle,
-      expr_type: expr.type_,
-    });
-    self.match_or_err(Token::Basic(';'));
-    handle.into()
+    let stmt_end = self.lex.previous_token_range();
+    self.match_token(Token::Basic(';'));
+    self.ast.add_statement(
+      stmt::StmtExpr { expr },
+      SourceRange::combine(stmt_start, stmt_end),
+    )
   }
 
-  fn parse_if_stmt(&mut self) -> ParsedStatement {
+  fn parse_if_stmt(&mut self) -> StmtHandle {
     assert_eq!(self.lookahead, Token::If);
-    let if_sr = self.lex.previous_token_range();
+    let stmt_start = self.lex.previous_token_range();
     self.advance();
-    self.match_or_err(Token::Basic('('));
+    self.match_token(Token::Basic('('));
     let condition = self.parse_expression();
-    if condition.type_ != Type::Bool {
-      self.emit_error(ty_err::incorrect_conditional_type(
-        if_sr,
-        condition.type_.print_pretty(),
-      ));
-      return ParsedStatement::INVALID;
-    }
-    self.match_or_err(Token::Basic(')'));
+    self.match_token(Token::Basic(')'));
     let true_branch = self.parse_statement();
-    let (else_branch, mut return_kind) = if (self.match_next(Token::Else)).is_some() {
-      let stmt = self.parse_statement();
-      (Some(stmt.handle), stmt.return_kind)
+    let else_branch = if (self.match_next(Token::Else)).is_some() {
+      Some(self.parse_statement())
     } else {
-      (None, ReturnKind::None)
+      None
     };
-    return_kind.update(true_branch.return_kind.to_conditional());
-    let handle = self.ast.add_statement(stmt::IfBranch {
-      condition: condition.handle,
-      true_branch: true_branch.handle,
-      else_branch,
-    });
-    ParsedStatement {
-      handle,
-      return_kind,
-    }
+    let stmt_end = else_branch
+      .map(|stmt| stmt.get_source_range(&self.ast))
+      .unwrap_or(true_branch.get_source_range(&self.ast));
+    self.ast.add_statement(
+      stmt::IfBranch {
+        condition,
+        true_branch,
+        else_branch,
+      },
+      SourceRange::combine(stmt_start, stmt_end),
+    )
   }
 
-  fn parse_while_stmt(&mut self) -> ParsedStatement {
+  fn parse_while_stmt(&mut self) -> StmtHandle {
     assert_eq!(self.lookahead, Token::While);
-    let while_sr = self.lex.previous_token_range();
-    self.advance(); // consume while
-    self.loop_depth += 1;
-    self.match_or_err(Token::Basic('('));
+    let stmt_start = self.lex.previous_token_range();
+    self.advance();
+    self.match_token(Token::Basic('('));
     let condition = self.parse_expression();
-    if condition.type_ != Type::Bool {
-      self.emit_error(ty_err::incorrect_conditional_type(
-        while_sr,
-        condition.type_.print_pretty(),
-      ));
-      return ParsedStatement::INVALID;
-    }
-    self.match_or_err(Token::Basic(')'));
+    self.match_token(Token::Basic(')'));
     let loop_body = self.parse_statement();
-    let handle = self.ast.add_statement(stmt::While {
-      condition: condition.handle,
-      loop_body: loop_body.handle,
-    });
-    self.loop_depth -= 1;
-    ParsedStatement {
-      handle,
-      return_kind: loop_body.return_kind.to_conditional(),
-    }
+    let stmt_end = loop_body.get_source_range(&self.ast);
+    self.ast.add_statement(
+      stmt::While {
+        condition,
+        loop_body,
+      },
+      SourceRange::combine(stmt_start, stmt_end),
+    )
   }
 
-  fn parse_for_stmt(&mut self) -> ParsedStatement {
+  fn parse_for_stmt(&mut self) -> StmtHandle {
     assert_eq!(self.lookahead, Token::For);
     unimplemented!();
   }
 
-  fn parse_loop_break(&mut self) -> ParsedStatement {
+  fn parse_loop_break(&mut self) -> StmtHandle {
     assert!(matches!(self.lookahead, Token::Break));
-    let sr = self.lex.previous_token_range();
-    if self.loop_depth == 0 {
-      self.emit_error(sema_err::break_outside_loop(sr));
-      return ParsedStatement::INVALID;
-    }
+    let stmt_start = self.lex.previous_token_range();
     self.advance();
-    self.match_or_err(Token::Basic(';'));
-    self.ast.add_statement(stmt::Break {}).into()
+    let stmt_end = self.lex.previous_token_range();
+    self.match_token(Token::Basic(';'));
+    self
+      .ast
+      .add_statement(Stmt::Break, SourceRange::combine(stmt_start, stmt_end))
   }
 
-  fn parse_function_return(&mut self) -> ParsedStatement {
-    assert!(matches!(self.lookahead, Token::Return));
+  fn parse_return(&mut self) -> StmtHandle {
+    assert_eq!(self.lookahead, Token::Return);
 
-    let return_sr = self.lex.previous_token_range();
+    let stmt_start = self.lex.previous_token_range();
     self.advance();
-
-    let (expr, type_) = if self.lookahead != Token::Basic(';') {
+    let expr = if self.lookahead != Token::Basic(';') {
       let expr = self.parse_expression();
-      (Some(expr.handle), expr.type_)
+      Some(expr)
     } else {
-      (None, Type::Nothing)
+      None
     };
-
-    if let Some(current_function_return_type) = self.env.get_function_return_type() {
-      if type_ != *current_function_return_type && *current_function_return_type != Type::Error {
-        self.emit_error(ty_err::incorrect_return_type(
-          return_sr,
-          type_.print_pretty(),
-          current_function_return_type.print_pretty(),
-        ));
-        return ParsedStatement::INVALID;
-      }
-    } else {
-      self.emit_error(ty_err::return_outside_of_function(return_sr));
-      return ParsedStatement::INVALID;
-    }
-
-    self.match_or_err(Token::Basic(';'));
-    let handle = self.ast.add_statement(stmt::Return { expr });
-    ParsedStatement {
-      handle,
-      return_kind: ReturnKind::Unconditional,
-    }
+    let stmt_end = self.lex.previous_token_range();
+    self.match_token(Token::Basic(';'));
+    self.ast.add_statement(
+      stmt::Return { expr },
+      SourceRange::combine(stmt_start, stmt_end),
+    )
   }
 
-  fn parse_statement(&mut self) -> ParsedStatement {
-    return_if_err!(self, ParsedStatement::INVALID);
+  fn parse_statement(&mut self) -> StmtHandle {
+    return_if_err!(self, StmtHandle::INVALID);
     match self.lookahead {
       Token::Basic('{') => self.parse_block(),
       Token::If => self.parse_if_stmt(),
       Token::While => self.parse_while_stmt(),
       Token::For => self.parse_for_stmt(),
       Token::Break => self.parse_loop_break(),
-      Token::Return => self.parse_function_return(),
+      Token::Return => self.parse_return(),
       _ => self.parse_expr_stmt(),
     }
   }
 
-  fn parse_var_decl(&mut self) -> ParsedStatement {
-    assert!(self.lookahead == Token::Var);
-    return_if_err!(self, ParsedStatement::INVALID);
+  fn parse_var_decl(&mut self) -> StmtHandle {
+    assert_eq!(self.lookahead, Token::Var);
+    return_if_err!(self, StmtHandle::INVALID);
 
+    let stmt_start = self.lex.previous_token_range();
     self.advance();
-    let (name, id_sr) = self.match_id_or_err();
+    let name = self.match_id();
+    let name_sr = self.lex.previous_token_range();
 
-    let type_specifier = self.parse_opt_type_specifier();
+    let specified_type = self
+      .parse_opt_type_specifier()
+      .unwrap_or(TypeHandle::NOTHING);
     if self.lookahead != Token::Basic('=') {
       self.emit_error(parser_err::missing_initialization_at_variable_declaration(
-        id_sr,
+        name_sr,
       ));
-      return ParsedStatement::INVALID;
+      return StmtHandle::INVALID;
     }
     self.advance();
-    let expr = self.parse_expression();
+    let init_expr = self.parse_expression();
 
-    if let Some(specifier) = type_specifier {
-      if specifier != expr.type_ {
-        self.emit_error(ty_err::type_specifier_expression_mismatch(
-          id_sr,
-          specifier.print_pretty(),
-          expr.type_.print_pretty(),
-        ));
-        return ParsedStatement::INVALID;
-      }
-    }
-
-    let identifier = check_error!(
-      self,
-      self.env.define_variable(name, id_sr, expr.type_.clone()),
-      VariableIdentifier::Invalid
-    );
-
-    self.match_or_err(Token::Basic(';'));
-    self
-      .ast
-      .add_statement(stmt::VarDecl {
-        identifier,
-        var_type: expr.type_,
-        init_expr: expr.handle,
-      })
-      .into()
+    let stmt_end = self.lex.previous_token_range();
+    self.match_token(Token::Basic(';'));
+    self.ast.add_statement(
+      stmt::VarDecl {
+        name,
+        specified_type,
+        init_expr,
+      },
+      SourceRange::combine(stmt_start, stmt_end),
+    )
   }
 
-  pub(super) fn parse_function_params(&mut self, call_start: SourceRange) -> Vec<Type> {
-    return_if_err!(self, vec![]);
-    let mut parameter_types = Vec::new();
-    while self.lookahead != Token::Basic(')') {
-      let (name, name_sr) = self.match_id_or_err();
-      let param_type = self.parse_type_specifier_or_err();
-      check_error!(
-        self,
-        self.env.define_variable(name, name_sr, param_type.clone()),
-        VariableIdentifier::Invalid
-      );
-      parameter_types.push(param_type);
-      if self.match_next(Token::Basic(',')).is_none() {
-        break;
-      }
-    }
-    if parameter_types.len() > 255 {
-      self.emit_error(parser_err::too_many_function_parameters(call_start));
-      vec![]
-    } else {
-      parameter_types
-    }
-  }
-
-  pub(super) fn parse_function_return_type(&mut self) -> Type {
-    return_if_err!(self, Type::Error);
-    if self.match_next(Token::ThinArrow).is_some() {
-      self.match_type_name_or_err()
-    } else {
-      Type::Nothing
-    }
-  }
-
-  fn parse_function_decl(&mut self) -> ParsedStatement {
+  fn parse_function_decl(&mut self) -> StmtHandle {
     assert_eq!(self.lookahead, Token::Fn);
 
-    self.advance(); // consume fn
-    let (name, name_sr) = self.match_id_or_err();
-    let call_start = self.lex.previous_token_range();
-    self.env.push_function();
-    self.match_or_err(Token::Basic('('));
-    let parameter_types = self.parse_function_params(call_start);
-    self.match_or_err(Token::Basic(')'));
+    let stmt_start = self.lex.previous_token_range();
+    self.advance();
+
+    let name = self.match_id();
+    let (parameter_types, parameter_names) = self.parse_function_parameters();
     let return_type = self.parse_function_return_type();
-    self.env.define_function_return_type(return_type.clone());
-    let function_type = FunctionSignature::new(parameter_types.clone(), return_type.clone()).into();
     if self.lookahead == Token::Basic(';') {
-      self.env.pop_function();
+      let stmt_end = self.lex.previous_token_range();
       self.advance();
-      let id = check_error!(
-        self,
-        self
-          .env
-          .declare_global_function(name, name_sr, function_type),
-        FunctionId::relative(0) // FIXME
-      );
-      return self
-        .ast
-        .add_statement(stmt::FunctionDeclaration {
-          id,
+      return self.ast.add_statement(
+        stmt::FunctionDeclaration {
+          name,
+          parameter_names,
           parameter_types,
           return_type,
-        })
-        .into();
-    }
-    let id = check_error!(
-      self,
-      self
-        .env
-        .define_global_function(name, name_sr, function_type),
-      FunctionId::relative(0) // FIXME
-    );
-    let body = self.parse_unscoped_block();
-    let captures = self.env.pop_function();
-
-    if matches!(body.1, ReturnKind::Conditional | ReturnKind::None if return_type != Type::Nothing)
-    {
-      self.emit_error(ty_err::no_unconditional_return(name_sr));
-      return ParsedStatement::INVALID;
+        },
+        SourceRange::combine(stmt_start, stmt_end),
+      );
     }
 
-    self
-      .ast
-      .add_statement(stmt::FunctionDefinition {
-        id,
+    let (body, body_sr) = self.parse_block_components();
+    self.ast.add_statement(
+      stmt::FunctionDefinition {
+        name,
+        parameter_names,
         parameter_types,
-        captures,
-        body: body.0,
+        body,
         return_type,
-      })
-      .into()
+      },
+      SourceRange::combine(stmt_start, body_sr),
+    )
   }
 
-  fn parse_member(&mut self, member_names: &mut Vec<String>, member_types: &mut Vec<Type>) {
-    let name = self.id_str_or_err().to_string();
-    let member_type = self.parse_type_specifier_or_err();
+  fn parse_member(
+    &mut self,
+    member_names: &mut Vec<&'src str>,
+    member_types: &mut Vec<TypeHandle>,
+  ) {
+    let name = self.match_id();
+    let member_type = self.parse_type_specifier();
     member_names.push(name);
     member_types.push(member_type);
   }
 
-  fn parse_struct_decl(&mut self) -> ParsedStatement {
+  fn parse_struct_decl(&mut self) -> StmtHandle {
     assert_eq!(self.lookahead, Token::Struct);
-    self.advance();
-    let (name, name_sr) = self.match_id_or_err();
 
-    self.match_or_err(Token::Basic('{'));
+    let stmt_start = self.lex.previous_token_range();
+    self.advance();
+    let name = self.match_id();
+    self.match_token(Token::Basic('{'));
     let mut member_names = Vec::new();
     let mut member_types = Vec::new();
     self.parse_member(&mut member_names, &mut member_types);
     while self.lookahead != Token::Basic('}') {
-      self.match_or_err(Token::Basic(','));
+      self.match_token(Token::Basic(','));
       if self.lookahead != Token::Basic('}') {
         self.parse_member(&mut member_names, &mut member_types);
       }
     }
-    self.match_or_err(Token::Basic('}'));
-    let name_id = check_error!(
-      self,
-      self
-        .env
-        .define_struct(name, name_sr, member_names, member_types),
-      StructId::relative(0)
-    );
-    self.ast.add_statement(stmt::Struct { id: name_id }).into()
+    let stmt_end = self.lex.previous_token_range();
+    self.match_token(Token::Basic('}'));
+    self.ast.add_statement(
+      stmt::Struct {
+        name,
+        member_names,
+        member_types,
+      },
+      SourceRange::combine(stmt_start, stmt_end),
+    )
   }
 
-  fn parse_extern_function(&mut self) -> ParsedStatement {
+  fn parse_extern_function(&mut self) -> StmtHandle {
     assert_eq!(self.lookahead, Token::Extern);
-    if !self.env.in_global_scope() {
-      let err = parser_err::extern_function_in_local_scope(&self.lex);
-      self.emit_error(err);
-      return ParsedStatement::INVALID;
-    }
+    let stmt_start = self.lex.previous_token_range();
+
     self.advance();
-    self.match_or_err(Token::Fn);
-    let (name, name_sr) = self.match_id_or_err();
-    let parameter_types = self.parse_function_param_types();
+    self.match_token(Token::Fn);
+    let name = self.match_id();
+    let (parameter_types, parameter_names) = self.parse_function_parameters();
     let return_type = self.parse_function_return_type();
-    let signature = FunctionSignature::new(parameter_types.clone(), return_type.clone());
-    let identifier = check_error!(
-      self,
-      self.env.declare_extern_function(name, name_sr, signature),
-      ExternId::relative(0)
-    );
-    self
-      .ast
-      .add_statement(stmt::ExternFunction {
-        identifier,
+    let stmt_end = self.lex.previous_token_range();
+    self.match_token(Token::Basic(';'));
+    self.ast.add_statement(
+      stmt::ExternFunction {
+        name,
+        parameter_names,
         parameter_types,
         return_type,
-      })
-      .into()
+      },
+      SourceRange::combine(stmt_start, stmt_end),
+    )
   }
 
-  fn parse_import(&mut self) -> ParsedStatement {
+  fn parse_import(&mut self) -> StmtHandle {
     assert_eq!(self.lookahead, Token::Import);
+    let stmt_start = self.lex.previous_token_range();
     self.advance();
-    if !self.env.in_global_scope() {
-      let err = parser_err::import_in_local_scope(&self.lex);
-      self.emit_error(err);
-      return ParsedStatement::INVALID;
-    }
+
     if let Token::Id(module_name) = self.lookahead {
-      let module_name_sr = self.lex.current_range();
       self.advance();
-      self.match_or_err(Token::Basic(';'));
-      match self.env.import_module(module_name, module_name_sr) {
-        Ok(module_id) => self.ast.add_statement(stmt::Import { module_id }).into(),
-        Err(error) => {
-          self.emit_error(error);
-          ParsedStatement::INVALID
-        }
-      }
+      self.match_token(Token::Basic(';'));
+      let stmt_end = self.lex.previous_token_range();
+      self.ast.add_statement(
+        stmt::Import { module_name },
+        SourceRange::combine(stmt_start, stmt_end),
+      )
     } else {
       let err = parser_err::expected_module_identifier(&self.lex, self.lookahead);
       self.emit_error(err);
-      ParsedStatement::INVALID
+      StmtHandle::INVALID
     }
   }
 
-  fn module_err(&mut self) -> ParsedStatement {
+  fn module_err(&mut self) -> StmtHandle {
     self.emit_error(parser_err::module_declarations_is_not_first_statement(
       &self.lex,
     ));
-    ParsedStatement::INVALID
+    StmtHandle::INVALID
   }
 
-  pub(super) fn parse_decl(&mut self) -> ParsedStatement {
+  pub fn parse_decl(&mut self) -> StmtHandle {
     match self.lookahead {
       Token::Var => self.parse_var_decl(),
       Token::Fn => self.parse_function_decl(),

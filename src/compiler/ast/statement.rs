@@ -1,44 +1,51 @@
 pub mod stmt {
 
-  use crate::compiler::identifier::FunctionId;
-  use crate::compiler::{
-    ast::{ExprHandle, StmtHandle},
-    identifier::{ExternId, ModuleId, StructId, VariableIdentifier},
-    lexer::SourceRange,
-    types::Type,
-  };
+  use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle};
 
   use super::Stmt;
 
   macro_rules! stmt_node {
-  ($name:tt, $($member:ident : $t:ty),*) => {
-    #[derive(Debug, Clone)]
-		pub struct $name {
-  		$(pub $member: $t),*
-		}
-
-    impl From<$name> for Stmt {
-      fn from(value: $name) -> Self {
-        Self::$name(value)
+    ($name:tt, $($member:ident : $t:ty),*) => {
+      #[derive(Debug, Clone)]
+      pub struct $name {
+        $(pub $member: $t),*
       }
-    }
-  };
-}
 
-  stmt_node!(VarDecl,
-    identifier: VariableIdentifier,
-    var_type: Type,
+      impl<'src> From<$name> for Stmt<'src> {
+        fn from(value: $name) -> Self {
+          Self::$name(value)
+        }
+      }
+    };
+  }
+
+  macro_rules! src_stmt_node {
+    ($name:tt, $($member:ident : $t:ty),*) => {
+      #[derive(Debug, Clone)]
+      pub struct $name<'src> {
+        $(pub $member: $t),*
+      }
+
+      impl<'src> From<$name<'src>> for Stmt<'src> {
+        fn from(value: $name<'src>) -> Self {
+          Self::$name(value)
+        }
+      }
+    };
+  }
+
+  src_stmt_node!(VarDecl,
+    name: &'src str,
+    specified_type: TypeHandle,
     init_expr: ExprHandle
   );
 
   stmt_node!(StmtExpr,
-    expr: ExprHandle,
-    expr_type: Type
+    expr: ExprHandle
   );
 
   stmt_node!(Block,
-    statements: Vec<StmtHandle>,
-    locals: u8
+    statements: Vec<StmtHandle>
   );
 
   stmt_node!(IfBranch,
@@ -52,55 +59,62 @@ pub mod stmt {
     loop_body: StmtHandle
   );
 
-  stmt_node!(FunctionDefinition,
-    id: FunctionId,
-    captures: Vec<VariableIdentifier>,
-    parameter_types: Vec<Type>,
-    return_type: Type,
+  src_stmt_node!(FunctionDefinition,
+    name: &'src str,
+    parameter_names: Vec<&'src str>,
+    parameter_types: Vec<TypeHandle>,
+    return_type: TypeHandle,
     body: Vec<StmtHandle>
   );
 
-  stmt_node!(FunctionDeclaration,
-    id: FunctionId,
-    parameter_types: Vec<Type>,
-    return_type: Type
+  src_stmt_node!(FunctionDeclaration,
+    name: &'src str,
+    parameter_names: Vec<&'src str>,
+    parameter_types: Vec<TypeHandle>,
+    return_type: TypeHandle
   );
 
-  stmt_node!(ExternFunction,
-    identifier: ExternId,
-    parameter_types: Vec<Type>,
-    return_type: Type
+  src_stmt_node!(ExternFunction,
+    name: &'src str,
+    parameter_names: Vec<&'src str>,
+    parameter_types: Vec<TypeHandle>,
+    return_type: TypeHandle
   );
-
-  stmt_node!(Break,);
 
   stmt_node!(Return,
     expr: Option<ExprHandle>
   );
 
-  stmt_node!(Struct,
-    id: StructId
+  src_stmt_node!(Struct,
+    name: &'src str,
+    member_names: Vec<&'src str>,
+    member_types: Vec<TypeHandle>
   );
 
-  stmt_node!(Import,
-    module_id: ModuleId
+  src_stmt_node!(Import,
+    module_name: &'src str
+  );
+
+  src_stmt_node!(ModuleDecl,
+    name: &'src str
   );
 }
 
 use stmt::*;
 
 #[derive(Debug, Clone)]
-pub enum Stmt {
-  VarDecl(VarDecl),
+pub enum Stmt<'src> {
+  VarDecl(VarDecl<'src>),
   StmtExpr(StmtExpr),
   Block(Block),
   IfBranch(IfBranch),
   While(While),
-  FunctionDefinition(FunctionDefinition),
-  FunctionDeclaration(FunctionDeclaration),
-  ExternFunction(ExternFunction),
-  Break(Break),
+  FunctionDefinition(FunctionDefinition<'src>),
+  FunctionDeclaration(FunctionDeclaration<'src>),
+  ExternFunction(ExternFunction<'src>),
+  Break,
   Return(Return),
-  Struct(Struct),
-  Import(Import),
+  Struct(Struct<'src>),
+  Import(Import<'src>),
+  ModuleDecl(ModuleDecl<'src>),
 }

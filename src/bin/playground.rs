@@ -1,12 +1,10 @@
+use language::compiler::Compiler;
 use std::fs;
 
-use language::vm::VM;
-
 fn test() -> Result<(), String> {
-  let mut vm = VM::new();
-  vm.load_module(&fs::read_to_string("prog2.pr").unwrap(), vec![])?;
+  let mut compiler = Compiler::new();
   let source = fs::read_to_string("program.pr").unwrap();
-  vm.load_module(&source, vec![])?;
+  compiler.compile(&source)?;
   Ok(())
 }
 

@@ -1,777 +1,241 @@
-use crate::{compiler::errors::ty_err, return_if_err};
+use crate::return_if_err;
 
 use super::*;
-use crate::compiler::ast::expression::expr::DotCall;
-use crate::compiler::identifier::OverloadId;
-use crate::compiler::operators::{BinaryOperator, LogicalOperator, UnaryOperator};
-use crate::compiler::parser::statement_parser::ReturnKind;
-use crate::compiler::types::FunctionSignature;
-use crate::compiler::types::Type::Struct;
+
 use ast::expression::*;
 
-const MAX_BIN_OP_PRECEDENCE: usize = 4;
+const MAX_BIN_OP_PRECEDENCE: usize = 6;
 
 const BIN_OP_PRECEDENCE: [&[Token<'_>]; MAX_BIN_OP_PRECEDENCE] = [
+  &[Token::Or, Token::Or],
+  &[Token::And, Token::And],
   &[Token::Same, Token::Different],
   &[Token::Basic('<'), Token::Basic('>'), Token::Leq, Token::Geq],
   &[Token::Basic('+'), Token::Basic('-')],
   &[Token::Basic('*'), Token::Basic('/')],
 ];
 
-const MAX_LOGICAL_OP_PRECEDENCE: usize = 2;
-
-const LOGICAL_OP_PRECEDENCE: [&[Token<'_>]; MAX_LOGICAL_OP_PRECEDENCE] =
-  [&[Token::Or, Token::Or], &[Token::And, Token::And]];
-
-pub struct ParsedExpression {
-  pub handle: ExprHandle,
-  pub type_: Type,
-}
-
-impl ParsedExpression {
-  const INVALID: Self = Self {
-    handle: ExprHandle::INVALID,
-    type_: Type::Error,
-  };
-}
-
-enum MemberGetError {
-  NotAStruct,
-  NotAMember,
-}
-
-enum ParsedPrimary {
-  Expr(ParsedExpression),
-  UnresolvedOverload(OverloadId),
-  Error,
-}
-
-impl From<ParsedExpression> for ParsedPrimary {
-  fn from(value: ParsedExpression) -> Self {
-    ParsedPrimary::Expr(value)
-  }
-}
-
-impl ParsedPrimary {
-  fn get_type(&self) -> &Type {
-    match self {
-      ParsedPrimary::Expr(expr) => &expr.type_,
-      ParsedPrimary::UnresolvedOverload(_) => &Type::UnresolvedOverload,
-      ParsedPrimary::Error => &Type::Error,
-    }
-  }
-}
-
-#[derive(Default)]
-struct ParsedArguments {
-  expressions: Vec<ExprHandle>,
-  types: Vec<Type>,
-}
-
-fn check_arguments(
-  errors: &mut Vec<CompilerError>,
-  parameters: &[Type],
-  arguments: &[Type],
-  call_sr: SourceRange,
-) {
-  if parameters.len() != arguments.len() {
-    errors.push(ty_err::incorrect_function_argument_number(
-      call_sr,
-      parameters.len(),
-      arguments.len(),
-    ));
-    return;
-  }
-
-  for (index, (param, argument)) in parameters.iter().zip(arguments).enumerate() {
-    if *param != *argument && *param != Type::Any {
-      errors.push(ty_err::incorrect_function_argument_type(
-        call_sr,
-        index + 1,
-        argument.print_pretty(),
-        param.print_pretty(),
-      ));
-    }
-  }
-}
-
 impl<'src> Parser<'src> {
-  fn parse_arguments(&mut self, call_start: SourceRange, terminator: char) -> ParsedArguments {
-    return_if_err!(self, ParsedArguments::default());
+  fn parse_arguments(&mut self, call_start: SourceRange, terminator: char) -> Vec<ExprHandle> {
+    return_if_err!(self, Vec::new());
 
-    let mut arguments = ParsedArguments::default();
+    let mut arguments = Vec::new();
     while self.lookahead != Token::Basic(terminator) {
       let expr = self.parse_expression();
-      arguments.expressions.push(expr.handle);
-      arguments.types.push(expr.type_);
+      arguments.push(expr);
       if self.matches_alternatives(&[Token::Basic(',')]).is_none() {
         break;
       }
     }
-    if arguments.expressions.len() >= 255 {
-      let err = parser_err::too_many_function_arguments(call_start);
+    let call_end = self.lex.previous_token_range();
+    if arguments.len() >= 255 {
+      let err = parser_err::too_many_function_arguments(SourceRange::combine(call_start, call_end));
       self.emit_error(err);
-      ParsedArguments::default()
+      Vec::new()
     } else {
       arguments
     }
   }
 
-  fn parse_constructor(&mut self, id: &str, id_sr: SourceRange) -> ParsedExpression {
+  fn parse_constructor(&mut self, type_name: &'src str, expr_start: SourceRange) -> ExprHandle {
     assert_eq!(self.lookahead, Token::Basic('{'));
+    return_if_err!(self, ExprHandle::INVALID);
 
-    let struct_id = self.get_struct_id(id, id_sr);
-    return_if_err!(self, ParsedExpression::INVALID);
     let arguments_start = self.lex.previous_token_range();
     self.advance();
     let arguments = self.parse_arguments(arguments_start, '}');
-    let arguments_end = self.lex.previous_token_range();
-    let arguments_sr = SourceRange::combine(arguments_start, arguments_end);
-    self.match_or_err(Token::Basic('}'));
-    if let Some(struct_) = self.env.get_struct(struct_id) {
-      check_arguments(
-        &mut self.errors,
-        struct_.get_member_types(),
-        &arguments.types,
-        arguments_sr,
-      );
-      ParsedExpression {
-        handle: self.ast.add_expression(expr::Construct {
-          arguments: arguments.expressions,
-          struct_id,
-        }),
-        type_: Struct(struct_id),
-      }
-    } else {
-      panic!(); // cannot construct
-    }
+    let expr_end = self.lex.previous_token_range();
+    self.advance();
+    self.ast.add_expression(
+      expr::Construct {
+        type_name,
+        arguments,
+      },
+      SourceRange::combine(expr_start, expr_end),
+    )
   }
 
-  fn parse_id(&mut self, id: &str) -> ParsedPrimary {
-    let id_sr = self.lex.previous_token_range();
+  fn parse_id(&mut self, id: &'src str) -> ExprHandle {
+    let expr_sr = self.lex.previous_token_range();
     self.advance();
     if let Token::Basic('{') = self.lookahead {
-      ParsedPrimary::Expr(self.parse_constructor(id, id_sr))
+      self.parse_constructor(id, expr_sr)
     } else {
-      let resolved_id = self.get_id(id, id_sr);
-      match resolved_id {
-        ResolvedIdentifier::ResolvedIdentifier { id, type_ } => ParsedExpression {
-          handle: self.ast.add_expression(expr::Id {
-            id,
-            id_type: type_.clone(),
-          }),
-          type_: type_.clone(),
-        }
-        .into(),
-        ResolvedIdentifier::UnresolvedOverload(overload_id) => {
-          ParsedPrimary::UnresolvedOverload(overload_id)
-        }
-        _ => ParsedPrimary::Error,
-      }
+      self.ast.add_expression(expr::Id { id }, expr_sr)
     }
   }
 
-  fn parse_paren(&mut self) -> ParsedPrimary {
+  fn parse_paren(&mut self) -> ExprHandle {
+    assert_eq!(self.lookahead, Token::Basic('('));
+
+    let expr_start = self.lex.previous_token_range();
     self.advance();
-    let parsed_expression = self.parse_expression();
-    self.match_or_err(Token::Basic(')'));
-    ParsedExpression {
-      handle: self.ast.add_expression(expr::Paren {
-        inner: parsed_expression.handle,
-      }),
-      type_: parsed_expression.type_,
-    }
-    .into()
+    let inner = self.parse_expression();
+    let expr_end = self.lex.previous_token_range();
+    self.match_token(Token::Basic(')'));
+    self.ast.add_expression(
+      expr::Paren { inner },
+      SourceRange::combine(expr_start, expr_end),
+    )
   }
 
-  fn parse_primary(&mut self) -> ParsedPrimary {
-    return_if_err!(self, ParsedPrimary::Error);
+  fn parse_primary(&mut self) -> ExprHandle {
+    return_if_err!(self, ExprHandle::INVALID);
 
     match self.lookahead {
-      Token::Number(num) => {
+      Token::Number(_) | Token::String(_) | Token::True | Token::False => {
+        let value = self.lookahead;
+        let literal_sr = self.lex.previous_token_range();
         self.advance();
-        ParsedExpression {
-          handle: self.ast.add_expression(expr::LiteralNumber { value: num }),
-          type_: Type::Num,
-        }
-        .into()
-      }
-      Token::String(str) => {
-        self.advance();
-        let handle = self.ast.add_str(str);
-        ParsedExpression {
-          handle: self.ast.add_expression(expr::LiteralString { handle }),
-          type_: Type::Str,
-        }
-        .into()
-      }
-      Token::True | Token::False => {
-        let value = self.lookahead == Token::True;
-        self.advance();
-        ParsedExpression {
-          handle: self.ast.add_expression(expr::LiteralBool { value }),
-          type_: Type::Bool,
-        }
-        .into()
+        self.ast.add_expression(expr::Literal { value }, literal_sr)
       }
       Token::Id(id) => self.parse_id(id),
       Token::Basic(c) if c == '(' => self.parse_paren(),
       _ => {
         let err = parser_err::expected_primary(&self.lex, self.lookahead);
         self.emit_error(err);
-        ParsedPrimary::Error
+        ExprHandle::INVALID
       }
     }
   }
 
-  fn parse_expr_call(
-    &mut self,
-    expr: ParsedExpression,
-    arguments: ParsedArguments,
-    call_sr: SourceRange,
-  ) -> ParsedExpression {
-    if let Type::Function(signature) = expr.type_ {
-      let (parameters, return_type) = signature.into_parts();
-      check_arguments(&mut self.errors, &parameters, &arguments.types, call_sr);
-      let handle = self.ast.add_expression(expr::FnCall {
-        func: expr.handle,
-        arguments: arguments.expressions,
-        expr_type: return_type.clone(),
-      });
-      ParsedExpression {
-        handle,
-        type_: return_type,
-      }
-    } else {
-      self.emit_error(ty_err::cannot_call_type(call_sr, expr.type_.print_pretty()));
-      ParsedExpression::INVALID
-    }
-  }
-
-  fn parse_overloaded_call(
-    &mut self,
-    overload_id: OverloadId,
-    arguments: ParsedArguments,
-    call_sr: SourceRange,
-  ) -> ParsedExpression {
-    let resolved_function = self.env.resolve_overload(overload_id, &arguments.types);
-    if let Some(resolved_function) = resolved_function {
-      let id_expr_node_handle = self.ast.add_expression(expr::Id {
-        id: Identifier::Function(resolved_function.function_id),
-        id_type: resolved_function.function_signature.clone().into(),
-      });
-      let return_type = resolved_function.function_signature.get_return_type();
-      ParsedExpression {
-        handle: self.ast.add_expression(expr::FnCall {
-          func: id_expr_node_handle,
-          arguments: arguments.expressions,
-          expr_type: return_type.clone(),
-        }),
-        type_: return_type.clone(),
-      }
-    } else {
-      self.emit_error(ty_err::no_available_oveload(call_sr));
-      ParsedExpression::INVALID
-    }
-  }
-
-  fn parse_function_call(&mut self, primary: ParsedPrimary) -> ParsedPrimary {
-    return_if_err!(self, ParsedExpression::INVALID.into());
+  fn parse_function_call(&mut self, lhs: ExprHandle, expr_start: SourceRange) -> ExprHandle {
+    return_if_err!(self, ExprHandle::INVALID);
     assert_eq!(self.lookahead, Token::Basic('('));
-
-    let call_start_sr = self.lex.previous_token_range();
-    self.advance();
-    let arguments = self.parse_arguments(call_start_sr, ')');
-    let call_end_sr = self.lex.previous_token_range();
-    self.match_or_err(Token::Basic(')'));
-    let call_sr = SourceRange::combine(call_start_sr, call_end_sr);
-    match primary {
-      ParsedPrimary::Expr(expr) => self.parse_expr_call(expr, arguments, call_sr).into(),
-      ParsedPrimary::UnresolvedOverload(overload_id) => self
-        .parse_overloaded_call(overload_id, arguments, call_sr)
-        .into(),
-      ParsedPrimary::Error => ParsedPrimary::Error,
-    }
-  }
-
-  fn try_parse_member_get(
-    &mut self,
-    primary: &ParsedPrimary,
-    member_name: &str,
-  ) -> Result<ParsedPrimary, MemberGetError> {
-    let expr = if let ParsedPrimary::Expr(expr) = primary {
-      expr
-    } else {
-      return Err(MemberGetError::NotAStruct);
-    };
-    if let Type::Struct(struct_id) = expr.type_ {
-      let s = self.env.get_struct(struct_id).unwrap();
-      if let Some(member_index) = s.get_member_index(member_name) {
-        let member_type = s.member_info(member_index).1.clone();
-        let handle = self.ast.add_expression(expr::MemberGet {
-          lhs: expr.handle,
-          member_index,
-        });
-        Ok(
-          ParsedExpression {
-            handle,
-            type_: member_type,
-          }
-          .into(),
-        )
-      } else {
-        Err(MemberGetError::NotAMember)
-      }
-    } else {
-      Err(MemberGetError::NotAStruct)
-    }
-  }
-
-  fn resolve_overloaded_dot_call(
-    &mut self,
-    overload_id: OverloadId,
-    parsed_arguments: ParsedArguments,
-    expr: ParsedExpression,
-    call_sr: SourceRange,
-  ) -> ParsedPrimary {
-    let mut argument_types = parsed_arguments.types.clone();
-    argument_types.insert(0, expr.type_);
-    let resolved_overload = self.env.resolve_overload(overload_id, &argument_types);
-    if let Some(resolved_overload) = resolved_overload {
-      let handle = self.ast.add_expression(DotCall {
-        function: resolved_overload.function_id.into(),
-        lhs: expr.handle,
-        arguments: parsed_arguments.expressions,
-      });
-      ParsedExpression {
-        handle,
-        type_: resolved_overload
-          .function_signature
-          .get_return_type()
-          .clone(),
-      }
-      .into()
-    } else {
-      self.emit_error(ty_err::no_available_oveload(call_sr));
-      ParsedPrimary::Error
-    }
-  }
-
-  fn resolve_dot_call(
-    &mut self,
-    primary: ParsedPrimary,
-    name: &str,
-    name_sr: SourceRange,
-    member_get_error: MemberGetError,
-  ) -> ParsedPrimary {
-    let identifier = self.get_id(name, name_sr);
-    return_if_err!(self, ParsedPrimary::Error);
 
     let call_start = self.lex.previous_token_range();
     self.advance();
-    let parsed_arguments = self.parse_arguments(call_start, ')');
-    let call_end = self.lex.previous_token_range();
-    self.match_or_err(Token::Basic(')'));
-    let call_sr = SourceRange::combine(call_start, call_end);
-
-    let expr = if let ParsedPrimary::Expr(expr) = primary {
-      expr
-    } else {
-      return ParsedPrimary::Error;
-    };
-
-    match identifier {
-      ResolvedIdentifier::UnresolvedOverload(overload_id) => {
-        self.resolve_overloaded_dot_call(overload_id, parsed_arguments, expr, call_sr)
-      }
-      ResolvedIdentifier::ResolvedIdentifier { id, type_: id_type } => {
-        if let Type::Function(signature) = id_type {
-          let (parameters, return_type) = signature.into_parts();
-          if parameters.first().is_some_and(|p1| *p1 == expr.type_) {
-            check_arguments(
-              &mut self.errors,
-              &parameters[1..parameters.len()],
-              &parsed_arguments.types,
-              call_sr,
-            );
-            let handle = self.ast.add_expression(DotCall {
-              function: id,
-              lhs: expr.handle,
-              arguments: parsed_arguments.expressions,
-            });
-            ParsedExpression {
-              handle,
-              type_: return_type,
-            }
-            .into()
-          } else {
-            match member_get_error {
-              MemberGetError::NotAStruct => self.emit_error(
-                ty_err::no_member_and_no_function_found(name_sr, name, expr.type_.print_pretty()),
-              ),
-              MemberGetError::NotAMember => {
-                self.emit_error(ty_err::could_not_find_function_for_dot_call(
-                  name_sr,
-                  name,
-                  expr.type_.print_pretty(),
-                ))
-              }
-            }
-            ParsedPrimary::Error
-          }
-        } else {
-          self.emit_error(ty_err::cannot_call_type(name_sr, id_type.print_pretty()));
-          ParsedPrimary::Error
-        }
-      }
-      ResolvedIdentifier::Error => ParsedPrimary::Error,
-    }
+    let arguments = self.parse_arguments(call_start, ')');
+    let expr_end = self.lex.previous_token_range();
+    self.match_token(Token::Basic(')'));
+    self.ast.add_expression(
+      expr::FnCall {
+        func: lhs,
+        arguments,
+      },
+      SourceRange::combine(expr_start, expr_end),
+    )
   }
 
-  fn try_resolve_dot_call(
-    &mut self,
-    primary: ParsedPrimary,
-    name: &str,
-    name_sr: SourceRange,
-    member_get_error: MemberGetError,
-  ) -> ParsedPrimary {
-    if let Token::Basic('(') = self.lookahead {
-      self.resolve_dot_call(primary, name, name_sr, member_get_error)
-    } else {
-      match member_get_error {
-        MemberGetError::NotAStruct => {
-          self.emit_error(ty_err::cannot_access_member_of_non_struct_type(
-            name_sr,
-            primary.get_type().print_pretty(),
-          ))
-        }
-        MemberGetError::NotAMember => self.emit_error(ty_err::not_a_member(
-          name_sr,
-          name,
-          primary.get_type().print_pretty(),
-        )),
-      }
-      ParsedPrimary::Error
-    }
-  }
-
-  fn parse_dot(&mut self, primary: ParsedPrimary) -> ParsedPrimary {
-    return_if_err!(self, ParsedPrimary::Error);
+  fn parse_dot(&mut self, lhs: ExprHandle, expr_start: SourceRange) -> ExprHandle {
+    return_if_err!(self, ExprHandle::INVALID);
     assert_eq!(self.lookahead, Token::Basic('.'));
-    // if its lhs is an object and name is a member, get the member
-    // if name is a function, try to call the function
 
     self.advance();
-    let (name, name_sr) = self.match_id_or_err();
-    match self.try_parse_member_get(&primary, name) {
-      Ok(result) => result,
-      Err(err) => self.try_resolve_dot_call(primary, name, name_sr, err),
-    }
+    let expr_end = self.lex.previous_token_range();
+    let rhs = self.match_id();
+    self.ast.add_expression(
+      expr::Dot { lhs, rhs },
+      SourceRange::combine(expr_start, expr_end),
+    )
   }
 
-  fn parse_call(&mut self) -> ParsedExpression {
-    return_if_err!(self, ParsedExpression::INVALID);
+  fn parse_call(&mut self) -> ExprHandle {
+    return_if_err!(self, ExprHandle::INVALID);
 
+    let expr_start = self.lex.previous_token_range();
     let mut expr = self.parse_primary();
     // if its a unresolved overload, try to get an expression
     loop {
-      return_if_err!(self, ParsedExpression::INVALID);
+      return_if_err!(self, ExprHandle::INVALID);
       match self.lookahead {
         Token::Basic('(') => {
-          expr = self.parse_function_call(expr);
+          expr = self.parse_function_call(expr, expr_start);
         }
         Token::Basic('.') => {
-          expr = self.parse_dot(expr);
+          expr = self.parse_dot(expr, expr_start);
         }
         _ => break,
       }
     }
-    match expr {
-      ParsedPrimary::Expr(expr) => expr,
-      ParsedPrimary::UnresolvedOverload(_) => ParsedExpression {
-        handle: ExprHandle::INVALID,
-        type_: Type::UnresolvedOverload,
-      },
-      ParsedPrimary::Error => ParsedExpression::INVALID,
-    }
+    expr
   }
 
-  fn check_unary(&mut self, sr: SourceRange, op: Token, rhs: Type) -> (Type, UnaryOperator) {
-    #[rustfmt::skip]
-    const OPERATORS: &[(Token, Type, Type, UnaryOperator)] = &[
-      (Token::Basic('-'), Type::Num, Type::Num, UnaryOperator::NegNum),
-      (Token::Basic('!'), Type::Bool, Type::Bool, UnaryOperator::NotBool),
-    ];
-    let result = OPERATORS
-      .iter()
-      .find(|e| e.0 == op && e.1 == rhs)
-      .map(|e| (e.2.clone(), e.3));
-    if let Some(result) = result {
-      result
-    } else {
-      self.emit_error(ty_err::incorrect_unary_operator(sr, op, rhs.print_pretty()));
-      (Type::Error, UnaryOperator::Invalid)
-    }
-  }
+  fn parse_unary(&mut self) -> ExprHandle {
+    return_if_err!(self, ExprHandle::INVALID);
 
-  fn parse_unary(&mut self) -> ParsedExpression {
-    return_if_err!(self, ParsedExpression::INVALID);
-
-    if let Some((op, op_sr)) = self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')]) {
+    let expr_start = self.lex.previous_token_range();
+    if let Some((operator, _)) = self.matches_alternatives(&[Token::Basic('-'), Token::Basic('!')])
+    {
       let right = self.parse_call();
-      let (result_type, operator) = self.check_unary(op_sr, op, right.type_);
-      ParsedExpression {
-        handle: self.ast.add_expression(expr::Unary {
-          operator,
-          right: right.handle,
-          expr_type: result_type.clone(),
-        }),
-        type_: result_type,
-      }
+      let expr_end = right.get_source_range(&self.ast);
+      self.ast.add_expression(
+        expr::Unary { operator, right },
+        SourceRange::combine(expr_start, expr_end),
+      )
     } else {
       self.parse_call()
     }
   }
 
-  fn check_binary(
-    &mut self,
-    sr: SourceRange,
-    op: Token,
-    lhs: &Type,
-    rhs: &Type,
-  ) -> (Type, BinaryOperator) {
-    #[rustfmt::skip]
-    const OPERATORS: &[(Token, Type, Type, Type, BinaryOperator)] = &[
-      // number
-      (Token::Basic('+'), Type::Num, Type::Num, Type::Num, BinaryOperator::AddNum),
-      (Token::Basic('-'), Type::Num, Type::Num, Type::Num, BinaryOperator::SubNum),
-      (Token::Basic('*'), Type::Num, Type::Num, Type::Num, BinaryOperator::MulNum),
-      (Token::Basic('/'), Type::Num, Type::Num, Type::Num, BinaryOperator::DivNum),
-      (Token::Basic('<'), Type::Num, Type::Num, Type::Bool, BinaryOperator::LeNum),
-      (Token::Basic('>'), Type::Num, Type::Num, Type::Bool, BinaryOperator::GeNum),
-      (Token::Leq, Type::Num, Type::Num, Type::Bool, BinaryOperator::LeqNum),
-      (Token::Geq, Type::Num, Type::Num, Type::Bool, BinaryOperator::GeqNum),
-      (Token::Same, Type::Num, Type::Num, Type::Bool, BinaryOperator::SameNum),
-      (Token::Different, Type::Num, Type::Num, Type::Bool, BinaryOperator::DiffNum),
-      // string Token
-      (Token::Basic('+'), Type::Str, Type::Str, Type::Str, BinaryOperator::AddStr),
-      (Token::Basic('<'), Type::Str, Type::Str, Type::Bool, BinaryOperator::LeStr),
-      (Token::Basic('>'), Type::Str, Type::Str, Type::Bool, BinaryOperator::GeStr),
-      (Token::Leq, Type::Str, Type::Str, Type::Bool, BinaryOperator::LeqStr),
-      (Token::Geq, Type::Str, Type::Str, Type::Bool, BinaryOperator::GeqStr),
-      (Token::Same, Type::Str, Type::Str, Type::Bool, BinaryOperator::SameStr),
-      (Token::Different, Type::Str, Type::Str, Type::Bool, BinaryOperator::DiffStr),
-      // bool
-      (Token::Same, Type::Bool, Type::Bool, Type::Bool, BinaryOperator::SameBool),
-      (Token::Different, Type::Bool, Type::Bool, Type::Bool, BinaryOperator::DiffBool),
-    ];
-
-    let result = OPERATORS
-      .iter()
-      .filter(|bin_op| bin_op.0 == op)
-      .find(|bin_op| bin_op.1 == *lhs && bin_op.2 == *rhs)
-      .map(|e| (e.3.clone(), e.4));
-    if let Some(result) = result {
-      result
-    } else {
-      self.emit_error(ty_err::incorrect_binary_operator(
-        sr,
-        op,
-        lhs.print_pretty(),
-        rhs.print_pretty(),
-      ));
-      (Type::Error, BinaryOperator::Invalid)
-    }
-  }
-
-  fn parse_binary_operation(&mut self, prec: usize) -> ParsedExpression {
-    return_if_err!(self, ParsedExpression::INVALID);
+  fn parse_binary_operation(&mut self, prec: usize) -> ExprHandle {
+    return_if_err!(self, ExprHandle::INVALID);
 
     if prec == MAX_BIN_OP_PRECEDENCE {
       self.parse_unary()
     } else {
-      let ParsedExpression {
-        handle: mut expr,
-        type_: mut expr_type,
-      } = self.parse_binary_operation(prec + 1);
-      while let Some((op, op_sr)) = self.matches_alternatives(BIN_OP_PRECEDENCE[prec]) {
+      let expr_start = self.lex.previous_token_range();
+      let mut expr = self.parse_binary_operation(prec + 1);
+      while let Some((operator, _)) = self.matches_alternatives(BIN_OP_PRECEDENCE[prec]) {
         let right = self.parse_binary_operation(prec + 1);
-        let (result_type, operator) = self.check_binary(op_sr, op, &expr_type, &right.type_);
-        expr_type = result_type;
-        expr = self.ast.add_expression(expr::Binary {
-          left: expr,
-          operator,
-          right: right.handle,
-          expr_type: expr_type.clone(),
-        })
+        let expr_end = right.get_source_range(&self.ast);
+        expr = self.ast.add_expression(
+          expr::Binary {
+            left: expr,
+            operator,
+            right,
+          },
+          SourceRange::combine(expr_start, expr_end),
+        );
       }
-      ParsedExpression {
-        handle: expr,
-        type_: expr_type,
-      }
+      expr
     }
   }
 
-  fn check_logical(
-    &mut self,
-    sr: SourceRange,
-    op: Token,
-    lhs: &Type,
-    rhs: &Type,
-  ) -> (Type, LogicalOperator) {
-    #[rustfmt::skip]
-    const OPERATORS: &[(Token, Type, Type, Type, LogicalOperator)] = &[
-      (Token::And, Type::Bool, Type::Bool, Type::Bool, LogicalOperator::And),
-      (Token::Or, Type::Bool, Type::Bool, Type::Bool, LogicalOperator::Or),
-    ];
+  fn parse_assignment(&mut self) -> ExprHandle {
+    return_if_err!(self, ExprHandle::INVALID);
 
-    let result = OPERATORS
-      .iter()
-      .find(|e| e.0 == op && e.1 == *lhs && e.2 == *rhs)
-      .map(|e| (e.3.clone(), e.4));
-    if let Some(result) = result {
-      result
+    let expr_start = self.lex.previous_token_range();
+    let lhs = self.parse_binary_operation(0);
+    if self.match_next(Token::Basic('=')).is_some() {
+      let rhs = self.parse_binary_operation(0);
+      let expr_end = rhs.get_source_range(&self.ast);
+      self.ast.add_expression(
+        expr::Assignment { lhs, rhs },
+        SourceRange::combine(expr_start, expr_end),
+      )
     } else {
-      self.emit_error(ty_err::incorrect_binary_operator(
-        sr,
-        op,
-        lhs.print_pretty(),
-        rhs.print_pretty(),
-      ));
-      (Type::Error, LogicalOperator::Invalid)
+      lhs
     }
   }
 
-  fn parse_logical_operation(&mut self, prec: usize) -> ParsedExpression {
-    return_if_err!(self, ParsedExpression::INVALID);
+  fn parse_lambda(&mut self) -> ExprHandle {
+    return_if_err!(self, ExprHandle::INVALID);
+    assert_eq!(self.lookahead, Token::Fn);
 
-    if prec == MAX_LOGICAL_OP_PRECEDENCE {
-      self.parse_binary_operation(0)
-    } else {
-      let ParsedExpression {
-        handle: mut expr,
-        type_: mut expr_type,
-      } = self.parse_logical_operation(prec + 1);
-      while let Some((op, op_sr)) = self.matches_alternatives(LOGICAL_OP_PRECEDENCE[prec]) {
-        let right = self.parse_logical_operation(prec + 1);
-        let (resuls_type, operator) = self.check_logical(op_sr, op, &expr_type, &right.type_);
-        expr_type = resuls_type;
-        expr = self.ast.add_expression(expr::Logical {
-          left: expr,
-          operator,
-          right: right.handle,
-          expr_type: expr_type.clone(),
-        })
-      }
-      ParsedExpression {
-        handle: expr,
-        type_: expr_type,
-      }
-    }
-  }
-
-  fn check_assignment(
-    &mut self,
-    id: expr::Id,
-    value: ParsedExpression,
-    eq_sr: SourceRange,
-  ) -> ParsedExpression {
-    match id.id {
-      Identifier::Variable(var_id) => {
-        if id.id_type == value.type_ {
-          return ParsedExpression {
-            handle: self.ast.add_expression(expr::Assignment {
-              id: var_id,
-              value: value.handle,
-              type_: id.id_type.clone(),
-            }),
-            type_: id.id_type,
-          };
-        } else {
-          self.emit_error(ty_err::assignment_of_incompatible_types(
-            eq_sr,
-            id.id_type.print_pretty(),
-            value.type_.print_pretty(),
-          ));
-        }
-      }
-      Identifier::ExternFunction(_) | Identifier::Function(_) => {
-        self.emit_error(ty_err::cannot_assign_to_function(eq_sr))
-      }
-      Identifier::Struct(_) => self.emit_error(ty_err::cannot_assing_to_type(eq_sr)),
-      Identifier::Invalid => {} // error already handled
-    }
-    ParsedExpression::INVALID
-  }
-
-  fn parse_assignment(&mut self) -> ParsedExpression {
-    return_if_err!(self, ParsedExpression::INVALID);
-
-    let ParsedExpression { handle: lhs, type_ } = self.parse_logical_operation(0);
-    if let Some((_, eq_sr)) = self.match_next(Token::Basic('=')) {
-      let rhs = self.parse_logical_operation(0);
-      // TODO: maybe consider making simple nodes copy
-      match lhs.get(&self.ast).clone() {
-        Expr::Id(id) => self.check_assignment(id, rhs, eq_sr),
-        Expr::MemberGet(member) => ParsedExpression {
-          handle: self.ast.add_expression(expr::MemberSet {
-            member: member.clone(),
-            value: rhs.handle,
-          }),
-          type_: rhs.type_.clone(),
-        },
-        _ => {
-          let err = parser_err::lvalue_assignment(eq_sr);
-          self.emit_error(err);
-          ParsedExpression::INVALID
-        }
-      }
-    } else {
-      ParsedExpression { handle: lhs, type_ }
-    }
-  }
-
-  fn parse_lambda(&mut self) -> ParsedExpression {
-    return_if_err!(self, ParsedExpression::INVALID);
-
-    let parameters_sr_start = self.lex.previous_token_range();
-    self.env.push_function();
-    self.match_or_err(Token::Basic('('));
-    let parameter_types = self.parse_function_params(parameters_sr_start);
-    self.match_or_err(Token::Basic(')'));
+    let expr_start = self.lex.previous_token_range();
+    self.advance();
+    let (parameter_types, parameter_names) = self.parse_function_parameters();
     let return_type = self.parse_function_return_type();
-    self.env.define_function_return_type(return_type.clone());
-    let body = self.parse_unscoped_block();
-    let captures = self.env.pop_function();
-    let function = FunctionSignature::new(parameter_types.clone(), return_type.clone());
+    let (body, expr_end) = self.parse_block_components();
 
-    if (body.1 == ReturnKind::Conditional || body.1 == ReturnKind::None)
-      && return_type != Type::Nothing
-    {
-      self.emit_error(ty_err::no_unconditional_return(SourceRange::EMPTY)); //FIXME: provide proper sr
-      return ParsedExpression::INVALID;
-    }
-    let id = self.env.new_function_id();
-
-    ParsedExpression {
-      handle: self.ast.add_expression(expr::Lambda {
-        id,
-        captures,
+    self.ast.add_expression(
+      expr::Lambda {
         parameter_types,
-        body: body.0,
+        parameter_names,
+        body,
         return_type: return_type.clone(),
-      }),
-      type_: function.into(),
-    }
+      },
+      SourceRange::combine(expr_start, expr_end),
+    )
   }
 
-  pub(super) fn parse_expression(&mut self) -> ParsedExpression {
-    return_if_err!(self, ParsedExpression::INVALID);
+  pub fn parse_expression(&mut self) -> ExprHandle {
+    return_if_err!(self, ExprHandle::INVALID);
 
-    if self.match_next(Token::Fn).is_some() {
-      self.parse_lambda()
-    } else {
-      self.parse_assignment()
+    match self.lookahead {
+      Token::Fn => self.parse_lambda(),
+      _ => self.parse_assignment(),
     }
   }
 }
