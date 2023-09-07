@@ -249,17 +249,24 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
         signature.get_return_type().clone()
       }
       Type::UnresolvedOverload(overload_id) => {
-        let function_id_location = self.code().get_next_instruction_address();
+        let function_id_location = unsafe { self.code().push_stub_constant() };
         let arguments = fn_call
           .arguments
           .iter()
           .map(|e| self.visit_expr(ast, *e))
           .collect::<Vec<_>>();
         if let Some(resolved_overload) = self.env.resolve_overload(overload_id, &arguments) {
-          resolved_overload
+          let function_id = resolved_overload.function_id;
+          let return_type = resolved_overload
             .function_signature
             .get_return_type()
-            .clone()
+            .clone();
+          unsafe {
+            self
+              .code()
+              .backpatch_constant(function_id_location, ConstantValue::FunctionId(function_id))
+          };
+          return_type
         } else {
           self.emit_error(ty_err::no_available_oveload(call_sr));
           Type::Error

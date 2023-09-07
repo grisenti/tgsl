@@ -1,6 +1,7 @@
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::identifier::VariableIdentifier;
 use std::fmt::Debug;
+use std::ops::Add;
 
 pub struct Label(usize);
 pub struct JumpPoint(usize);
@@ -22,7 +23,13 @@ impl FunctionCode {
     }
   }
 
+  pub fn get_name(&self) -> &str {
+    &self.function_name
+  }
+
   pub unsafe fn push_constant(&mut self, val: ConstantValue) {
+    debug_assert_ne!(val, ConstantValue::None, "use push_constant_none");
+
     let constant_offset = self.constants.len() as u8;
     let constant_type = if matches!(val, ConstantValue::Str(_)) {
       OpCode::ConstantStr
@@ -37,6 +44,23 @@ impl FunctionCode {
   pub unsafe fn push_constant_none(&mut self) {
     self.code.push(OpCode::Constant as u8);
     self.code.push(0);
+  }
+
+  pub unsafe fn push_stub_constant(&mut self) -> Address {
+    let address = self.get_next_instruction_address();
+    self.push_constant(ConstantValue::Stub);
+    address
+  }
+
+  pub unsafe fn backpatch_constant(&mut self, address: Address, value: ConstantValue) {
+    assert_eq!(self.code[address.0], OpCode::Constant as u8);
+    let constant_index = self.code[address.0 + 1] as usize;
+    assert_eq!(
+      self.constants[constant_index],
+      ConstantValue::Stub,
+      "trying to replace a non stub constant"
+    );
+    self.constants[constant_index] = value;
   }
 
   pub unsafe fn push_op(&mut self, op: OpCode) {

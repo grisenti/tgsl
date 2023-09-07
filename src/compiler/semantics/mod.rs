@@ -4,9 +4,10 @@ use crate::compiler::ast::visitor::{ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{ExprHandle, StmtHandle, AST};
 use crate::compiler::codegen::bytecode::ConstantValue;
 use crate::compiler::codegen::function_code::FunctionCode;
+use crate::compiler::codegen::ModuleCode;
 use crate::compiler::errors::{sema_err, CompilerError};
 use crate::compiler::global_env::{GlobalEnv, Struct};
-use crate::compiler::identifier::{Identifier, StructId, VariableIdentifier};
+use crate::compiler::identifier::{Identifier, ModuleId, StructId, VariableIdentifier};
 use crate::compiler::lexer::SourceRange;
 use crate::compiler::semantics::environment::{
   DeclarationError, Environment, NameError, ResolvedIdentifier,
@@ -31,7 +32,7 @@ impl<'a> SemanticChecker<'a> {
   pub fn check_program(
     ast: &'a AST<'a>,
     global_env: &'a GlobalEnv,
-  ) -> Result<(), Vec<CompilerError>> {
+  ) -> Result<ModuleCode, Vec<CompilerError>> {
     let mut checker = Self {
       env: Environment::new(global_env),
       ast,
@@ -43,8 +44,15 @@ impl<'a> SemanticChecker<'a> {
     for stmt in ast.get_program() {
       checker.visit_stmt(ast, *stmt);
     }
+    assert!(
+      checker.current_function_stack.is_empty(),
+      "some functions have yet to be closed"
+    );
     if checker.errors.is_empty() {
-      Ok(())
+      Ok(ModuleCode {
+        global_code: checker.global_code,
+        functions: checker.checked_functions,
+      })
     } else {
       Err(checker.errors)
     }

@@ -57,7 +57,8 @@ impl Compiler {
   pub fn compile(&mut self, source: &str) -> Result<(), Vec<CompilerError>> {
     let ast = Parser::parse_program(source)?;
     println!("{}", ASTJSONPrinter::print_to_string(&ast));
-    SemanticChecker::check_program(&ast, &self.global_env)?;
+    let code = SemanticChecker::check_program(&ast, &self.global_env)?;
+    println!("{:?}", code);
     Ok(())
 
     /*

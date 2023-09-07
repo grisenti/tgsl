@@ -107,7 +107,7 @@ impl From<UnaryOperator> for OpCode {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ConstantValue {
   Number(f64),
   GlobalId(GlobalVarId),
@@ -116,4 +116,5 @@ pub enum ConstantValue {
   Bool(bool),
   Str(String),
   None,
+  Stub,
 }
