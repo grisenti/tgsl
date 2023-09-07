@@ -8,7 +8,9 @@ use crate::compiler::errors::{sema_err, CompilerError};
 use crate::compiler::global_env::{GlobalEnv, Struct};
 use crate::compiler::identifier::{Identifier, StructId, VariableIdentifier};
 use crate::compiler::lexer::SourceRange;
-use crate::compiler::semantics::environment::{DeclarationError, Environment, ResolvedIdentifier};
+use crate::compiler::semantics::environment::{
+  DeclarationError, Environment, NameError, ResolvedIdentifier,
+};
 use crate::compiler::semantics::statement_semantics::ReturnType;
 use crate::compiler::types::Type;
 
@@ -86,11 +88,28 @@ impl<'a> SemanticChecker<'a> {
   }
 
   fn get_id(&mut self, name: &str, sr: SourceRange) -> ResolvedIdentifier {
-    todo!()
+    match self.env.get_id(name) {
+      Ok(resolved_id) => resolved_id,
+      Err(NameError::UndeclaredName) => {
+        self.errors.push(sema_err::name_not_found(sr, name));
+        ResolvedIdentifier::Error
+      }
+    }
   }
 
   fn get_variable(&mut self, name: &str, sr: SourceRange) -> (VariableIdentifier, &Type) {
-    todo!()
+    match self.env.get_id(name) {
+      Ok(ResolvedIdentifier::ResolvedIdentifier {
+        id: Identifier::Variable(var_id),
+        type_,
+      }) => return (var_id, type_),
+      Err(NameError::UndeclaredName) => {
+        self.errors.push(sema_err::name_not_found(sr, name));
+      }
+      _ => self.errors.push(sema_err::not_a_variable(sr, name)),
+    }
+
+    (VariableIdentifier::Invalid, &Type::Error)
   }
 
   fn get_struct_id(&mut self, name: &str, sr: SourceRange) -> StructId {

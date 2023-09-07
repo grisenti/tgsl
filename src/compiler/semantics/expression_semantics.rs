@@ -102,9 +102,11 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     match resolved_id {
       ResolvedIdentifier::UnresolvedOverload(overload_id) => Type::UnresolvedOverload(overload_id),
       ResolvedIdentifier::ResolvedIdentifier { id, type_ } => {
+        let type_ = type_.clone();
         unsafe { self.generate_identifier_code(id) };
         type_
       }
+      ResolvedIdentifier::Struct(struct_id) => Type::Struct(struct_id),
       ResolvedIdentifier::Error => Type::Error,
     }
   }
@@ -126,8 +128,8 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       let var_type = var_type.clone(); // we already borrowed self with get_variable
       self.emit_error(ty_err::assignment_of_incompatible_types(
         expr_sr,
-        var_type.print_pretty(),
         rhs_type.print_pretty(),
+        var_type.print_pretty(),
       ));
       Type::Error
     } else {

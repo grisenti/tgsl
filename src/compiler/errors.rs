@@ -194,8 +194,8 @@ pub mod ty_err {
     assignment_of_incompatible_types,
     "TY004",
     "cannot assign value of type {} to identifier of type {}",
-    t1: String,
-    t2: String
+    value_type: String,
+    var_type: String
   );
 
   def_err!(cannot_call_type, "TY005", "cannot call type {}", t: String);
@@ -338,6 +338,19 @@ pub mod sema_err {
     too_many_local_names,
     "SE002",
     "the current local scope has more than 255 names"
+  );
+
+  def_err!(
+    name_not_found,
+    "SE003",
+    "identifier '{}' could not be found in the current scope",
+    name: &str
+  );
+
+  def_err!(not_a_variable,
+    "SE004",
+    "identifier '{}' is not a variable",
+    name: &str
   );
 }
 

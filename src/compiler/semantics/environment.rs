@@ -14,9 +14,10 @@ use crate::compiler::{
   },
 };
 
-pub enum ResolvedIdentifier {
+pub enum ResolvedIdentifier<'a> {
   UnresolvedOverload(OverloadId),
-  ResolvedIdentifier { id: Identifier, type_: Type },
+  ResolvedIdentifier { id: Identifier, type_: &'a Type },
+  Struct(StructId),
   Error,
 }
 
@@ -141,19 +142,19 @@ impl<'src> Environment<'src> {
       let type_ = match global_variable {
         GlobalIdentifier::Variable(var_id) => {
           if var_id.is_relative() {
-            self.module_global_variables_types[var_id.get_id() as usize].clone()
+            &self.module_global_variables_types[var_id.get_id() as usize]
           } else {
-            self.global_env.get_variable_type(var_id).clone()
+            self.global_env.get_variable_type(var_id)
           }
         }
         GlobalIdentifier::ExternFunction(extern_id) => {
           if extern_id.is_relative() {
-            self.extern_function_types[extern_id.get_id() as usize].clone()
+            &self.extern_function_types[extern_id.get_id() as usize]
           } else {
-            self.global_env.get_extern_function_type(extern_id).clone()
+            self.global_env.get_extern_function_type(extern_id)
           }
         }
-        GlobalIdentifier::Struct(struct_id) => Type::Struct(struct_id),
+        GlobalIdentifier::Struct(struct_id) => return Ok(ResolvedIdentifier::Struct(struct_id)),
         GlobalIdentifier::OverloadId(overload_id) => {
           return Ok(ResolvedIdentifier::UnresolvedOverload(overload_id));
         }
@@ -161,7 +162,7 @@ impl<'src> Environment<'src> {
       };
       Ok(ResolvedIdentifier::ResolvedIdentifier {
         id: global_variable.into(),
-        type_: type_.clone(),
+        type_,
       })
     } else {
       Err(NameError::UndeclaredName)
@@ -182,7 +183,7 @@ impl<'src> Environment<'src> {
       let (local_id, type_) = self.capture(local);
       Ok(ResolvedIdentifier::ResolvedIdentifier {
         id: local_id.into(),
-        type_: type_.clone(),
+        type_: type_,
       })
     } else {
       self.get_global(name)

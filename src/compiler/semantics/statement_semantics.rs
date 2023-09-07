@@ -50,7 +50,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnType> for SemanticChecker<'a> {
     if var_type.is_error() {
       return ReturnType::None;
     }
-    if var_type != specified_type {
+    if specified_type != Type::Nothing && var_type != specified_type {
       self.emit_error(ty_err::type_specifier_expression_mismatch(
         stmt_sr,
         var_type.print_pretty(),
@@ -74,13 +74,9 @@ impl<'a> StmtVisitor<'a, 'a, ReturnType> for SemanticChecker<'a> {
   }
 
   fn visit_block(&mut self, ast: &'a AST, block: &Block, stmt_handle: StmtHandle) -> ReturnType {
-    let mut return_type = ReturnType::None;
     let stmt_sr = stmt_handle.get_source_range(ast);
     self.env.push_scope();
-    for stmt in &block.statements {
-      let stmt_return_type = self.visit_stmt(ast, *stmt);
-      return_type = self.combine_return_types(return_type, stmt_return_type, stmt_sr);
-    }
+    let return_type = self.visit_statements(&block.statements, stmt_sr);
     let locals = self.env.pop_scope();
     (0..=locals).for_each(|_| unsafe { self.code().push_op(OpCode::Pop) });
     return_type
