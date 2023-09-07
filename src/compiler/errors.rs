@@ -325,19 +325,19 @@ pub mod ge_err {
 }
 
 pub mod sema_err {
-
   use super::{CompilerError, SourceRangeProvider};
 
   def_err!(
-    cannot_initialize_with_itself,
-    "SA004",
-    "cannot initialize identifier with itself"
+    name_already_defined,
+    "SE001",
+    "name {} was already defined in this scope",
+    name: &str
   );
 
   def_err!(
-    break_outside_loop,
-    "SA006",
-    "cannot have a break outisde of loop body"
+    too_many_local_names,
+    "SE002",
+    "the current local scope has more than 255 names"
   );
 }
 

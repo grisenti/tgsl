@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use super::errors::{ge_err, CompilerResult};
 use super::identifier::{ExternId, GlobalIdentifier, GlobalVarId, ModuleId, StructId};
 use super::lexer::SourceRange;
-use super::parser::ParsedModule;
 use super::types::Type;
 
 pub struct Module {
@@ -72,17 +71,12 @@ pub struct GlobalEnv {
   exported_functions: u32,
 }
 
-impl GlobalEnv {
-  pub fn get_module_id(&self, module_name: &str, name_sr: SourceRange) -> CompilerResult<ModuleId> {
-    if let Some(module_id) = self.module_names.get(module_name) {
-      Ok(*module_id)
-    } else {
-      Err(ge_err::not_a_loaded_module(name_sr, module_name))
-    }
-  }
+pub struct ParsedModule {}
 
-  pub fn get_module(&self, id: ModuleId) -> &Module {
-    &self.modules[id.0 as usize]
+impl GlobalEnv {
+  pub fn get_module(&self, module_name: &str) -> Option<&Module> {
+    let id = self.module_names.get(module_name)?;
+    Some(&self.modules[id.0 as usize])
   }
 
   pub fn get_variable_type(&self, id: GlobalVarId) -> &Type {
@@ -101,6 +95,8 @@ impl GlobalEnv {
   }
 
   pub fn export_module(&mut self, parsed_module: ParsedModule) -> Option<ModuleId> {
+    todo!();
+    /*
     if let Some(module_name) = parsed_module.module_name {
       debug_assert!(
         !self.module_names.contains_key(&module_name),
@@ -173,7 +169,7 @@ impl GlobalEnv {
       Some(ModuleId(module_id))
     } else {
       None
-    }
+    }*/
   }
 
   pub fn is_module_name_available(&self, name: &str) -> bool {

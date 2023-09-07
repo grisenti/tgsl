@@ -1,11 +1,15 @@
+use language::compiler::errors::ErrorPrinter;
 use language::compiler::Compiler;
 use std::fs;
 
 fn test() -> Result<(), String> {
   let mut compiler = Compiler::new();
   let source = fs::read_to_string("program.pr").unwrap();
-  compiler.compile(&source)?;
-  Ok(())
+  if let Err(err) = compiler.compile(&source) {
+    Err(ErrorPrinter::to_string(&err, &source))
+  } else {
+    Ok(())
+  }
 }
 
 fn main() {

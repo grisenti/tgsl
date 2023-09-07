@@ -46,8 +46,8 @@ pub mod expr {
     inner: ExprHandle
   );
 
-  expr_node!(Assignment,
-    lhs: ExprHandle,
+  src_expr_node!(Assignment,
+    var_name: &'src str,
     rhs: ExprHandle
   );
 
@@ -92,7 +92,7 @@ pub enum Expr<'src> {
   Literal(Literal<'src>),
   Id(Id<'src>),
   Paren(Paren),
-  Assignment(Assignment),
+  Assignment(Assignment<'src>),
   Binary(Binary<'src>),
   Unary(Unary<'src>),
   Lambda(Lambda<'src>),

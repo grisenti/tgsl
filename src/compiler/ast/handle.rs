@@ -21,7 +21,7 @@ macro_rules! generate_ast_handle {
 
 generate_ast_handle!(ExprHandle);
 impl ExprHandle {
-  pub fn get_expr<'a>(&'a self, ast: &'a AST) -> &'a Expr {
+  pub fn get_expr<'ast, 'src>(self, ast: &'ast AST<'src>) -> &'ast Expr<'src> {
     assert!(self.index < ast.expressions.len() as u32);
     &ast.expressions[self.index as usize]
   }

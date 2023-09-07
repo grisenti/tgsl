@@ -92,7 +92,7 @@ impl From<BinaryOperator> for OpCode {
       BinaryOperator::DiffStr => OpCode::DiffStr,
       BinaryOperator::SameBool => OpCode::SameBool,
       BinaryOperator::DiffBool => OpCode::DiffBool,
-      BinaryOperator::Invalid => panic!(),
+      BinaryOperator::Invalid => panic!("invalid binary operator"),
     }
   }
 }

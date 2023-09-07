@@ -8,11 +8,20 @@ pub struct Address(usize);
 
 #[derive(Default, Clone)]
 pub struct FunctionCode {
+  function_name: String,
   code: Vec<u8>,
   constants: Vec<ConstantValue>,
 }
 
 impl FunctionCode {
+  pub fn new(function_name: String) -> Self {
+    Self {
+      function_name,
+      code: vec![],
+      constants: vec![],
+    }
+  }
+
   pub unsafe fn push_constant(&mut self, val: ConstantValue) {
     let constant_offset = self.constants.len() as u8;
     let constant_type = if matches!(val, ConstantValue::Str(_)) {
@@ -109,7 +118,7 @@ impl FunctionCode {
       VariableIdentifier::Local(id) => {
         self.push_op2(OpCode::SetLocal, id);
       }
-      VariableIdentifier::Invalid => panic!("codegen with invalid ast"),
+      VariableIdentifier::Invalid => self.push_op(OpCode::Last),
     }
   }
 

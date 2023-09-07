@@ -68,20 +68,3 @@ impl Display for UnaryOperator {
     }
   }
 }
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum LogicalOperator {
-  And,
-  Or,
-  Invalid,
-}
-
-impl Display for LogicalOperator {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    match self {
-      Self::And => write!(f, "and"),
-      Self::Or => write!(f, "or"),
-      Self::Invalid => write!(f, "<INVALID>"),
-    }
-  }
-}

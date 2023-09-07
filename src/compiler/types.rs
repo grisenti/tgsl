@@ -1,4 +1,8 @@
 use super::identifier::StructId;
+use crate::compiler::ast::parsed_type::ParsedFunctionType;
+use crate::compiler::ast::visitor::ParsedTypeVisitor;
+use crate::compiler::ast::AST;
+use crate::compiler::identifier::OverloadId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionSignature {
@@ -18,7 +22,7 @@ impl FunctionSignature {
   }
 
   pub fn get_parameters(&self) -> &[Type] {
-    &self.signature[0..self.signature.len()-1]
+    &self.signature[0..self.signature.len() - 1]
   }
 
   pub fn into_parts(mut self) -> (Vec<Type>, Type) {
@@ -41,13 +45,17 @@ pub enum Type {
   Bool,
   Struct(StructId),
   Function(FunctionSignature),
-  UnresolvedOverload,
+  UnresolvedOverload(OverloadId),
   Unknown,
   Nothing,
   Error,
 }
 
 impl Type {
+  pub fn is_error(&self) -> bool {
+    *self == Type::Error
+  }
+
   pub fn print_pretty(&self) -> String {
     match self {
       Type::Function(signature) => {

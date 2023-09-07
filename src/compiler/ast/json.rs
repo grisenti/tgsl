@@ -13,7 +13,6 @@ use crate::compiler::lexer::Token;
 use super::expression::*;
 use super::statement::*;
 use super::visitor::ExprVisitor;
-use super::visitor::ProgramVisitor;
 use super::visitor::StmtVisitor;
 use super::AST;
 
@@ -79,8 +78,8 @@ fn parsed_type_list_to_json(parsed_types: &[TypeHandle], ast: &AST) -> JsonValue
 
 pub struct ASTJSONPrinter {}
 
-impl ExprVisitor<JsonValue> for ASTJSONPrinter {
-  fn visit_literal(&mut self, ast: &AST, literal: &expr::Literal) -> JsonValue {
+impl ExprVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
+  fn visit_literal(&mut self, ast: &AST, literal: &expr::Literal, _: ExprHandle) -> JsonValue {
     object! {
       "Literal": {
         "value": literal.value
@@ -88,7 +87,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_id(&mut self, _ast: &AST, id: &expr::Id) -> JsonValue {
+  fn visit_id(&mut self, _ast: &AST, id: &expr::Id, _: ExprHandle) -> JsonValue {
     object! {
       "Id": {
         "id": id.id
@@ -96,7 +95,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_paren(&mut self, ast: &AST, paren: &expr::Paren) -> JsonValue {
+  fn visit_paren(&mut self, ast: &AST, paren: &expr::Paren, _: ExprHandle) -> JsonValue {
     object! {
       "Paren": {
         "expr": self.visit_expr(ast, paren.inner)
@@ -104,16 +103,21 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_assignment(&mut self, ast: &AST, assignment: &expr::Assignment) -> JsonValue {
+  fn visit_assignment(
+    &mut self,
+    ast: &AST,
+    assignment: &expr::Assignment,
+    _: ExprHandle,
+  ) -> JsonValue {
     object! {
       "Assignment": {
-        lhs: self.visit_expr(ast, assignment.lhs),
+        var_name: assignment.var_name,
         rhs: self.visit_expr(ast, assignment.rhs),
       }
     }
   }
 
-  fn visit_binary(&mut self, ast: &AST, binary: &expr::Binary) -> JsonValue {
+  fn visit_binary(&mut self, ast: &AST, binary: &expr::Binary, _: ExprHandle) -> JsonValue {
     object! {
       "Binary": {
         left: self.visit_expr(ast, binary.left),
@@ -123,7 +127,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_unary(&mut self, ast: &AST, unary: &expr::Unary) -> JsonValue {
+  fn visit_unary(&mut self, ast: &AST, unary: &expr::Unary, _: ExprHandle) -> JsonValue {
     object! {
       "Unary": {
         "operator": unary.operator,
@@ -132,7 +136,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_lambda(&mut self, ast: &AST, lambda: &expr::Lambda) -> JsonValue {
+  fn visit_lambda(&mut self, ast: &AST, lambda: &expr::Lambda, _: ExprHandle) -> JsonValue {
     object! {
       "Lambda": {
         "parameter_names": lambda.parameter_names.clone(),
@@ -143,7 +147,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_fn_call(&mut self, ast: &AST, fn_call: &expr::FnCall) -> JsonValue {
+  fn visit_fn_call(&mut self, ast: &AST, fn_call: &expr::FnCall, _: ExprHandle) -> JsonValue {
     object! {
       "FnCall": {
         "func": self.visit_expr(ast, fn_call.func),
@@ -152,7 +156,7 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_dot(&mut self, ast: &AST, dot: &Dot) -> JsonValue {
+  fn visit_dot(&mut self, ast: &AST, dot: &Dot, _: ExprHandle) -> JsonValue {
     object! {
       "Dot": {
         lhs: self.visit_expr(ast, dot.lhs),
@@ -161,7 +165,12 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_constructor(&mut self, ast: &AST, constructor: &expr::Construct) -> JsonValue {
+  fn visit_constructor(
+    &mut self,
+    ast: &AST,
+    constructor: &expr::Construct,
+    _: ExprHandle,
+  ) -> JsonValue {
     object! {
       "Constructor": {
         "type_name": constructor.type_name,
@@ -171,8 +180,8 @@ impl ExprVisitor<JsonValue> for ASTJSONPrinter {
   }
 }
 
-impl StmtVisitor<JsonValue> for ASTJSONPrinter {
-  fn visit_var_decl(&mut self, ast: &AST, var_decl: &stmt::VarDecl) -> JsonValue {
+impl StmtVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
+  fn visit_var_decl(&mut self, ast: &AST, var_decl: &stmt::VarDecl, _: StmtHandle) -> JsonValue {
     object! {
       "VarDecl": {
         "name": var_decl.name,
@@ -182,7 +191,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_stmt_expr(&mut self, ast: &AST, expr: &stmt::StmtExpr) -> JsonValue {
+  fn visit_stmt_expr(&mut self, ast: &AST, expr: &stmt::StmtExpr, _: StmtHandle) -> JsonValue {
     object! {
       "StmtExpr": {
         "expr": self.visit_expr(ast, expr.expr),
@@ -190,7 +199,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_block(&mut self, ast: &AST, block: &stmt::Block) -> JsonValue {
+  fn visit_block(&mut self, ast: &AST, block: &stmt::Block, _: StmtHandle) -> JsonValue {
     object! {
       "Block": {
         "statements": stmt_list_to_json(&block.statements, ast)
@@ -198,7 +207,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_if_branch(&mut self, ast: &AST, if_branch: &stmt::IfBranch) -> JsonValue {
+  fn visit_if_branch(&mut self, ast: &AST, if_branch: &stmt::IfBranch, _: StmtHandle) -> JsonValue {
     let else_branch = if let Some(stmt) = if_branch.else_branch {
       self.visit_stmt(ast, stmt)
     } else {
@@ -213,7 +222,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_while(&mut self, ast: &AST, while_stmt: &stmt::While) -> JsonValue {
+  fn visit_while(&mut self, ast: &AST, while_stmt: &stmt::While, _: StmtHandle) -> JsonValue {
     object! {
       "While": {
         "condition": self.visit_expr(ast, while_stmt.condition),
@@ -226,6 +235,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     &mut self,
     ast: &AST,
     function_definition: &stmt::FunctionDefinition,
+    _: StmtHandle,
   ) -> JsonValue {
     object! {
       "FunctionDefinition": {
@@ -242,6 +252,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     &mut self,
     ast: &AST,
     function_declaration: &stmt::FunctionDeclaration,
+    _: StmtHandle,
   ) -> JsonValue {
     object! {
         "FunctionDeclaration": {
@@ -257,6 +268,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     &mut self,
     ast: &AST,
     extern_function: &stmt::ExternFunction,
+    _: StmtHandle,
   ) -> JsonValue {
     object! {
       "ExternalFunction": {
@@ -268,11 +280,11 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_break(&mut self, _ast: &AST) -> JsonValue {
+  fn visit_break(&mut self, _ast: &AST, _: StmtHandle) -> JsonValue {
     JsonValue::String("Break".to_string())
   }
 
-  fn visit_return(&mut self, ast: &AST, return_stmt: &stmt::Return) -> JsonValue {
+  fn visit_return(&mut self, ast: &AST, return_stmt: &stmt::Return, _: StmtHandle) -> JsonValue {
     let ret_expr = if let Some(expr) = return_stmt.expr {
       self.visit_expr(ast, expr)
     } else {
@@ -285,7 +297,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_struct(&mut self, ast: &AST, struct_stmt: &stmt::Struct) -> JsonValue {
+  fn visit_struct(&mut self, ast: &AST, struct_stmt: &stmt::Struct, _: StmtHandle) -> JsonValue {
     object! {
       "Struct": {
         "name": struct_stmt.name,
@@ -295,7 +307,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_import(&mut self, _ast: &AST, import: &stmt::Import) -> JsonValue {
+  fn visit_import(&mut self, _ast: &AST, import: &stmt::Import, _: StmtHandle) -> JsonValue {
     object! {
       "Import": {
         "module_name": import.module_name
@@ -303,7 +315,7 @@ impl StmtVisitor<JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_module_decl(&mut self, ast: &AST, module_decl: &ModuleDecl) -> JsonValue {
+  fn visit_module_decl(&mut self, ast: &AST, module_decl: &ModuleDecl, _: StmtHandle) -> JsonValue {
     object! {
       "ModuleDecl": {
         "name": module_decl.name
@@ -349,12 +361,20 @@ impl ParsedTypeVisitor<JsonValue> for ASTJSONPrinter {
 
 impl ASTJSONPrinter {
   pub fn print_to_string(ast: &AST) -> String {
-    let program = ProgramVisitor::new(ASTJSONPrinter {}, ast).collect::<Vec<_>>();
+    let program = ast
+      .get_program()
+      .iter()
+      .map(|s| ASTJSONPrinter {}.visit_stmt(ast, *s))
+      .collect::<Vec<_>>();
     json::stringify_pretty(program, 1)
   }
 
   pub fn to_json(ast: &AST) -> JsonValue {
-    let program = ProgramVisitor::new(ASTJSONPrinter {}, ast).collect::<Vec<_>>();
+    let program = ast
+      .get_program()
+      .iter()
+      .map(|s| ASTJSONPrinter {}.visit_stmt(ast, *s))
+      .collect::<Vec<_>>();
     JsonValue::Array(program)
   }
 }

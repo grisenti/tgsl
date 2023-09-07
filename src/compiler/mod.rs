@@ -1,6 +1,8 @@
 use crate::compiler::ast::json::ASTJSONPrinter;
 use crate::compiler::ast::AST;
 use crate::compiler::errors::ErrorPrinter;
+use crate::compiler::global_env::GlobalEnv;
+use crate::compiler::semantics::SemanticChecker;
 use std::collections::HashMap;
 
 use self::{
@@ -10,14 +12,16 @@ use self::{
 };
 
 pub mod ast;
+mod codegen;
 pub mod errors;
-//mod global_env;
+mod global_env;
 pub mod identifier;
 mod lexer;
-
+mod operators;
+mod overload_set;
 mod parser;
-//mod semantics;
-//mod types;
+mod semantics;
+mod types;
 
 /*pub struct CompiledModule {
   pub module_id: Option<ModuleId>,
@@ -27,7 +31,7 @@ mod parser;
 }*/
 
 pub struct Compiler {
-  //global_env: GlobalEnv,
+  global_env: GlobalEnv,
 }
 
 impl Compiler {
@@ -50,14 +54,11 @@ impl Compiler {
       .collect()
   }
 
-  pub fn compile<'src>(&mut self, source: &'src str) -> Result<AST<'src>, String> {
-    match Parser::parse_program(source) {
-      Ok(ast) => {
-        println!("{}", ASTJSONPrinter::print_to_string(&ast));
-        Ok(ast)
-      }
-      Err(errs) => Err(ErrorPrinter::to_string(&errs, source)),
-    }
+  pub fn compile(&mut self, source: &str) -> Result<(), Vec<CompilerError>> {
+    let ast = Parser::parse_program(source)?;
+    println!("{}", ASTJSONPrinter::print_to_string(&ast));
+    SemanticChecker::check_program(&ast, &self.global_env)?;
+    Ok(())
 
     /*
     let parsed_module = Parser::parse(source, &self.global_env)?;
@@ -78,7 +79,7 @@ impl Compiler {
 
   pub fn new() -> Self {
     Self {
-      //global_env: GlobalEnv::new(),
+      global_env: GlobalEnv::new(),
     }
   }
 }

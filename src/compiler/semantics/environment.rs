@@ -1,7 +1,11 @@
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::task::ready;
 
+use crate::compiler::errors::CompilerResult;
 use crate::compiler::identifier::{FunctionId, OverloadId};
 use crate::compiler::overload_set::{OverloadSet, ResolvedOverload};
+use crate::compiler::types::{FunctionSignature, Type};
 use crate::compiler::{
   errors::ge_err,
   global_env::{GlobalEnv, Struct},
@@ -9,8 +13,6 @@ use crate::compiler::{
     ExternId, GlobalIdentifier, GlobalVarId, Identifier, ModuleId, StructId, VariableIdentifier,
   },
 };
-
-use super::*;
 
 pub enum ResolvedIdentifier {
   UnresolvedOverload(OverloadId),
@@ -39,6 +41,26 @@ struct Function {
   captures: Vec<CaptureId>,
   return_type: Option<Type>,
 }
+
+pub enum DeclarationError {
+  AlreadyDefined,
+  TooManyLocalNames,
+}
+
+pub type DeclarationResult<T> = Result<T, DeclarationError>;
+
+pub enum ImportError {
+  NameConflict,
+  NotAValidModule,
+}
+
+pub type ImportResult = Result<(), ImportError>;
+
+pub enum NameError {
+  UndeclaredName,
+}
+
+pub type NameResult<T> = Result<T, NameError>;
 
 pub struct Environment<'src> {
   global_env: &'src GlobalEnv,
@@ -114,7 +136,7 @@ impl<'src> Environment<'src> {
     (capture_id, &local.type_)
   }
 
-  fn get_global(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<ResolvedIdentifier> {
+  fn get_global(&mut self, name: &str) -> NameResult<ResolvedIdentifier> {
     if let Some(&global_variable) = self.global_names.get(name) {
       let type_ = match global_variable {
         GlobalIdentifier::Variable(var_id) => {
@@ -142,25 +164,20 @@ impl<'src> Environment<'src> {
         type_: type_.clone(),
       })
     } else {
-      Err(ge_err::undeclared_global(name_sr))
+      Err(NameError::UndeclaredName)
     }
   }
 
-  fn declare_global(
-    &mut self,
-    name: &str,
-    name_sr: SourceRange,
-    global_id: GlobalIdentifier,
-  ) -> CompilerResult<()> {
+  fn declare_global(&mut self, name: &str, global_id: GlobalIdentifier) -> DeclarationResult<()> {
     if let Entry::Vacant(e) = self.global_names.entry(name.to_string()) {
       e.insert(global_id);
       Ok(())
     } else {
-      Err(ge_err::identifier_redeclaration(name_sr, name))
+      Err(DeclarationError::AlreadyDefined)
     }
   }
 
-  pub fn get_id(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<ResolvedIdentifier> {
+  pub fn get_id(&mut self, name: &str) -> NameResult<ResolvedIdentifier> {
     if let Some(local) = self.find_local(name) {
       let (local_id, type_) = self.capture(local);
       Ok(ResolvedIdentifier::ResolvedIdentifier {
@@ -168,31 +185,24 @@ impl<'src> Environment<'src> {
         type_: type_.clone(),
       })
     } else {
-      self.get_global(name, name_sr)
+      self.get_global(name)
     }
   }
 
-  pub fn get_variable_id(
-    &mut self,
-    name: &str,
-    name_sr: SourceRange,
-  ) -> CompilerResult<(VariableIdentifier, &Type)> {
+  pub fn get_variable_id(&mut self, name: &str) -> NameResult<(VariableIdentifier, &Type)> {
     if let Some(local) = self.find_local(name) {
       Ok(self.capture(local))
+    } else if let Some(GlobalIdentifier::Variable(id)) = self.global_names.get(name).copied() {
+      Ok((
+        id.into(),
+        &self.module_global_variables_types[id.get_id() as usize],
+      ))
     } else {
-      let id = self.global_names.get(name).copied();
-      if let Some(GlobalIdentifier::Variable(id)) = id {
-        Ok((
-          id.into(),
-          &self.module_global_variables_types[id.get_id() as usize],
-        ))
-      } else {
-        Err(ge_err::undeclared_global(name_sr))
-      }
+      Err(NameError::UndeclaredName)
     }
   }
 
-  pub fn get_struct_id(&mut self, name: &str, _name_sr: SourceRange) -> CompilerResult<StructId> {
+  pub fn get_struct_id(&mut self, name: &str) -> CompilerResult<StructId> {
     let id = self.global_names.get(name).copied();
     if let Some(GlobalIdentifier::Struct(id)) = id {
       Ok(id)
@@ -204,17 +214,12 @@ impl<'src> Environment<'src> {
   pub fn define_global_function(
     &mut self,
     name: &str,
-    name_sr: SourceRange,
     signature: FunctionSignature,
-  ) -> CompilerResult<FunctionId> {
-    self.declare_global_function(name, name_sr, signature)
+  ) -> NameResult<FunctionId> {
+    self.declare_global_function(name, signature)
   }
 
-  fn get_or_create_overload_id(
-    &mut self,
-    name: &str,
-    name_sr: SourceRange,
-  ) -> CompilerResult<OverloadId> {
+  fn get_or_create_overload_id(&mut self, name: &str) -> NameResult<OverloadId> {
     if let Some(id) = self.global_names.get(name) {
       if let GlobalIdentifier::OverloadId(overload_id) = id {
         Ok(*overload_id)
@@ -234,10 +239,9 @@ impl<'src> Environment<'src> {
   pub fn declare_global_function(
     &mut self,
     name: &str,
-    name_sr: SourceRange,
     signature: FunctionSignature,
-  ) -> CompilerResult<FunctionId> {
-    let overload_id = self.get_or_create_overload_id(name, name_sr)?;
+  ) -> NameResult<FunctionId> {
+    let overload_id = self.get_or_create_overload_id(name)?;
     if let Some(overload) = &self.overloads[overload_id as usize].find(signature.get_parameters()) {
       if overload.function_signature.get_return_type() != signature.get_return_type() {
         panic!()
@@ -270,14 +274,13 @@ impl<'src> Environment<'src> {
   pub fn define_struct(
     &mut self,
     name: &str,
-    name_sr: SourceRange,
     member_names: Vec<String>,
     member_types: Vec<Type>,
-  ) -> CompilerResult<StructId> {
+  ) -> DeclarationResult<StructId> {
     assert_eq!(member_types.len(), member_names.len());
 
     let id = StructId::relative(self.module_structs.len() as u32).into_public();
-    self.declare_global(name, name_sr, id.into())?;
+    self.declare_global(name, id.into())?;
     self.module_structs.push(Some(Struct::new(
       name.to_string(),
       member_names,
@@ -289,11 +292,10 @@ impl<'src> Environment<'src> {
   fn define_local_variable(
     &mut self,
     name: &'src str,
-    name_sr: SourceRange,
     var_type: Type,
-  ) -> CompilerResult<VariableIdentifier> {
+  ) -> DeclarationResult<VariableIdentifier> {
     if self.last_local_id == u8::MAX {
-      return Err(parser_err::too_many_local_names(name_sr));
+      return Err(DeclarationError::TooManyLocalNames);
     }
     let id = self.last_local_id;
     let local = Local {
@@ -327,18 +329,17 @@ impl<'src> Environment<'src> {
   pub fn define_variable(
     &mut self,
     name: &'src str,
-    name_sr: SourceRange,
     var_type: Type,
-  ) -> CompilerResult<VariableIdentifier> {
+  ) -> DeclarationResult<VariableIdentifier> {
     if self.is_local_in_current_scope(name) {
-      Err(parser_err::same_scope_name_redeclaration(name_sr, name))
+      Err(DeclarationError::AlreadyDefined)
     } else if self.in_global_scope() {
       let id = GlobalVarId::relative(self.module_global_variables_types.len() as u32).into_public();
-      self.declare_global(name, name_sr, id.into())?;
+      self.declare_global(name, id.into())?;
       self.module_global_variables_types.push(var_type);
       Ok(VariableIdentifier::Global(id))
     } else {
-      self.define_local_variable(name, name_sr, var_type)
+      self.define_local_variable(name, var_type)
     }
   }
 
@@ -395,27 +396,29 @@ impl<'src> Environment<'src> {
       .collect()
   }
 
-  fn ensure_name_available(&self, _name: &str, _name_sr: SourceRange) -> CompilerResult<()> {
+  fn ensure_name_available(&self, _name: &str) -> CompilerResult<()> {
     Ok(())
   }
 
   pub fn declare_extern_function(
     &mut self,
     name: &str,
-    name_sr: SourceRange,
     function_signature: FunctionSignature,
-  ) -> CompilerResult<ExternId> {
+  ) -> DeclarationResult<ExternId> {
     let id = ExternId::relative(self.extern_function_types.len() as u32).into_public();
-    self.declare_global(name, name_sr, GlobalIdentifier::ExternFunction(id))?;
+    self.declare_global(name, GlobalIdentifier::ExternFunction(id))?;
     self
       .extern_function_types
       .push(Type::Function(function_signature));
     Ok(id)
   }
 
-  pub fn import_module(&mut self, name: &str, name_sr: SourceRange) -> CompilerResult<ModuleId> {
-    let module_id = self.global_env.get_module_id(name, name_sr)?;
-    let module = self.global_env.get_module(module_id);
+  pub fn import_module(&mut self, name: &str) -> ImportResult {
+    let module = if let Some(module_id) = self.global_env.get_module(name) {
+      module_id
+    } else {
+      return Err(ImportError::NotAValidModule);
+    };
     // FIXME: does not check for double declarations
     for (name, global_id) in &module.global_names {
       match global_id {
@@ -447,7 +450,7 @@ impl<'src> Environment<'src> {
         }
       }
     }
-    Ok(module_id)
+    Ok(())
   }
 
   pub fn new(global_env: &'src GlobalEnv) -> Self {

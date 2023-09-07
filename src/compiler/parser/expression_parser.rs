@@ -200,10 +200,19 @@ impl<'src> Parser<'src> {
     if self.match_next(Token::Basic('=')).is_some() {
       let rhs = self.parse_binary_operation(0);
       let expr_end = rhs.get_source_range(&self.ast);
-      self.ast.add_expression(
-        expr::Assignment { lhs, rhs },
-        SourceRange::combine(expr_start, expr_end),
-      )
+      let expr_sr = SourceRange::combine(expr_start, expr_end);
+      if let Expr::Id(id) = lhs.get_expr(&self.ast) {
+        self.ast.add_expression(
+          expr::Assignment {
+            var_name: id.id,
+            rhs,
+          },
+          expr_sr,
+        )
+      } else {
+        self.emit_error(parser_err::lvalue_assignment(expr_sr));
+        ExprHandle::INVALID
+      }
     } else {
       lhs
     }
