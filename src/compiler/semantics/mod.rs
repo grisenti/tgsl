@@ -1,7 +1,7 @@
 use crate::compiler::ast::expression::expr;
 use crate::compiler::ast::parsed_type::ParsedFunctionType;
 use crate::compiler::ast::visitor::{ParsedTypeVisitor, StmtVisitor};
-use crate::compiler::ast::{ExprHandle, AST};
+use crate::compiler::ast::{ExprHandle, StmtHandle, AST};
 use crate::compiler::codegen::bytecode::ConstantValue;
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::errors::{sema_err, CompilerError};
@@ -9,6 +9,7 @@ use crate::compiler::global_env::{GlobalEnv, Struct};
 use crate::compiler::identifier::{Identifier, StructId, VariableIdentifier};
 use crate::compiler::lexer::SourceRange;
 use crate::compiler::semantics::environment::{DeclarationError, Environment, ResolvedIdentifier};
+use crate::compiler::semantics::statement_semantics::ReturnType;
 use crate::compiler::types::Type;
 
 mod environment;
@@ -54,6 +55,18 @@ impl<'a> SemanticChecker<'a> {
   fn start_function(&mut self, name: &str) {}
 
   fn end_function(&mut self) {}
+
+  fn visit_statements(
+    &mut self,
+    statements: &[StmtHandle],
+    statements_sr: SourceRange,
+  ) -> ReturnType {
+    todo!()
+  }
+
+  fn visit_function_body(&mut self, statements: &[StmtHandle], statements_sr: SourceRange) {
+    todo!()
+  }
 
   fn new_variable(&mut self, name: &'a str, type_: Type, sr: SourceRange) -> VariableIdentifier {
     match self.env.define_variable(name, type_) {

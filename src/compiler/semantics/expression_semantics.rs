@@ -205,9 +205,13 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     }
   }
 
-  fn visit_lambda(&mut self, ast: &'a AST, lambda: &Lambda, expr_handle: ExprHandle) -> Type {
-    todo!()
-    /*let parameter_types = lambda
+  fn visit_lambda(
+    &mut self,
+    ast: &'a AST<'a>,
+    lambda: &Lambda<'a>,
+    expr_handle: ExprHandle,
+  ) -> Type {
+    let parameter_types = lambda
       .parameter_types
       .iter()
       .map(|t| self.visit_parsed_type(ast, *t))
@@ -219,11 +223,9 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     for (name, type_) in lambda.parameter_names.iter().zip(&parameter_types) {
       self.new_variable(name, type_.clone(), expr_sr);
     }
-    for stmt in &lambda.body {
-      self.visit_stmt(ast, *stmt);
-    }
+    self.visit_function_body(&lambda.body, expr_sr);
     self.end_function();
-    return_type*/
+    return_type
   }
 
   fn visit_fn_call(&mut self, ast: &'a AST, fn_call: &FnCall, expr_handle: ExprHandle) -> Type {
