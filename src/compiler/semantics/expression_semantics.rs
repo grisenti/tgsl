@@ -9,7 +9,7 @@ use crate::compiler::lexer::{SourceRange, Token};
 use crate::compiler::operators::{BinaryOperator, UnaryOperator};
 use crate::compiler::semantics::environment::ResolvedIdentifier;
 use crate::compiler::semantics::SemanticChecker;
-use crate::compiler::types::Type;
+use crate::compiler::types::{FunctionSignature, Type};
 
 #[rustfmt::skip]
 const BINARY_OPERATORS: &[(Token, Type, Type, Type, BinaryOperator)] = &[
@@ -213,21 +213,21 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     lambda: &Lambda<'a>,
     expr_handle: ExprHandle,
   ) -> Type {
-    let parameter_types = lambda
-      .parameter_types
-      .iter()
-      .map(|t| self.visit_parsed_type(ast, *t))
-      .collect::<Vec<_>>();
+    let parameter_types = self.convert_parameter_types(&lambda.parameter_types);
     let return_type = self.visit_parsed_type(ast, lambda.return_type);
     let expr_sr = expr_handle.get_source_range(ast);
 
-    self.start_function("<lambda>");
-    for (name, type_) in lambda.parameter_names.iter().zip(&parameter_types) {
-      self.new_variable(name, type_.clone(), expr_sr);
-    }
+    self.start_lambda(return_type.clone());
+    self.declare_function_parameters(&lambda.parameter_names, &parameter_types, expr_sr);
     self.visit_function_body(&lambda.body, expr_sr);
-    self.end_function();
-    return_type
+    let (function_id, captures) = self.end_lambda();
+    unsafe {
+      self
+        .code()
+        .push_constant(ConstantValue::FunctionId(function_id));
+      self.code().maybe_create_closure(&captures);
+    };
+    FunctionSignature::new(parameter_types, return_type).into()
   }
 
   fn visit_fn_call(&mut self, ast: &'a AST, fn_call: &FnCall, expr_handle: ExprHandle) -> Type {

@@ -2,9 +2,11 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::task::ready;
 
+use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::errors::CompilerResult;
 use crate::compiler::identifier::{FunctionId, OverloadId};
 use crate::compiler::overload_set::{OverloadSet, ResolvedOverload};
+use crate::compiler::semantics::ReturnKind;
 use crate::compiler::types::{FunctionSignature, Type};
 use crate::compiler::{
   errors::ge_err,
@@ -40,9 +42,16 @@ struct CaptureId {
 
 struct Function {
   captures: Vec<CaptureId>,
-  return_type: Option<Type>,
+  return_type: Type,
+  code: FunctionCode,
 }
 
+pub struct FinalizedFunction {
+  pub captures: Vec<VariableIdentifier>,
+  pub code: FunctionCode,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum DeclarationError {
   AlreadyDefined,
   TooManyLocalNames,
@@ -50,6 +59,7 @@ pub enum DeclarationError {
 
 pub type DeclarationResult<T> = Result<T, DeclarationError>;
 
+#[derive(Debug, Clone, Copy)]
 pub enum ImportError {
   NameConflict,
   NotAValidModule,
@@ -57,6 +67,7 @@ pub enum ImportError {
 
 pub type ImportResult = Result<(), ImportError>;
 
+#[derive(Debug, Clone, Copy)]
 pub enum NameError {
   UndeclaredName,
 }
@@ -311,20 +322,18 @@ impl<'src> Environment<'src> {
     Ok(VariableIdentifier::Local(id))
   }
 
-  pub fn define_function_return_type(&mut self, type_: Type) {
-    self
-      .functions_declaration_stack
-      .last_mut()
-      .unwrap()
-      .return_type = Some(type_);
-  }
-
-  pub fn get_function_return_type(&self) -> Option<&Type> {
+  pub fn get_current_function_return_type(&self) -> Option<&Type> {
     self
       .functions_declaration_stack
       .last()
-      .map(|func| func.return_type.as_ref())
-      .flatten()
+      .map(|func| &func.return_type)
+  }
+
+  pub fn get_current_function_code(&mut self) -> Option<&mut FunctionCode> {
+    self
+      .functions_declaration_stack
+      .last_mut()
+      .map(|func| &mut func.code)
   }
 
   pub fn define_variable(
@@ -366,17 +375,18 @@ impl<'src> Environment<'src> {
     self.names_in_current_scope = 0;
   }
 
-  pub fn push_function(&mut self) {
+  pub fn push_function(&mut self, name: String, return_type: Type) {
     self.names_in_current_scope = 0;
     self.last_local_id = 0;
     self.push_scope();
     self.functions_declaration_stack.push(Function {
       captures: Vec::new(),
-      return_type: None,
+      return_type,
+      code: FunctionCode::new(name),
     })
   }
 
-  pub fn pop_function(&mut self) -> Vec<VariableIdentifier> {
+  pub fn pop_function(&mut self) -> FinalizedFunction {
     assert!(!self.functions_declaration_stack.is_empty());
 
     self.pop_scope();
@@ -387,14 +397,15 @@ impl<'src> Environment<'src> {
       self.last_local_id = 0;
       self.names_in_current_scope = 0;
     }
-    self
+    let function = self
       .functions_declaration_stack
       .pop()
-      .unwrap()
-      .captures
-      .iter()
-      .map(|c| c.id)
-      .collect()
+      .expect("no functions to pop");
+    let captures = function.captures.iter().map(|c| c.id).collect();
+    FinalizedFunction {
+      captures,
+      code: function.code,
+    }
   }
 
   fn ensure_name_available(&self, _name: &str) -> CompilerResult<()> {

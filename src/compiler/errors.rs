@@ -265,25 +265,13 @@ pub mod ty_err {
   );
 
   def_err!(
-    return_outside_of_function,
-    "TY014",
-    "cannot have a return statement outside of a function"
-  );
-
-  def_err!(
-    no_unconditional_return,
-    "TY015",
-    "function requires one unconditional return type"
-  );
-
-  def_err!(
     incorrect_conditional_type,
-    "TY016",
+    "TY014",
     "cannot use value of type {} in a condition",
     conditional_type: String
   );
 
-  def_err!(no_available_oveload, "TY017", "no available overload");
+  def_err!(no_available_oveload, "TY015", "no available overload");
 }
 
 pub mod ge_err {
@@ -351,6 +339,18 @@ pub mod sema_err {
     "SE004",
     "identifier '{}' is not a variable",
     name: &str
+  );
+
+  def_err!(
+    no_unconditional_return,
+    "SE005",
+    "function requires one unconditional return type"
+  );
+
+  def_err!(
+    return_outside_of_function,
+    "SE006",
+    "cannot have a return statement outside of a function"
   );
 }
 

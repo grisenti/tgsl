@@ -4,51 +4,25 @@ use crate::compiler::ast::statement::stmt::{
 };
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{StmtHandle, AST};
+use crate::compiler::codegen::bytecode::ConstantValue::FunctionId;
 use crate::compiler::codegen::bytecode::OpCode;
-use crate::compiler::errors::{ty_err, CompilerResult};
+use crate::compiler::errors::{sema_err, ty_err, CompilerResult};
 use crate::compiler::lexer::SourceRange;
-use crate::compiler::semantics::SemanticChecker;
-use crate::compiler::types::Type;
+use crate::compiler::semantics::{ReturnKind, SemanticChecker};
+use crate::compiler::types::{FunctionSignature, Type};
 
-pub enum ReturnType {
-  Conditional(Type),
-  Unconditional(Type),
-  None,
-}
-
-impl SemanticChecker<'_> {
-  fn check_return_types(&mut self, t1: Type, t2: Type, sr: SourceRange) -> Type {
-    todo!()
-  }
-  fn combine_return_types(&mut self, a: ReturnType, b: ReturnType, sr: SourceRange) -> ReturnType {
-    match (a, b) {
-      (ReturnType::None, other) | (other, ReturnType::None) => other,
-      (ReturnType::Unconditional(unconditional), ReturnType::Conditional(conditional))
-      | (ReturnType::Conditional(conditional), ReturnType::Unconditional(unconditional)) => {
-        ReturnType::Unconditional(self.check_return_types(conditional, unconditional, sr))
-      }
-      (ReturnType::Conditional(t1), ReturnType::Conditional(t2)) => {
-        ReturnType::Conditional(self.check_return_types(t1, t2, sr))
-      }
-      (ReturnType::Unconditional(t1), ReturnType::Unconditional(t2)) => {
-        ReturnType::Unconditional(self.check_return_types(t1, t2, sr))
-      }
-    }
-  }
-}
-
-impl<'a> StmtVisitor<'a, 'a, ReturnType> for SemanticChecker<'a> {
+impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
   fn visit_var_decl(
     &mut self,
     ast: &'a AST,
     var_decl: &'a VarDecl<'a>,
-    expr_handle: StmtHandle,
-  ) -> ReturnType {
+    stmt_handle: StmtHandle,
+  ) -> ReturnKind {
     let var_type = self.visit_expr(ast, var_decl.init_expr);
     let specified_type = self.visit_parsed_type(ast, var_decl.specified_type);
-    let stmt_sr = expr_handle.get_source_range(ast);
+    let stmt_sr = stmt_handle.get_source_range(ast);
     if var_type.is_error() {
-      return ReturnType::None;
+      return ReturnKind::None;
     }
     if specified_type != Type::Nothing && var_type != specified_type {
       self.emit_error(ty_err::type_specifier_expression_mismatch(
@@ -56,27 +30,21 @@ impl<'a> StmtVisitor<'a, 'a, ReturnType> for SemanticChecker<'a> {
         var_type.print_pretty(),
         specified_type.print_pretty(),
       ));
-      return ReturnType::None;
+      return ReturnKind::None;
     }
     let id = self.new_variable(var_decl.name, var_type, stmt_sr);
     unsafe { self.code().set_variable(id) };
-    ReturnType::None
+    ReturnKind::None
   }
 
-  fn visit_stmt_expr(
-    &mut self,
-    ast: &'a AST,
-    expr: &StmtExpr,
-    expr_handle: StmtHandle,
-  ) -> ReturnType {
+  fn visit_stmt_expr(&mut self, ast: &'a AST, expr: &StmtExpr, _: StmtHandle) -> ReturnKind {
     self.visit_expr(ast, expr.expr);
-    ReturnType::None
+    ReturnKind::None
   }
 
-  fn visit_block(&mut self, ast: &'a AST, block: &Block, stmt_handle: StmtHandle) -> ReturnType {
-    let stmt_sr = stmt_handle.get_source_range(ast);
+  fn visit_block(&mut self, ast: &'a AST, block: &Block, stmt_handle: StmtHandle) -> ReturnKind {
     self.env.push_scope();
-    let return_type = self.visit_statements(&block.statements, stmt_sr);
+    let return_type = self.visit_statements(&block.statements);
     let locals = self.env.pop_scope();
     (0..=locals).for_each(|_| unsafe { self.code().push_op(OpCode::Pop) });
     return_type
@@ -87,7 +55,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnType> for SemanticChecker<'a> {
     ast: &'a AST,
     if_branch: &IfBranch,
     expr_handle: StmtHandle,
-  ) -> ReturnType {
+  ) -> ReturnKind {
     todo!()
   }
 
@@ -96,47 +64,107 @@ impl<'a> StmtVisitor<'a, 'a, ReturnType> for SemanticChecker<'a> {
     ast: &'a AST,
     while_node: &While,
     expr_handle: StmtHandle,
-  ) -> ReturnType {
+  ) -> ReturnKind {
     todo!()
   }
 
   fn visit_function_definition(
     &mut self,
     ast: &'a AST,
-    function_definition: &FunctionDefinition,
-    expr_handle: StmtHandle,
-  ) -> ReturnType {
-    todo!()
+    function_definition: &FunctionDefinition<'a>,
+    stmt_handle: StmtHandle,
+  ) -> ReturnKind {
+    let parameter_types = self.convert_parameter_types(&function_definition.parameter_types);
+    let return_type = self.visit_parsed_type(ast, function_definition.return_type);
+    let function_signature = FunctionSignature::new(parameter_types.clone(), return_type);
+    let stmt_sr = stmt_handle.get_source_range(ast);
+
+    let function_id = self.start_function(function_definition.name, function_signature);
+    self.declare_function_parameters(
+      &function_definition.parameter_names,
+      &parameter_types,
+      stmt_sr,
+    );
+    self.visit_function_body(&function_definition.body, stmt_sr);
+    self.end_function(function_id);
+
+    ReturnKind::None
   }
 
   fn visit_function_declaration(
     &mut self,
     ast: &'a AST,
     function_declaration: &FunctionDeclaration,
-    expr_handle: StmtHandle,
-  ) -> ReturnType {
-    todo!()
+    stmt_handle: StmtHandle,
+  ) -> ReturnKind {
+    let parameter_types = self.convert_parameter_types(&function_declaration.parameter_types);
+    let return_type = self.visit_parsed_type(ast, function_declaration.return_type);
+    let _stmt_sr = stmt_handle.get_source_range(ast);
+
+    self
+      .env
+      .declare_global_function(
+        function_declaration.name,
+        FunctionSignature::new(parameter_types, return_type).into(),
+      )
+      .expect("error declaring function");
+
+    ReturnKind::None
   }
 
   fn visit_extern_function(
     &mut self,
     ast: &'a AST,
     extern_function: &ExternFunction,
-    expr_handle: StmtHandle,
-  ) -> ReturnType {
+    _: StmtHandle,
+  ) -> ReturnKind {
+    let parameter_types = self.convert_parameter_types(&extern_function.parameter_types);
+    let return_type = self.visit_parsed_type(ast, extern_function.return_type);
+
+    self
+      .env
+      .declare_extern_function(
+        extern_function.name,
+        FunctionSignature::new(parameter_types, return_type).into(),
+      )
+      .expect("error declaring extern function");
+
+    ReturnKind::None
+  }
+
+  fn visit_break(&mut self, ast: &'a AST, _: StmtHandle) -> ReturnKind {
     todo!()
   }
 
-  fn visit_break(&mut self, ast: &'a AST, expr_handle: StmtHandle) -> ReturnType {
-    todo!()
-  }
-
-  fn visit_return(&mut self, ast: &'a AST, return_stmt: &Return, _: StmtHandle) -> ReturnType {
-    if let Some(expr) = return_stmt.expr {
-      let return_type = self.visit_expr(ast, expr);
-      ReturnType::Unconditional(return_type)
+  fn visit_return(
+    &mut self,
+    ast: &'a AST,
+    return_stmt: &Return,
+    stmt_handle: StmtHandle,
+  ) -> ReturnKind {
+    let return_type = if let Some(expr) = return_stmt.expr {
+      self.visit_expr(ast, expr)
     } else {
-      ReturnType::Unconditional(Type::Nothing)
+      Type::Nothing
+    };
+    if let Some(required_return_type) = self.env.get_current_function_return_type() {
+      if !required_return_type.is_error()
+        && !return_type.is_error()
+        && *required_return_type != return_type
+      {
+        self.emit_error(ty_err::incorrect_return_type(
+          stmt_handle.get_source_range(ast),
+          return_type.print_pretty(),
+          required_return_type.print_pretty(),
+        ));
+      }
+      unsafe { self.code().push_op(OpCode::Return) };
+      ReturnKind::Unconditional
+    } else {
+      self.emit_error(sema_err::return_outside_of_function(
+        stmt_handle.get_source_range(ast),
+      ));
+      ReturnKind::None
     }
   }
 
@@ -145,11 +173,11 @@ impl<'a> StmtVisitor<'a, 'a, ReturnType> for SemanticChecker<'a> {
     ast: &'a AST,
     struct_stmt: &Struct,
     stmt_handle: StmtHandle,
-  ) -> ReturnType {
+  ) -> ReturnKind {
     todo!()
   }
 
-  fn visit_import(&mut self, ast: &'a AST, import: &Import, expr_handle: StmtHandle) -> ReturnType {
+  fn visit_import(&mut self, ast: &'a AST, import: &Import, expr_handle: StmtHandle) -> ReturnKind {
     todo!()
   }
 
@@ -158,7 +186,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnType> for SemanticChecker<'a> {
     ast: &'a AST,
     module_decl: &ModuleDecl,
     stmt_handle: StmtHandle,
-  ) -> ReturnType {
+  ) -> ReturnKind {
     todo!()
   }
 }
