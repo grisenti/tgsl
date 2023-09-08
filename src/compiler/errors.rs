@@ -274,41 +274,28 @@ pub mod ty_err {
   def_err!(no_available_oveload, "TY015", "no available overload");
 }
 
-pub mod ge_err {
+pub mod import_err {
   use super::{CompilerError, SourceRangeProvider};
 
   def_err!(
-    identifier_declare_in_multiple_modules,
-    "GE001",
-    "identifier '{}' declared in multiple imported modules",
-    name: &str
-  );
-
-  def_err!(
-    identifier_redeclaration,
-    "GE002",
-    "redeclaration of global identifier '{}'",
-    name: &str
-  );
-
-  def_err!(
-    undeclared_global,
-    "GE003",
-    "identifier was not declared in the current module"
-  );
-
-  def_err!(
     not_a_loaded_module,
-    "GE004",
+    "IE001",
     "'{}' is not a loaded module",
     module: &str
   );
 
   def_err!(
-    trying_to_redeclare_a_module,
-    "GE005",
-    "module '{}' was already declared",
-    module: &str
+    name_redeclaration,
+    "IE002",
+    "name '{}' from import was already defined",
+    name: String
+  );
+
+  def_err!(
+    overload_conflict,
+    "IE003",
+    "redefinition of overloaded function '{}'",
+    name: String
   );
 }
 

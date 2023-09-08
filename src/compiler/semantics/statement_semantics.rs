@@ -6,8 +6,9 @@ use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor}
 use crate::compiler::ast::{StmtHandle, AST};
 use crate::compiler::codegen::bytecode::ConstantValue::FunctionId;
 use crate::compiler::codegen::bytecode::OpCode;
-use crate::compiler::errors::{sema_err, ty_err, CompilerResult};
+use crate::compiler::errors::{import_err, sema_err, ty_err, CompilerResult};
 use crate::compiler::lexer::SourceRange;
+use crate::compiler::semantics::environment::ImportError;
 use crate::compiler::semantics::{ReturnKind, SemanticChecker};
 use crate::compiler::types::{FunctionSignature, Type};
 
@@ -178,7 +179,21 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
   }
 
   fn visit_import(&mut self, ast: &'a AST, import: &Import, expr_handle: StmtHandle) -> ReturnKind {
-    todo!()
+    match self.env.import_module(import.module_name) {
+      Err(ImportError::NotAValidModule) => self.errors.push(import_err::not_a_loaded_module(
+        expr_handle.get_source_range(ast),
+        import.module_name,
+      )),
+      Err(ImportError::NameRedefinition(name)) => self.errors.push(import_err::name_redeclaration(
+        expr_handle.get_source_range(ast),
+        name,
+      )),
+      Err(ImportError::OverloadRedefinition(name)) => self.errors.push(
+        import_err::overload_conflict(expr_handle.get_source_range(ast), name),
+      ),
+      Ok(()) => {}
+    }
+    ReturnKind::None
   }
 
   fn visit_module_decl(

@@ -1,19 +1,14 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::task::ready;
 
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::errors::CompilerResult;
 use crate::compiler::identifier::{FunctionId, OverloadId};
 use crate::compiler::overload_set::{OverloadSet, ResolvedOverload};
-use crate::compiler::semantics::ReturnKind;
 use crate::compiler::types::{FunctionSignature, Type};
 use crate::compiler::{
-  errors::ge_err,
   global_env::{GlobalEnv, Struct},
-  identifier::{
-    ExternId, GlobalIdentifier, GlobalVarId, Identifier, ModuleId, StructId, VariableIdentifier,
-  },
+  identifier::{ExternId, GlobalIdentifier, GlobalVarId, Identifier, StructId, VariableIdentifier},
 };
 
 pub enum ResolvedIdentifier<'a> {
@@ -59,9 +54,10 @@ pub enum DeclarationError {
 
 pub type DeclarationResult<T> = Result<T, DeclarationError>;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum ImportError {
-  NameConflict,
+  NameRedefinition(String),
+  OverloadRedefinition(String),
   NotAValidModule,
 }
 
@@ -431,7 +427,6 @@ impl<'src> Environment<'src> {
     } else {
       return Err(ImportError::NotAValidModule);
     };
-    // FIXME: does not check for double declarations
     for (name, global_id) in &module.global_names {
       match global_id {
         GlobalIdentifier::OverloadId(module_overload_id) => {
@@ -440,11 +435,11 @@ impl<'src> Environment<'src> {
               if !self.overloads[overload_id as usize]
                 .merge(&module.overloads[*module_overload_id as usize])
               {
-                panic!() // cannot merge
+                return Err(ImportError::OverloadRedefinition(name.clone()));
               }
               self.global_names.insert(name.clone(), global_id);
             } else {
-              panic!() // overload in one name is something else in this module
+              return Err(ImportError::NameRedefinition(name.clone()));
             }
           } else {
             let overload_id = self.overloads.len();
@@ -457,9 +452,12 @@ impl<'src> Environment<'src> {
             );
           }
         }
-        other => {
-          self.global_names.insert(name.clone(), *other);
-        }
+        other => match self.global_names.entry(name.clone()) {
+          Entry::Occupied(_) => return Err(ImportError::NameRedefinition(name.clone())),
+          Entry::Vacant(entry) => {
+            entry.insert(*other);
+          }
+        },
       }
     }
     Ok(())
