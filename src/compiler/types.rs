@@ -29,6 +29,17 @@ impl FunctionSignature {
     let return_type = self.signature.pop().unwrap();
     (self.signature, return_type)
   }
+
+  pub fn print_pretty(&self) -> String {
+    let parameters = self
+      .get_parameters()
+      .iter()
+      .map(|val| val.print_pretty())
+      .collect::<Vec<_>>()
+      .join(" ,");
+    let return_type = self.get_return_type().print_pretty();
+    format!("fn ({}) -> {}", parameters, return_type)
+  }
 }
 
 impl From<FunctionSignature> for Type {
@@ -58,16 +69,7 @@ impl Type {
 
   pub fn print_pretty(&self) -> String {
     match self {
-      Type::Function(signature) => {
-        let parameters = signature
-          .get_parameters()
-          .iter()
-          .map(|val| val.print_pretty())
-          .collect::<Vec<_>>()
-          .join(" ,");
-        let return_type = signature.get_return_type().print_pretty();
-        format!("fn ({}) -> {}", parameters, return_type)
-      }
+      Type::Function(signature) => signature.print_pretty(),
       other => format!("{:?}", other),
     }
   }
