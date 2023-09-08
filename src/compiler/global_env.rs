@@ -2,7 +2,6 @@ use crate::compiler::overload_set::OverloadSet;
 use core::panic;
 use std::collections::HashMap;
 
-use super::errors::{ge_err, CompilerResult};
 use super::identifier::{ExternId, GlobalIdentifier, GlobalVarId, ModuleId, StructId};
 use super::lexer::SourceRange;
 use super::types::Type;

@@ -39,6 +39,7 @@ pub struct SemanticChecker<'a> {
   errors: Vec<CompilerError>,
   checked_functions: Vec<FunctionCode>,
   global_code: FunctionCode,
+  module_name: Option<String>,
 }
 
 impl<'a> SemanticChecker<'a> {
@@ -52,6 +53,7 @@ impl<'a> SemanticChecker<'a> {
       errors: Vec::new(),
       checked_functions: Vec::new(),
       global_code: FunctionCode::new("<global>".to_string()),
+      module_name: None,
     };
     for stmt in ast.get_program() {
       checker.visit_stmt(ast, *stmt);

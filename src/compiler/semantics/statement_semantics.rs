@@ -178,18 +178,18 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     todo!()
   }
 
-  fn visit_import(&mut self, ast: &'a AST, import: &Import, expr_handle: StmtHandle) -> ReturnKind {
+  fn visit_import(&mut self, ast: &'a AST, import: &Import, stmt_handle: StmtHandle) -> ReturnKind {
     match self.env.import_module(import.module_name) {
       Err(ImportError::NotAValidModule) => self.errors.push(import_err::not_a_loaded_module(
-        expr_handle.get_source_range(ast),
+        stmt_handle.get_source_range(ast),
         import.module_name,
       )),
       Err(ImportError::NameRedefinition(name)) => self.errors.push(import_err::name_redeclaration(
-        expr_handle.get_source_range(ast),
+        stmt_handle.get_source_range(ast),
         name,
       )),
       Err(ImportError::OverloadRedefinition(name)) => self.errors.push(
-        import_err::overload_conflict(expr_handle.get_source_range(ast), name),
+        import_err::overload_conflict(stmt_handle.get_source_range(ast), name),
       ),
       Ok(()) => {}
     }
@@ -202,6 +202,15 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     module_decl: &ModuleDecl,
     stmt_handle: StmtHandle,
   ) -> ReturnKind {
-    todo!()
+    assert!(self.module_name.is_none());
+    if self.env.ensure_module_name_available(module_decl.name) {
+      self.module_name = Some(module_decl.name.to_string());
+    } else {
+      self.emit_error(import_err::module_already_declared(
+        stmt_handle.get_source_range(ast),
+        module_decl.name,
+      ))
+    }
+    ReturnKind::None
   }
 }

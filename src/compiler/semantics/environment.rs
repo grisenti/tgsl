@@ -404,8 +404,8 @@ impl<'src> Environment<'src> {
     }
   }
 
-  fn ensure_name_available(&self, _name: &str) -> CompilerResult<()> {
-    Ok(())
+  pub fn ensure_module_name_available(&self, name: &str) -> bool {
+    self.global_env.is_module_name_available(name)
   }
 
   pub fn declare_extern_function(

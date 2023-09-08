@@ -287,7 +287,7 @@ pub mod import_err {
   def_err!(
     name_redeclaration,
     "IE002",
-    "name '{}' from import was already defined",
+    "name '{}' was already defined",
     name: String
   );
 
@@ -296,6 +296,13 @@ pub mod import_err {
     "IE003",
     "redefinition of overloaded function '{}'",
     name: String
+  );
+
+  def_err!(
+    module_already_declared,
+    "IE004",
+    "module name '{}' is already used by another module",
+    name: &str
   );
 }
 
