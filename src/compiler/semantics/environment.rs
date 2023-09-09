@@ -314,6 +314,7 @@ impl<'src> Environment<'src> {
       type_: var_type,
     };
     self.last_local_id += 1;
+    self.names_in_current_scope += 1;
     self.locals.push(local);
     Ok(VariableIdentifier::Local(id))
   }
