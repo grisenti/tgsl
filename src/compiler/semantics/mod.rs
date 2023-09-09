@@ -233,14 +233,6 @@ impl<'a> SemanticChecker<'a> {
     (VariableIdentifier::Invalid, &Type::Error)
   }
 
-  fn get_struct_id(&mut self, name: &str, sr: SourceRange) -> StructId {
-    todo!()
-  }
-
-  fn get_struct(&mut self, struct_id: StructId, sr: SourceRange) -> Option<&Struct> {
-    todo!()
-  }
-
   unsafe fn generate_identifier_code(&mut self, id: Identifier) {
     match id {
       Identifier::Variable(var_id) => {
@@ -286,10 +278,15 @@ impl ParsedTypeVisitor<Type> for SemanticChecker<'_> {
   }
 
   fn visit_named(&mut self, ast: &AST, name: &str) -> Type {
-    todo!()
+    match self.env.get_struct_id(name) {
+      Ok(struct_it) => Type::Struct(struct_it),
+      Err(_) => panic!(),
+    }
   }
 
   fn visit_function(&mut self, ast: &AST, function: &ParsedFunctionType) -> Type {
-    todo!()
+    let parameters = self.convert_parameter_types(function.parameters());
+    let return_type = self.visit_parsed_type(ast, function.return_type());
+    FunctionSignature::new(parameters, return_type).into()
   }
 }

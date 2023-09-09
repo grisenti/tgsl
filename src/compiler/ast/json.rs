@@ -377,7 +377,7 @@ impl ParsedTypeVisitor<JsonValue> for ASTJSONPrinter {
   fn visit_function(&mut self, ast: &AST, function: &ParsedFunctionType) -> JsonValue {
     object! {
       "Function": {
-        "parameters": parsed_type_list_to_json(&function.signature(), ast),
+        "parameters": parsed_type_list_to_json(&function.parameters(), ast),
         "return_type": self.visit_parsed_type(ast, function.return_type()),
       }
     }

@@ -12,7 +12,7 @@ impl ParsedFunctionType {
     }
   }
 
-  pub fn signature(&self) -> &[TypeHandle] {
+  pub fn parameters(&self) -> &[TypeHandle] {
     &self.signature[0..self.signature.len() - 1]
   }
 
