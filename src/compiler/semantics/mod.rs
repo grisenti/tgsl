@@ -22,11 +22,21 @@ mod environment;
 mod expression_semantics;
 mod statement_semantics;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum ReturnKind {
   Conditional,
   Unconditional,
   None,
+}
+
+impl ReturnKind {
+  fn to_conditional(self) -> ReturnKind {
+    if self == ReturnKind::Unconditional {
+      ReturnKind::Conditional
+    } else {
+      self
+    }
+  }
 }
 
 fn combine_returns(current: ReturnKind, new: ReturnKind) -> ReturnKind {

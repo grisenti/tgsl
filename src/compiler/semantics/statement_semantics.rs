@@ -9,7 +9,7 @@ use crate::compiler::codegen::bytecode::OpCode;
 use crate::compiler::errors::{import_err, sema_err, ty_err, CompilerResult};
 use crate::compiler::lexer::SourceRange;
 use crate::compiler::semantics::environment::{DeclarationError, ImportError};
-use crate::compiler::semantics::{ReturnKind, SemanticChecker};
+use crate::compiler::semantics::{combine_returns, ReturnKind, SemanticChecker};
 use crate::compiler::types::{FunctionSignature, Type};
 
 impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
@@ -59,9 +59,29 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     &mut self,
     ast: &'a AST,
     if_branch: &IfBranch,
-    expr_handle: StmtHandle,
+    stmt_handle: StmtHandle,
   ) -> ReturnKind {
-    todo!()
+    let condition_type = self.visit_expr(ast, if_branch.condition);
+    if condition_type != Type::Bool {
+      self.emit_error(ty_err::incorrect_conditional_type(
+        stmt_handle.get_source_range(ast),
+        condition_type.print_pretty(),
+      ));
+      return ReturnKind::None;
+    }
+    let if_jump_point = unsafe { self.code().push_jump(OpCode::JumpIfFalsePop) };
+    let if_branch_return_kind = self.visit_stmt(ast, if_branch.true_branch).to_conditional();
+    let else_branch_return_kind = if let Some(stmt) = if_branch.else_branch {
+      let skip_else = unsafe { self.code().push_jump(OpCode::Jump) };
+      self.code().backpatch_current_instruction(if_jump_point);
+      let return_kind = self.visit_stmt(ast, stmt);
+      self.code().backpatch_current_instruction(skip_else);
+      return_kind
+    } else {
+      self.code().backpatch_current_instruction(if_jump_point);
+      ReturnKind::None
+    };
+    combine_returns(if_branch_return_kind, else_branch_return_kind)
   }
 
   fn visit_while(
@@ -106,13 +126,10 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     let return_type = self.visit_parsed_type(ast, function_declaration.return_type);
     let _stmt_sr = stmt_handle.get_source_range(ast);
 
-    self
-      .env
-      .declare_global_function(
-        function_declaration.name,
-        FunctionSignature::new(parameter_types, return_type).into(),
-      )
-      .expect("error declaring function");
+    self.declare_function(
+      function_declaration.name,
+      FunctionSignature::new(parameter_types, return_type).into(),
+    );
 
     ReturnKind::None
   }
