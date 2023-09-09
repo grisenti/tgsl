@@ -215,7 +215,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     lambda: &Lambda<'a>,
     expr_handle: ExprHandle,
   ) -> Type {
-    let parameter_types = self.convert_parameter_types(&lambda.parameter_types);
+    let parameter_types = self.convert_type_list(&lambda.parameter_types);
     let return_type = self.visit_parsed_type(ast, lambda.return_type);
     let expr_sr = expr_handle.get_source_range(ast);
 

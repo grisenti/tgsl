@@ -75,7 +75,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     function_definition: &FunctionDefinition<'a>,
     stmt_handle: StmtHandle,
   ) -> ReturnKind {
-    let parameter_types = self.convert_parameter_types(&function_definition.parameter_types);
+    let parameter_types = self.convert_type_list(&function_definition.parameter_types);
     let return_type = self.visit_parsed_type(ast, function_definition.return_type);
     let function_signature = FunctionSignature::new(parameter_types.clone(), return_type);
     let stmt_sr = stmt_handle.get_source_range(ast);
@@ -98,7 +98,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     function_declaration: &FunctionDeclaration,
     stmt_handle: StmtHandle,
   ) -> ReturnKind {
-    let parameter_types = self.convert_parameter_types(&function_declaration.parameter_types);
+    let parameter_types = self.convert_type_list(&function_declaration.parameter_types);
     let return_type = self.visit_parsed_type(ast, function_declaration.return_type);
     let _stmt_sr = stmt_handle.get_source_range(ast);
 
@@ -119,7 +119,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     extern_function: &ExternFunction,
     _: StmtHandle,
   ) -> ReturnKind {
-    let parameter_types = self.convert_parameter_types(&extern_function.parameter_types);
+    let parameter_types = self.convert_type_list(&extern_function.parameter_types);
     let return_type = self.visit_parsed_type(ast, extern_function.return_type);
 
     self
@@ -180,7 +180,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
       .iter()
       .map(|s| s.to_string())
       .collect();
-    let member_types = self.convert_parameter_types(&struct_stmt.member_types);
+    let member_types = self.convert_type_list(&struct_stmt.member_types);
     match self
       .env
       .define_struct(struct_stmt.name, member_names, member_types)

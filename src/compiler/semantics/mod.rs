@@ -174,7 +174,7 @@ impl<'a> SemanticChecker<'a> {
     }
   }
 
-  fn convert_parameter_types(&mut self, parameter_types: &[TypeHandle]) -> Vec<Type> {
+  fn convert_type_list(&mut self, parameter_types: &[TypeHandle]) -> Vec<Type> {
     parameter_types
       .iter()
       .map(|t| self.visit_parsed_type(self.ast, *t))
@@ -285,7 +285,7 @@ impl ParsedTypeVisitor<Type> for SemanticChecker<'_> {
   }
 
   fn visit_function(&mut self, ast: &AST, function: &ParsedFunctionType) -> Type {
-    let parameters = self.convert_parameter_types(function.parameters());
+    let parameters = self.convert_type_list(function.parameters());
     let return_type = self.visit_parsed_type(ast, function.return_type());
     FunctionSignature::new(parameters, return_type).into()
   }
