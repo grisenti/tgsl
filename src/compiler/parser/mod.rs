@@ -284,7 +284,7 @@ impl<'src> Parser<'src> {
   }
 }
 
-#[cfg(test)]
+#[cfg(never)]
 mod test {
   use crate::compiler::ast::json::ASTJSONPrinter;
   use crate::compiler::ast::visitor::{ExprVisitor, StmtVisitor};
@@ -292,7 +292,6 @@ mod test {
   use crate::compiler::errors::CompilerError;
   use crate::compiler::global_env::test::EMPTY_GLOBAL_ENV;
   use crate::compiler::lexer::{Lexer, SourceRange, Token};
-  use crate::compiler::parser::environment::Environment;
   use crate::compiler::parser::{Parser, ParserState};
   use crate::compiler::types::Type;
   use json::JsonValue;

@@ -7,12 +7,16 @@ use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::codegen::ModuleCode;
 use crate::compiler::errors::{sema_err, CompilerError};
 use crate::compiler::global_env::{GlobalEnv, Struct};
-use crate::compiler::identifier::{FunctionId, Identifier, ModuleId, StructId, VariableIdentifier};
+use crate::compiler::identifier::{
+  FunctionId, GlobalIdentifier, Identifier, ModuleId, StructId, VariableIdentifier,
+};
 use crate::compiler::lexer::SourceRange;
+use crate::compiler::overload_set::OverloadSet;
 use crate::compiler::semantics::environment::{
   DeclarationError, Environment, NameError, NameResult, ResolvedIdentifier,
 };
 use crate::compiler::types::{FunctionSignature, Type};
+use std::collections::HashMap;
 
 mod environment;
 mod expression_semantics;
@@ -33,6 +37,15 @@ fn combine_returns(current: ReturnKind, new: ReturnKind) -> ReturnKind {
   }
 }
 
+pub struct ModuleExports {
+  pub module_name: Option<String>,
+  pub global_names: HashMap<String, GlobalIdentifier>,
+  pub global_variables_types: Vec<Type>,
+  pub extern_function_types: Vec<Type>,
+  pub structs: Vec<Option<Struct>>,
+  pub overloads: Vec<OverloadSet>,
+}
+
 pub struct SemanticChecker<'a> {
   env: Environment<'a>,
   ast: &'a AST<'a>,
@@ -46,7 +59,7 @@ impl<'a> SemanticChecker<'a> {
   pub fn check_program(
     ast: &'a AST<'a>,
     global_env: &'a GlobalEnv,
-  ) -> Result<ModuleCode, Vec<CompilerError>> {
+  ) -> Result<(ModuleCode, ModuleExports), Vec<CompilerError>> {
     let mut checker = Self {
       env: Environment::new(global_env),
       ast,
@@ -63,10 +76,21 @@ impl<'a> SemanticChecker<'a> {
       "some functions have yet to be closed"
     );
     if checker.errors.is_empty() {
-      Ok(ModuleCode {
-        global_code: checker.global_code,
-        functions: checker.checked_functions,
-      })
+      let exported_module = ModuleExports {
+        module_name: checker.module_name,
+        global_names: checker.env.global_names,
+        global_variables_types: checker.env.module_global_variables_types,
+        extern_function_types: checker.env.extern_function_types,
+        structs: checker.env.module_structs,
+        overloads: checker.env.overloads,
+      };
+      Ok((
+        ModuleCode {
+          global_code: checker.global_code,
+          functions: checker.checked_functions,
+        },
+        exported_module,
+      ))
     } else {
       Err(checker.errors)
     }

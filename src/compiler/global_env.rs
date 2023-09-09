@@ -1,4 +1,5 @@
 use crate::compiler::overload_set::OverloadSet;
+use crate::compiler::semantics::ModuleExports;
 use core::panic;
 use std::collections::HashMap;
 
@@ -93,82 +94,77 @@ impl GlobalEnv {
     &self.structs[id.get_id() as usize]
   }
 
-  pub fn export_module(&mut self, parsed_module: ParsedModule) -> Option<ModuleId> {
-    todo!();
-    /*
-    if let Some(module_name) = parsed_module.module_name {
-      debug_assert!(
-        !self.module_names.contains_key(&module_name),
-        "this error should have been detected earlier by calling `is_module_name_available`"
-      );
+  pub fn export_module(&mut self, module_exports: ModuleExports) -> Option<ModuleId> {
+    let module_name = module_exports.module_name?;
 
-      let module_id = self.modules.len() as u16;
-      self.module_names.insert(module_name, ModuleId(module_id));
+    debug_assert!(
+      !self.module_names.contains_key(&module_name),
+      "this error should have been detected earlier by calling `is_module_name_available`"
+    );
 
-      self
-        .variable_types
-        .extend(parsed_module.module_global_variable_types.into_iter());
-      self
-        .extern_functions_types
-        .extend(parsed_module.module_extern_functions_types.into_iter());
+    let module_id = self.modules.len() as u16;
+    self.module_names.insert(module_name, ModuleId(module_id));
 
-      let mut module_names = HashMap::new();
-      let mut exported_variables = 0;
-      let mut exported_extern_functions = 0;
-      let mut exported_structs = 0;
-      for (name, id) in parsed_module.global_names {
-        match id {
-          GlobalIdentifier::Variable(var_id) => {
-            if var_id.is_relative() && var_id.is_public() {
-              let absolute_id =
-                GlobalVarId::absolute(var_id.get_id() + self.global_variables_count);
-              module_names.insert(name, GlobalIdentifier::Variable(absolute_id));
-              exported_variables += 1;
-            }
+    self
+      .variable_types
+      .extend(module_exports.global_variables_types.into_iter());
+    self
+      .extern_functions_types
+      .extend(module_exports.extern_function_types.into_iter());
+
+    let mut module_names = HashMap::new();
+    let mut exported_variables = 0;
+    let mut exported_extern_functions = 0;
+    let mut exported_structs = 0;
+    for (name, id) in module_exports.global_names {
+      match id {
+        GlobalIdentifier::Variable(var_id) => {
+          if var_id.is_relative() && var_id.is_public() {
+            let absolute_id = GlobalVarId::absolute(var_id.get_id() + self.global_variables_count);
+            module_names.insert(name, GlobalIdentifier::Variable(absolute_id));
+            exported_variables += 1;
           }
-          GlobalIdentifier::ExternFunction(ext_id) => {
-            if ext_id.is_relative() && ext_id.is_public() {
-              let absolute_id = ExternId::absolute(ext_id.get_id() + self.extern_functions_count);
-              module_names.insert(name, GlobalIdentifier::ExternFunction(absolute_id));
-              exported_extern_functions += 1;
-            }
-          }
-          GlobalIdentifier::Struct(struct_id) => {
-            if struct_id.is_relative() && struct_id.is_public() {
-              let absolute_id = GlobalVarId::absolute(struct_id.get_id() + self.structs_count);
-              module_names.insert(name, GlobalIdentifier::Variable(absolute_id));
-              exported_structs += 1;
-            }
-          }
-          GlobalIdentifier::OverloadId(overload_id) => {
-            module_names.insert(name, GlobalIdentifier::OverloadId(overload_id));
-          }
-          _ => panic!(),
         }
+        GlobalIdentifier::ExternFunction(ext_id) => {
+          if ext_id.is_relative() && ext_id.is_public() {
+            let absolute_id = ExternId::absolute(ext_id.get_id() + self.extern_functions_count);
+            module_names.insert(name, GlobalIdentifier::ExternFunction(absolute_id));
+            exported_extern_functions += 1;
+          }
+        }
+        GlobalIdentifier::Struct(struct_id) => {
+          if struct_id.is_relative() && struct_id.is_public() {
+            let absolute_id = GlobalVarId::absolute(struct_id.get_id() + self.structs_count);
+            module_names.insert(name, GlobalIdentifier::Variable(absolute_id));
+            exported_structs += 1;
+          }
+        }
+        GlobalIdentifier::OverloadId(overload_id) => {
+          module_names.insert(name, GlobalIdentifier::OverloadId(overload_id));
+        }
+        _ => panic!(),
       }
-      let mut exported_functions = 0;
-      let overloads = parsed_module
-        .module_overloads
-        .into_iter()
-        .map(|overload_set| {
-          let (set, count) = overload_set.export_set(self.exported_functions);
-          exported_functions += count;
-          set
-        })
-        .collect();
+    }
+    let mut exported_functions = 0;
+    let overloads = module_exports
+      .overloads
+      .into_iter()
+      .map(|overload_set| {
+        let (set, count) = overload_set.export_set(self.exported_functions);
+        exported_functions += count;
+        set
+      })
+      .collect();
 
-      self.global_variables_count += exported_variables;
-      self.extern_functions_count += exported_extern_functions;
-      self.structs_count += exported_structs;
-      self.exported_functions += exported_functions as u32;
-      self.modules.push(Module {
-        global_names: module_names,
-        overloads,
-      });
-      Some(ModuleId(module_id))
-    } else {
-      None
-    }*/
+    self.global_variables_count += exported_variables;
+    self.extern_functions_count += exported_extern_functions;
+    self.structs_count += exported_structs;
+    self.exported_functions += exported_functions as u32;
+    self.modules.push(Module {
+      global_names: module_names,
+      overloads,
+    });
+    Some(ModuleId(module_id))
   }
 
   pub fn is_module_name_available(&self, name: &str) -> bool {

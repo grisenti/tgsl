@@ -132,6 +132,7 @@ fn convert_constant(value: ConstantValue, address_table: &AddressTable) -> Tagge
     }
     ConstantValue::Str(s) => s.into(),
     ConstantValue::None => TaggedValue::none().into(),
+    ConstantValue::Stub => panic!("stub constant passed to vm"),
   }
 }
 
