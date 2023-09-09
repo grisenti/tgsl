@@ -33,7 +33,18 @@ pub trait ExprVisitor<'ast, 'src, T> {
     expr: ExprHandle,
   ) -> T;
   fn visit_fn_call(&mut self, ast: &'ast AST, fn_call: &'ast expr::FnCall, expr: ExprHandle) -> T;
-  fn visit_dot(&mut self, ast: &'ast AST, dot: &'ast expr::Dot<'src>, expr: ExprHandle) -> T;
+  fn visit_member_get(
+    &mut self,
+    ast: &'ast AST,
+    member_get: &'ast expr::MemberGet<'src>,
+    expr: ExprHandle,
+  ) -> T;
+  fn visit_dot_call(
+    &mut self,
+    ast: &'ast AST,
+    dot_call: &'ast expr::DotCall<'src>,
+    expr: ExprHandle,
+  ) -> T;
   fn visit_constructor(
     &mut self,
     ast: &'ast AST,
@@ -51,7 +62,8 @@ pub trait ExprVisitor<'ast, 'src, T> {
       Expr::Unary(value) => self.visit_unary(ast, value, expr),
       Expr::Lambda(value) => self.visit_lambda(ast, value, expr),
       Expr::FnCall(value) => self.visit_fn_call(ast, value, expr),
-      Expr::Dot(value) => self.visit_dot(ast, value, expr),
+      Expr::MemberGet(value) => self.visit_member_get(ast, value, expr),
+      Expr::DotCall(value) => self.visit_dot_call(ast, value, expr),
       Expr::Construct(value) => self.visit_constructor(ast, value, expr),
     }
   }

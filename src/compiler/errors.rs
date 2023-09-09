@@ -222,7 +222,7 @@ pub mod ty_err {
     "TY007",
     "{} is not a member of type {}",
     member_name: &str,
-    object_type: String
+    object_type: &str
   );
 
   def_err!(cannot_access_member_of_non_struct_type,

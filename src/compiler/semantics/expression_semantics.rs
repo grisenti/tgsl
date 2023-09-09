@@ -1,5 +1,5 @@
 use crate::compiler::ast::expression::expr::{
-  Assignment, Binary, Construct, Dot, FnCall, Id, Lambda, Literal, Paren, Unary,
+  Assignment, Binary, Construct, DotCall, FnCall, Id, Lambda, Literal, MemberGet, Paren, Unary,
 };
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{ExprHandle, AST};
@@ -10,6 +10,7 @@ use crate::compiler::operators::{BinaryOperator, UnaryOperator};
 use crate::compiler::semantics::environment::ResolvedIdentifier;
 use crate::compiler::semantics::SemanticChecker;
 use crate::compiler::types::{FunctionSignature, Type};
+use std::process::id;
 
 #[rustfmt::skip]
 const BINARY_OPERATORS: &[(Token, Type, Type, Type, BinaryOperator)] = &[
@@ -246,11 +247,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       }
       Type::UnresolvedOverload(overload_id) => {
         let function_id_location = unsafe { self.code().push_stub_constant() };
-        let arguments = fn_call
-          .arguments
-          .iter()
-          .map(|e| self.visit_expr(ast, *e))
-          .collect::<Vec<_>>();
+        let arguments = self.visit_expr_list(ast, &fn_call.arguments);
         if let Some(resolved_overload) = self.env.resolve_overload(overload_id, &arguments) {
           let function_id = resolved_overload.function_id;
           let return_type = resolved_overload
@@ -285,7 +282,45 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     expr_type
   }
 
-  fn visit_dot(&mut self, ast: &'a AST, dot: &Dot, expr_handle: ExprHandle) -> Type {
+  fn visit_member_get(
+    &mut self,
+    ast: &'a AST,
+    member_get: &'a MemberGet<'a>,
+    expr_handle: ExprHandle,
+  ) -> Type {
+    let lhs_type = self.visit_expr(ast, member_get.lhs);
+    if lhs_type.is_error() {
+      return Type::Error;
+    }
+    if let Type::Struct(struct_id) = lhs_type {
+      let struct_ = self.env.get_struct(struct_id).unwrap();
+      if let Some(index) = struct_.get_member_index(member_get.member_name) {
+        let (_, member_type) = struct_.member_info(index);
+        let member_type = member_type.clone();
+        unsafe {
+          self
+            .code()
+            .push_op2(OpCode::GetMember, index.get_index() as u8)
+        };
+        member_type
+      } else {
+        self.emit_error(ty_err::not_a_member(
+          expr_handle.get_source_range(ast),
+          member_get.member_name,
+          struct_.get_name(),
+        ));
+        Type::Error
+      }
+    } else {
+      self.emit_error(ty_err::cannot_access_member_of_non_struct_type(
+        expr_handle.get_source_range(ast),
+        lhs_type.print_pretty(),
+      ));
+      Type::Error
+    }
+  }
+
+  fn visit_dot_call(&mut self, ast: &'a AST, dot_call: &DotCall, expr_handle: ExprHandle) -> Type {
     todo!()
   }
 
@@ -309,6 +344,11 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
         &arguments,
         expr_sr,
       );
+      unsafe {
+        self
+          .code()
+          .push_op2(OpCode::Construct, constructor.arguments.len() as u8)
+      };
       Type::Struct(struct_id)
     } else {
       panic!(); // no struct, maybe incorrect name or we just have a declaration

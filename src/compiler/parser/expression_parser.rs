@@ -124,10 +124,28 @@ impl<'src> Parser<'src> {
     self.advance();
     let expr_end = self.lex.previous_token_range();
     let rhs = self.match_id();
-    self.ast.add_expression(
-      expr::Dot { lhs, rhs },
-      SourceRange::combine(expr_start, expr_end),
-    )
+    if self.lookahead == Token::Basic('(') {
+      let call_start = self.lex.previous_token_range();
+      let arguments = self.parse_arguments(call_start, ')');
+      let expr_end = self.lex.previous_token_range();
+      self.match_token(Token::Basic(')'));
+      self.ast.add_expression(
+        expr::DotCall {
+          lhs,
+          function_name: rhs,
+          arguments,
+        },
+        SourceRange::combine(expr_start, expr_end),
+      )
+    } else {
+      self.ast.add_expression(
+        expr::MemberGet {
+          lhs,
+          member_name: rhs,
+        },
+        SourceRange::combine(expr_start, expr_end),
+      )
+    }
   }
 
   fn parse_call(&mut self) -> ExprHandle {

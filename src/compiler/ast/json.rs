@@ -1,4 +1,4 @@
-use crate::compiler::ast::expression::expr::Dot;
+use crate::compiler::ast::expression::expr::{DotCall, MemberGet};
 use crate::compiler::ast::parsed_type::ParsedFunctionType;
 use crate::compiler::ast::statement::stmt::ModuleDecl;
 use crate::compiler::ast::visitor::ParsedTypeVisitor;
@@ -156,11 +156,26 @@ impl ExprVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_dot(&mut self, ast: &AST, dot: &Dot, _: ExprHandle) -> JsonValue {
+  fn visit_member_get(
+    &mut self,
+    ast: &'_ AST,
+    member_get: &'_ MemberGet<'_>,
+    _: ExprHandle,
+  ) -> JsonValue {
     object! {
-      "Dot": {
-        lhs: self.visit_expr(ast, dot.lhs),
-        rhs: dot.rhs
+      "MemberGet": {
+        "lhs": self.visit_expr(ast, member_get.lhs),
+        "member_name": member_get.member_name
+      }
+    }
+  }
+
+  fn visit_dot_call(&mut self, ast: &AST, dot_call: &DotCall, _: ExprHandle) -> JsonValue {
+    object! {
+      "DotCall": {
+        "lhs": self.visit_expr(ast, dot_call.lhs),
+        "function_name": dot_call.function_name,
+        "arguments": expr_list_to_json(&dot_call.arguments, ast)
       }
     }
   }

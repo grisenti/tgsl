@@ -74,9 +74,15 @@ pub mod expr {
     arguments: Vec<ExprHandle>
   );
 
-  src_expr_node!(Dot,
+  src_expr_node!(MemberGet,
     lhs: ExprHandle,
-    rhs: &'src str
+    member_name: &'src str
+  );
+
+  src_expr_node!(DotCall,
+    lhs: ExprHandle,
+    function_name: &'src str,
+    arguments: Vec<ExprHandle>
   );
 
   src_expr_node!(Construct,
@@ -97,6 +103,7 @@ pub enum Expr<'src> {
   Unary(Unary<'src>),
   Lambda(Lambda<'src>),
   FnCall(FnCall),
-  Dot(Dot<'src>),
+  MemberGet(MemberGet<'src>),
+  DotCall(DotCall<'src>),
   Construct(Construct<'src>),
 }
