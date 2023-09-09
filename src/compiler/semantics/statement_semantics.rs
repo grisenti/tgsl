@@ -34,12 +34,16 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
       return ReturnKind::None;
     }
     let id = self.new_variable(var_decl.name, var_type, stmt_sr);
-    unsafe { self.code().set_variable(id) };
+    if self.env.in_global_scope() {
+      unsafe { self.code().set_variable(id) };
+      unsafe { self.code().push_op(OpCode::Pop) };
+    }
     ReturnKind::None
   }
 
   fn visit_stmt_expr(&mut self, ast: &'a AST, expr: &StmtExpr, _: StmtHandle) -> ReturnKind {
     self.visit_expr(ast, expr.expr);
+    unsafe { self.code().push_op(OpCode::Pop) };
     ReturnKind::None
   }
 
