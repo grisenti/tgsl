@@ -5,7 +5,7 @@ use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::codegen::ModuleCode;
-use crate::compiler::errors::{sema_err, CompilerError};
+use crate::compiler::errors::{sema_err, ty_err, CompilerError};
 use crate::compiler::global_env::{GlobalEnv, MemberIndex, Struct};
 use crate::compiler::identifier::{
   FunctionId, GlobalIdentifier, Identifier, ModuleId, StructId, VariableIdentifier,
@@ -16,6 +16,7 @@ use crate::compiler::semantics::environment::{
   DeclarationError, Environment, NameError, NameResult, ResolvedIdentifier,
 };
 use crate::compiler::types::{FunctionSignature, Type};
+use crate::return_if_err;
 use std::collections::HashMap;
 
 mod environment;
@@ -255,6 +256,20 @@ impl<'a> SemanticChecker<'a> {
         .code()
         .push_constant(ConstantValue::FunctionId(function_id)),
       _ => panic!("invalid identifier"),
+    }
+  }
+
+  fn check_condition(&mut self, condition_type: Type, sr: SourceRange) -> bool {
+    if condition_type.is_error() {
+      false
+    } else if condition_type != Type::Bool {
+      self.emit_error(ty_err::incorrect_conditional_type(
+        sr,
+        condition_type.print_pretty(),
+      ));
+      false
+    } else {
+      true
     }
   }
 

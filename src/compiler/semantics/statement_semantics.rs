@@ -62,12 +62,8 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     stmt_handle: StmtHandle,
   ) -> ReturnKind {
     let condition_type = self.visit_expr(ast, if_branch.condition);
-    if condition_type != Type::Bool {
-      self.emit_error(ty_err::incorrect_conditional_type(
-        stmt_handle.get_source_range(ast),
-        condition_type.print_pretty(),
-      ));
-      return ReturnKind::None;
+    if !self.check_condition(condition_type, stmt_handle.get_source_range(ast)) {
+      return ReturnKind::Unconditional;
     }
     let if_jump_point = unsafe { self.code().push_jump(OpCode::JumpIfFalsePop) };
     let if_branch_return_kind = self.visit_stmt(ast, if_branch.true_branch).to_conditional();
@@ -88,9 +84,18 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     &mut self,
     ast: &'a AST,
     while_node: &While,
-    expr_handle: StmtHandle,
+    stmt_handle: StmtHandle,
   ) -> ReturnKind {
-    todo!()
+    let label = self.code().get_next_instruction_label();
+    let condition_type = self.visit_expr(ast, while_node.condition);
+    if !self.check_condition(condition_type, stmt_handle.get_source_range(ast)) {
+      return ReturnKind::Unconditional;
+    }
+    let loop_condition = unsafe { self.code().push_jump(OpCode::JumpIfFalsePop) };
+    let return_kind = self.visit_stmt(ast, while_node.loop_body).to_conditional();
+    self.code().push_back_jump(label);
+    self.code().backpatch_current_instruction(loop_condition);
+    return_kind
   }
 
   fn visit_function_definition(
