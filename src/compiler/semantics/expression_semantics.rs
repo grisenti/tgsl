@@ -235,11 +235,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     let call_sr = expr_handle.get_source_range(ast);
     let expr_type = match function_expr {
       Type::Function(signature) => {
-        let arguments = fn_call
-          .arguments
-          .iter()
-          .map(|e| self.visit_expr(ast, *e))
-          .collect::<Vec<_>>();
+        let arguments = self.visit_expr_list(ast, &fn_call.arguments);
         check_arguments(
           &mut self.errors,
           signature.get_parameters(),
@@ -299,16 +295,14 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     constructor: &Construct,
     expr_handle: ExprHandle,
   ) -> Type {
-    todo!()
-    /*
     let expr_sr = expr_handle.get_source_range(ast);
-    let arguments = constructor
-      .arguments
-      .iter()
-      .map(|e| self.visit_expr(ast, *e))
-      .collect::<Vec<_>>();
-    let struct_id = self.get_struct_id(constructor.type_name, expr_sr);
-    if let Some(struct_) = self.get_struct(struct_id, expr_sr) {
+    let arguments = self.visit_expr_list(ast, &constructor.arguments);
+    let struct_id = if let Ok(struct_id) = self.env.get_struct_id(constructor.type_name) {
+      struct_id
+    } else {
+      panic!()
+    };
+    if let Some(struct_) = self.env.get_struct(struct_id) {
       check_arguments(
         &mut self.errors,
         struct_.get_member_types(),
@@ -317,7 +311,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       );
       Type::Struct(struct_id)
     } else {
-      Type::Error
-    }*/
+      panic!(); // no struct, maybe incorrect name or we just have a declaration
+    }
   }
 }

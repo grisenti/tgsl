@@ -8,7 +8,7 @@ use crate::compiler::codegen::bytecode::ConstantValue::FunctionId;
 use crate::compiler::codegen::bytecode::OpCode;
 use crate::compiler::errors::{import_err, sema_err, ty_err, CompilerResult};
 use crate::compiler::lexer::SourceRange;
-use crate::compiler::semantics::environment::ImportError;
+use crate::compiler::semantics::environment::{DeclarationError, ImportError};
 use crate::compiler::semantics::{ReturnKind, SemanticChecker};
 use crate::compiler::types::{FunctionSignature, Type};
 
@@ -175,7 +175,25 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     struct_stmt: &Struct,
     stmt_handle: StmtHandle,
   ) -> ReturnKind {
-    todo!()
+    let member_names = struct_stmt
+      .member_names
+      .iter()
+      .map(|s| s.to_string())
+      .collect();
+    let member_types = self.convert_parameter_types(&struct_stmt.member_types);
+    match self
+      .env
+      .define_struct(struct_stmt.name, member_names, member_types)
+    {
+      Err(DeclarationError::AlreadyDefined) => self.emit_error(sema_err::name_already_defined(
+        stmt_handle.get_source_range(ast),
+        struct_stmt.name,
+      )),
+      Err(DeclarationError::TooManyLocalNames) => unreachable!(),
+      Ok(_) => {}
+    }
+
+    ReturnKind::None
   }
 
   fn visit_import(&mut self, ast: &'a AST, import: &Import, stmt_handle: StmtHandle) -> ReturnKind {

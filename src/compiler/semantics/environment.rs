@@ -210,7 +210,7 @@ impl<'src> Environment<'src> {
     }
   }
 
-  pub fn get_struct_id(&mut self, name: &str) -> CompilerResult<StructId> {
+  pub fn get_struct_id(&mut self, name: &str) -> NameResult<StructId> {
     let id = self.global_names.get(name).copied();
     if let Some(GlobalIdentifier::Struct(id)) = id {
       Ok(id)

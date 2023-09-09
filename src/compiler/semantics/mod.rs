@@ -1,6 +1,6 @@
 use crate::compiler::ast::expression::expr;
 use crate::compiler::ast::parsed_type::{ParsedFunctionType, ParsedType};
-use crate::compiler::ast::visitor::{ParsedTypeVisitor, StmtVisitor};
+use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::codegen::function_code::FunctionCode;
@@ -179,6 +179,10 @@ impl<'a> SemanticChecker<'a> {
       .iter()
       .map(|t| self.visit_parsed_type(self.ast, *t))
       .collect::<Vec<_>>()
+  }
+
+  fn visit_expr_list(&mut self, ast: &'a AST<'a>, expr_list: &[ExprHandle]) -> Vec<Type> {
+    expr_list.iter().map(|e| self.visit_expr(ast, *e)).collect()
   }
 
   fn declare_function_parameters(&mut self, names: &[&'a str], types: &[Type], sr: SourceRange) {
