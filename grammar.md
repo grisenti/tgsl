@@ -62,7 +62,7 @@ expression → lambda | assignment;
 
 lambda → "fn" "(" parameters? ")" -> type block;
 
-assignment → ( call "." )? IDENTIFIER "=" assignment
+assignment → (IDENTIFIER | member_get) "=" expression
 	| logic_or ;
 
 logic_or → logic_and ( "or" logic_and )* ;
@@ -80,6 +80,12 @@ factor → unary (( "/" | "*" ) unary)*;
 unary → ( "!" | "-" ) unary | call ;
 
 call → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
+
+fn_call → primary "(" arguments? ")" ;
+
+member_get → primary "." IDENTIFIER ;  
+
+dot_call → primary "." IDENTIFIER "(" arguments? ")" ;
 
 arguments → expression ( "," expression )* ;
 
