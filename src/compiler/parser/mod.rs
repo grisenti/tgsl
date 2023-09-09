@@ -248,19 +248,16 @@ impl<'src> Parser<'src> {
   fn parse_module_name(&mut self) {
     let stmt_start = self.lex.previous_token_range();
     if self.match_next(Token::Module).is_some() {
-      if let Token::Id(module_name) = self.lookahead {
-        self.advance();
-        let stmt_end = self.lex.previous_token_range();
-        self.match_next(Token::Basic(';'));
-        self.ast.add_statement(
-          stmt::ModuleDecl { name: module_name },
-          SourceRange::combine(stmt_start, stmt_end),
-        );
-      } else {
-        self.emit_error(parser_err::expected_module_identifier(
-          &self.lex,
-          self.lookahead,
-        ));
+      let module_name = self.match_id();
+      let stmt_end = self.lex.previous_token_range();
+      self.match_next(Token::Basic(';'));
+      let stmt = self.ast.add_statement(
+        stmt::ModuleDecl { name: module_name },
+        SourceRange::combine(stmt_start, stmt_end),
+      );
+      self.ast.program_push(stmt);
+      if self.in_panic_state() {
+        self.recover_from_errors();
       }
     }
   }

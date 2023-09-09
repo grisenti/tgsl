@@ -1,13 +1,4 @@
 module std_io;
 
-extern fn println(any)
-extern fn print(any)
-
-enum {
-
-}
-
-match x {
-    1 => {}
-    2 =>
-}
+extern fn println(out: any);
+extern fn print(out: any);
