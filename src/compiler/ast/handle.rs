@@ -15,6 +15,10 @@ macro_rules! generate_ast_handle {
       pub(super) fn new(index: u32) -> Self {
         Self { index }
       }
+
+      pub fn is_invalid(self) -> bool {
+        self == Self::INVALID
+      }
     }
   };
 }
@@ -27,8 +31,12 @@ impl ExprHandle {
   }
 
   pub fn get_source_range(self, ast: &AST) -> SourceRange {
-    assert!(self.index < ast.expression_source_range.len() as u32);
-    ast.expression_source_range[self.index as usize]
+    if self.is_invalid() {
+      SourceRange::EMPTY
+    } else {
+      assert!(self.index < ast.expression_source_range.len() as u32);
+      ast.expression_source_range[self.index as usize]
+    }
   }
 }
 
@@ -40,8 +48,12 @@ impl StmtHandle {
   }
 
   pub fn get_source_range(self, ast: &AST) -> SourceRange {
-    assert!(self.index < ast.statement_source_range.len() as u32);
-    ast.statement_source_range[self.index as usize]
+    if self.is_invalid() {
+      SourceRange::EMPTY
+    } else {
+      assert!(self.index < ast.statement_source_range.len() as u32);
+      ast.statement_source_range[self.index as usize]
+    }
   }
 }
 

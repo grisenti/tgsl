@@ -74,6 +74,7 @@ impl Default for AST<'_> {
         ParsedType::Str,
         ParsedType::Bool,
         ParsedType::Nothing,
+        ParsedType::Any,
       ],
       program: vec![],
     }

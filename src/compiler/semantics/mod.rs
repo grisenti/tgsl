@@ -2,7 +2,7 @@ use crate::compiler::ast::expression::expr;
 use crate::compiler::ast::parsed_type::{ParsedFunctionType, ParsedType};
 use crate::compiler::ast::visitor::{ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle, AST};
-use crate::compiler::codegen::bytecode::ConstantValue;
+use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::codegen::ModuleCode;
 use crate::compiler::errors::{sema_err, CompilerError};
@@ -76,6 +76,7 @@ impl<'a> SemanticChecker<'a> {
       "some functions have yet to be closed"
     );
     if checker.errors.is_empty() {
+      unsafe { checker.global_code.push_op(OpCode::Return) };
       let exported_module = ModuleExports {
         module_name: checker.module_name,
         global_names: checker.env.global_names,

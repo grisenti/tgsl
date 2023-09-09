@@ -7,6 +7,7 @@ use super::errors::CompilerError;
 use super::lexer::*;
 use super::*;
 use crate::compiler::ast::parsed_type::{ParsedFunctionType, ParsedType};
+use crate::compiler::ast::statement::{stmt, Stmt};
 
 #[derive(PartialEq, Eq)]
 enum ParserState {
@@ -244,12 +245,17 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_module_name(&mut self) -> Option<String> {
+  fn parse_module_name(&mut self) {
+    let stmt_start = self.lex.previous_token_range();
     if self.match_next(Token::Module).is_some() {
       if let Token::Id(module_name) = self.lookahead {
-        let id_sr = self.lex.previous_token_range();
         self.advance();
+        let stmt_end = self.lex.previous_token_range();
         self.match_next(Token::Basic(';'));
+        self.ast.add_statement(
+          stmt::ModuleDecl { name: module_name },
+          SourceRange::combine(stmt_start, stmt_end),
+        );
       } else {
         self.emit_error(parser_err::expected_module_identifier(
           &self.lex,
@@ -257,7 +263,6 @@ impl<'src> Parser<'src> {
         ));
       }
     }
-    None
   }
 
   pub fn parse_program(source: &'src str) -> Result<AST<'src>, Vec<CompilerError>> {
@@ -269,6 +274,7 @@ impl<'src> Parser<'src> {
       state: ParserState::NoErrors,
     };
     parser.advance();
+    parser.parse_module_name();
     while !parser.is_at_end() && parser.state != ParserState::UnrecoverableError {
       let stmt = parser.parse_decl();
       parser.ast.program_push(stmt);
