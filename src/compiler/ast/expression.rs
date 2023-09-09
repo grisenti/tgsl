@@ -79,6 +79,12 @@ pub mod expr {
     member_name: &'src str
   );
 
+  src_expr_node!(MemberSet,
+    lhs: ExprHandle,
+    member_name: &'src str,
+    value: ExprHandle
+  );
+
   src_expr_node!(DotCall,
     lhs: ExprHandle,
     function_name: &'src str,
@@ -104,6 +110,7 @@ pub enum Expr<'src> {
   Lambda(Lambda<'src>),
   FnCall(FnCall),
   MemberGet(MemberGet<'src>),
+  MemberSet(MemberSet<'src>),
   DotCall(DotCall<'src>),
   Construct(Construct<'src>),
 }

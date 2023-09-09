@@ -6,7 +6,7 @@ use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::codegen::ModuleCode;
 use crate::compiler::errors::{sema_err, CompilerError};
-use crate::compiler::global_env::{GlobalEnv, Struct};
+use crate::compiler::global_env::{GlobalEnv, MemberIndex, Struct};
 use crate::compiler::identifier::{
   FunctionId, GlobalIdentifier, Identifier, ModuleId, StructId, VariableIdentifier,
 };

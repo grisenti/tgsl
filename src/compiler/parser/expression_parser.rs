@@ -219,17 +219,26 @@ impl<'src> Parser<'src> {
       let rhs = self.parse_binary_operation(0);
       let expr_end = rhs.get_source_range(&self.ast);
       let expr_sr = SourceRange::combine(expr_start, expr_end);
-      if let Expr::Id(id) = lhs.get_expr(&self.ast) {
-        self.ast.add_expression(
+      match lhs.get_expr(&self.ast) {
+        Expr::Id(id) => self.ast.add_expression(
           expr::Assignment {
             var_name: id.id,
             rhs,
           },
           expr_sr,
-        )
-      } else {
-        self.emit_error(parser_err::lvalue_assignment(expr_sr));
-        ExprHandle::INVALID
+        ),
+        Expr::MemberGet(member_get) => self.ast.add_expression(
+          expr::MemberSet {
+            lhs: member_get.lhs,
+            member_name: member_get.member_name,
+            value: rhs,
+          },
+          expr_sr,
+        ),
+        _ => {
+          self.emit_error(parser_err::lvalue_assignment(expr_sr));
+          ExprHandle::INVALID
+        }
       }
     } else {
       lhs

@@ -1,5 +1,6 @@
 use crate::compiler::ast::expression::expr::{
-  Assignment, Binary, Construct, DotCall, FnCall, Id, Lambda, Literal, MemberGet, Paren, Unary,
+  Assignment, Binary, Construct, DotCall, FnCall, Id, Lambda, Literal, MemberGet, MemberSet, Paren,
+  Unary,
 };
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{ExprHandle, AST};
@@ -307,6 +308,45 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
         self.emit_error(ty_err::not_a_member(
           expr_handle.get_source_range(ast),
           member_get.member_name,
+          struct_.get_name(),
+        ));
+        Type::Error
+      }
+    } else {
+      self.emit_error(ty_err::cannot_access_member_of_non_struct_type(
+        expr_handle.get_source_range(ast),
+        lhs_type.print_pretty(),
+      ));
+      Type::Error
+    }
+  }
+
+  fn visit_member_set(
+    &mut self,
+    ast: &'a AST,
+    member_set: &'a MemberSet<'a>,
+    expr_handle: ExprHandle,
+  ) -> Type {
+    let lhs_type = self.visit_expr(ast, member_set.lhs);
+    if lhs_type.is_error() {
+      return Type::Error;
+    }
+    if let Type::Struct(struct_id) = lhs_type {
+      let struct_ = self.env.get_struct(struct_id).unwrap();
+      if let Some(index) = struct_.get_member_index(member_set.member_name) {
+        let (_, member_type) = struct_.member_info(index);
+        let member_type = member_type.clone();
+        self.visit_expr(ast, member_set.value);
+        unsafe {
+          self
+            .code()
+            .push_op2(OpCode::SetMember, index.get_index() as u8)
+        };
+        member_type
+      } else {
+        self.emit_error(ty_err::not_a_member(
+          expr_handle.get_source_range(ast),
+          member_set.member_name,
           struct_.get_name(),
         ));
         Type::Error
