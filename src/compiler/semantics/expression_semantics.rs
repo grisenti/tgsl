@@ -391,7 +391,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
           } // its not a function
         } // its not a member
       } else {
-        panic!("dot call with undefined struct")
+        todo!("dot call with undefined struct")
       }
     }
     let function_id = self.env.get_id(dot_call.function_name);
@@ -418,8 +418,8 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       Ok(ResolvedIdentifier::ResolvedIdentifier {
         id: Identifier::Function(function_id),
         type_: Type::Function(signature),
-      }) => panic!(),
-      _ => panic!(),
+      }) => todo!(),
+      _ => todo!(),
     };
     unsafe { self.code().push_op2(OpCode::Call, arguments.len() as u8) };
     expr_type
@@ -436,7 +436,8 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     let struct_id = if let Ok(struct_id) = self.env.get_struct_id(constructor.type_name) {
       struct_id
     } else {
-      panic!()
+      self.emit_error(ty_err::not_struct_name(expr_sr, constructor.type_name));
+      return Type::Error;
     };
     if let Some(struct_) = self.env.get_struct(struct_id) {
       check_arguments(
@@ -452,7 +453,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       };
       Type::Struct(struct_id)
     } else {
-      panic!(); // no struct, maybe incorrect name or we just have a declaration
+      todo!("struct was not defined");
     }
   }
 }

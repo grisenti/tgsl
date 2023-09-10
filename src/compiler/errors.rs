@@ -272,6 +272,8 @@ pub mod ty_err {
   );
 
   def_err!(no_available_oveload, "TY015", "no available overload");
+
+  def_err!(not_struct_name, "TY016", "'{}' is not a declared struct", struct_name: &str);
 }
 
 pub mod import_err {
