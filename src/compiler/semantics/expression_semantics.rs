@@ -6,6 +6,7 @@ use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor}
 use crate::compiler::ast::{ExprHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::errors::{ty_err, CompilerError};
+use crate::compiler::identifier::Identifier;
 use crate::compiler::lexer::{SourceRange, Token};
 use crate::compiler::operators::{BinaryOperator, UnaryOperator};
 use crate::compiler::semantics::environment::ResolvedIdentifier;
@@ -361,7 +362,39 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
   }
 
   fn visit_dot_call(&mut self, ast: &'a AST, dot_call: &DotCall, expr_handle: ExprHandle) -> Type {
-    todo!()
+    // if rhs is member, call it
+    // otherwise, ensure name is a function and try to call it
+    let call_sr = expr_handle.get_source_range(ast);
+    let function_id_location = unsafe { self.code().push_stub_constant() };
+    let lhs_type = self.visit_expr(ast, dot_call.lhs);
+    let mut arguments = self.visit_expr_list(ast, &dot_call.arguments);
+    let function_id = self.env.get_id(dot_call.function_name);
+    arguments.push(lhs_type);
+    match function_id {
+      Ok(ResolvedIdentifier::UnresolvedOverload(overload_id)) => {
+        if let Some(resolved_overload) = self.env.resolve_overload(overload_id, &arguments) {
+          let function_id = resolved_overload.function_id;
+          let return_type = resolved_overload
+            .function_signature
+            .get_return_type()
+            .clone();
+          unsafe {
+            self
+              .code()
+              .backpatch_constant(function_id_location, ConstantValue::FunctionId(function_id))
+          };
+          return_type
+        } else {
+          self.emit_error(ty_err::no_available_oveload(call_sr));
+          Type::Error
+        }
+      }
+      Ok(ResolvedIdentifier::ResolvedIdentifier {
+        id: Identifier::Function(function_id),
+        type_: Type::Function(signature),
+      }) => panic!(),
+      _ => panic!(),
+    }
   }
 
   fn visit_constructor(
