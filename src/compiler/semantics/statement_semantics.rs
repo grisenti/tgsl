@@ -51,7 +51,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     self.env.push_scope();
     let return_type = self.visit_statements(&block.statements);
     let locals = self.env.pop_scope();
-    (0..=locals).for_each(|_| unsafe { self.code().push_op(OpCode::Pop) });
+    (0..locals).for_each(|_| unsafe { self.code().push_op(OpCode::Pop) });
     return_type
   }
 
