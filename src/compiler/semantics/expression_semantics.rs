@@ -370,7 +370,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     let mut arguments = self.visit_expr_list(ast, &dot_call.arguments);
     let function_id = self.env.get_id(dot_call.function_name);
     arguments.push(lhs_type);
-    match function_id {
+    let expr_type = match function_id {
       Ok(ResolvedIdentifier::UnresolvedOverload(overload_id)) => {
         if let Some(resolved_overload) = self.env.resolve_overload(overload_id, &arguments) {
           let function_id = resolved_overload.function_id;
@@ -394,7 +394,9 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
         type_: Type::Function(signature),
       }) => panic!(),
       _ => panic!(),
-    }
+    };
+    unsafe { self.code().push_op2(OpCode::Call, arguments.len() as u8) };
+    expr_type
   }
 
   fn visit_constructor(
