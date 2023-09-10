@@ -363,8 +363,37 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     // if rhs is member, call it
     // otherwise, ensure name is a function and try to call it
     let call_sr = expr_handle.get_source_range(ast);
+    let start = self.code().get_next_instruction_address();
     let lhs_type = self.visit_expr(ast, dot_call.lhs);
+    let mid = self.code().get_next_instruction_address();
     let mut arguments = self.visit_expr_list(ast, &dot_call.arguments);
+    let end = self.code().get_next_instruction_address();
+    if let Type::Struct(struct_id) = lhs_type {
+      if let Some(struct_) = self.env.get_struct(struct_id) {
+        if let Some(member_index) = struct_.get_member_index(dot_call.function_name) {
+          let (_, member_type) = struct_.member_info(member_index);
+          if let Type::Function(signature) = member_type {
+            let return_type = signature.get_return_type().clone();
+            check_arguments(
+              &mut self.errors,
+              signature.get_parameters(),
+              &arguments,
+              expr_handle.get_source_range(ast),
+            );
+            self.code().swap(start, mid, end);
+            unsafe {
+              self
+                .code()
+                .push_op2(OpCode::GetMember, member_index.get_index() as u8);
+              self.code().push_op2(OpCode::Call, arguments.len() as u8);
+            }
+            return return_type;
+          } // its not a function
+        } // its not a member
+      } else {
+        panic!("dot call with undefined struct")
+      }
+    }
     let function_id = self.env.get_id(dot_call.function_name);
     arguments.push(lhs_type);
     let expr_type = match function_id {
