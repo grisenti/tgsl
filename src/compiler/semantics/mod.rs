@@ -127,6 +127,12 @@ impl<'a> SemanticChecker<'a> {
     let index = function_id.get_id() as usize;
     assert!(index < self.checked_functions.len());
 
+    if *self.env.get_current_function_return_type().unwrap() == Type::Nothing {
+      unsafe {
+        self.code().push_constant_none();
+        self.code().push_op(OpCode::Return);
+      }
+    }
     let function = self.env.pop_function();
     self.checked_functions[index] = function.code;
   }
@@ -142,6 +148,12 @@ impl<'a> SemanticChecker<'a> {
   }
 
   fn end_lambda(&mut self) -> (FunctionId, Vec<VariableIdentifier>) {
+    if *self.env.get_current_function_return_type().unwrap() == Type::Nothing {
+      unsafe {
+        self.code().push_constant_none();
+        self.code().push_op(OpCode::Return);
+      }
+    }
     let function = self.env.pop_function();
     let function_id = self.env.new_function_id();
     assert_eq!(function_id.get_id() as usize, self.checked_functions.len());

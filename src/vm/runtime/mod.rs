@@ -209,7 +209,7 @@ impl RunTime {
         }
         OpCode::Call => {
           let arguments = frame.read_byte() as usize;
-          let function_value = unsafe { *frame.sp.sub(arguments + 1) };
+          let function_value = frame.pop();
           let (function, captures) = match function_value.kind {
             ValueType::FunctionId => (
               ptr::addr_of!(self.functions[unsafe { function_value.value.id }]),
@@ -234,7 +234,7 @@ impl RunTime {
           let bp = unsafe { frame.sp.sub(arguments) };
           let pc = unsafe { (*function).code.code.as_ptr() };
           let sp = frame.sp;
-          frame.sp = unsafe { frame.sp.sub(1 + arguments) };
+          frame.sp = unsafe { frame.sp.sub(arguments) };
           self.call_stack[self.function_call] = frame;
           self.function_call += 1;
           if self.function_call >= MAX_CALLS {

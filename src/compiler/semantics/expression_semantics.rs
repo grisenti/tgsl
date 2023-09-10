@@ -234,11 +234,11 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
   }
 
   fn visit_fn_call(&mut self, ast: &'a AST, fn_call: &FnCall, expr_handle: ExprHandle) -> Type {
+    let arguments = self.visit_expr_list(ast, &fn_call.arguments);
     let function_expr = self.visit_expr(ast, fn_call.func);
     let call_sr = expr_handle.get_source_range(ast);
     let expr_type = match function_expr {
       Type::Function(signature) => {
-        let arguments = self.visit_expr_list(ast, &fn_call.arguments);
         check_arguments(
           &mut self.errors,
           signature.get_parameters(),
@@ -248,8 +248,6 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
         signature.get_return_type().clone()
       }
       Type::UnresolvedOverload(overload_id) => {
-        let function_id_location = unsafe { self.code().push_stub_constant() };
-        let arguments = self.visit_expr_list(ast, &fn_call.arguments);
         if let Some(resolved_overload) = self.env.resolve_overload(overload_id, &arguments) {
           let function_id = resolved_overload.function_id;
           let return_type = resolved_overload
@@ -259,7 +257,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
           unsafe {
             self
               .code()
-              .backpatch_constant(function_id_location, ConstantValue::FunctionId(function_id))
+              .push_constant(ConstantValue::FunctionId(function_id))
           };
           return_type
         } else {
@@ -365,7 +363,6 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     // if rhs is member, call it
     // otherwise, ensure name is a function and try to call it
     let call_sr = expr_handle.get_source_range(ast);
-    let function_id_location = unsafe { self.code().push_stub_constant() };
     let lhs_type = self.visit_expr(ast, dot_call.lhs);
     let mut arguments = self.visit_expr_list(ast, &dot_call.arguments);
     let function_id = self.env.get_id(dot_call.function_name);
@@ -381,7 +378,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
           unsafe {
             self
               .code()
-              .backpatch_constant(function_id_location, ConstantValue::FunctionId(function_id))
+              .push_constant(ConstantValue::FunctionId(function_id))
           };
           return_type
         } else {
