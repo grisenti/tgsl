@@ -72,7 +72,8 @@ test_files!(ufc,
   primitive_types,
   aggregates,
   repeated,
-  in_local_scope
+  in_local_scope,
+  call_struct_member
 );
 
 #[rustfmt::skip]

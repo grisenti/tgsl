@@ -1,0 +1,10 @@
+import assert;
+
+struct X {
+    callable: fn() -> bool,
+}
+
+var x = X{ fn () -> bool {return true;} };
+
+assert(x.callable());
+
