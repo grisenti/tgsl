@@ -307,7 +307,7 @@ impl<'src> Parser<'src> {
   }
 }
 
-#[cfg(never)]
+#[cfg(test)]
 mod test {
   use json::{array, JsonValue};
 
@@ -322,10 +322,11 @@ mod test {
   fn parse_function_declaration_with_parameter_names() {
     let function_decl = parse_correct_statement("fn fwd_decl(a: num, b: str) -> num;");
     let function_decl = &function_decl["FunctionDeclaration"];
+    assert_eq!(function_decl["name"], "fwd_decl");
     assert_eq!(
-      function_decl["parameter types"],
-      array![&Type::Num, &Type::Str]
+      function_decl["parameter_names"].len(),
+      function_decl["parameter_types"].len()
     );
-    assert_eq!(Type::Num, function_decl["return type"])
+    assert_eq!(function_decl["return_type"], "num")
   }
 }

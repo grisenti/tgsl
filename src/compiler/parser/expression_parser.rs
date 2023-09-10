@@ -277,8 +277,9 @@ impl<'src> Parser<'src> {
   }
 }
 
-#[cfg(never)]
+#[cfg(test)]
 mod test {
+  use crate::compiler::lexer::Token;
   use json::JsonValue;
 
   use crate::compiler::parser::test::TestParser;
@@ -292,33 +293,40 @@ mod test {
   #[test]
   fn literal_string() {
     let literal = parse_correct_expression("\"str\"");
-    assert_eq!(literal["LiteralString"]["value"], "str");
+    assert_eq!(
+      literal["Literal"]["value"],
+      JsonValue::from(Token::String("str"))
+    );
   }
 
   #[test]
   fn literal_num() {
     let literal = parse_correct_expression("1");
-    assert_eq!(literal["LiteralNumber"]["value"], "1");
+    assert_eq!(
+      literal["Literal"]["value"],
+      JsonValue::from(Token::Number(1.0))
+    );
   }
 
   #[test]
   fn literal_bool() {
     let literal = parse_correct_expression("true");
-    assert_eq!(literal["LiteralBool"]["value"], true);
+    assert_eq!(literal["Literal"]["value"], JsonValue::from(Token::True));
   }
 
   #[test]
   fn identifier_type() {
-    let id = TestParser::new("x")
-      .declare_name("x", Type::Str)
-      .parse_correct_expression();
-    assert_eq!(Type::Str, id["Id"]["id_type"]);
+    let id = parse_correct_expression("this_isAn_Identifier123");
+    assert_eq!(id["Id"]["id"], "this_isAn_Identifier123");
   }
 
   #[test]
   fn literal_in_parenthesis() {
     let literal = parse_correct_expression("(1)");
-    assert_eq!(literal["Paren"]["expr"]["LiteralNumber"]["value"], "1");
+    assert_eq!(
+      literal["Paren"]["expr"]["Literal"]["value"],
+      JsonValue::from(Token::Number(1.0))
+    );
   }
 
   #[test]
@@ -334,95 +342,91 @@ mod test {
   fn binary_op() {
     let bin_op = parse_correct_expression("1 + 1");
     let bin_op = &bin_op["Binary"];
-    assert_eq!(bin_op["operator"], "+");
-    assert_eq!(bin_op["left"]["LiteralNumber"]["value"], "1");
-    assert_eq!(bin_op["right"]["LiteralNumber"]["value"], "1");
-  }
-
-  #[test]
-  fn logical_op() {
-    let logical_op = parse_correct_expression("true and false");
-    let logical_op = &logical_op["Logical"];
-    assert_eq!(logical_op["operator"], "and");
-    assert_eq!(logical_op["left"]["LiteralBool"]["value"], true);
-    assert_eq!(logical_op["right"]["LiteralBool"]["value"], false);
+    assert_eq!(bin_op["operator"], JsonValue::from(Token::Basic('+')));
+    assert_eq!(
+      bin_op["left"]["Literal"]["value"],
+      JsonValue::from(Token::Number(1.0))
+    );
+    assert_eq!(
+      bin_op["right"]["Literal"]["value"],
+      JsonValue::from(Token::Number(1.0))
+    );
   }
 
   #[test]
   fn parse_empty_function_call() {
-    let call = TestParser::new("main()")
-      .declare_name("main", FunctionSignature::new(vec![], Type::Str).into())
-      .parse_correct_expression();
+    let call = parse_correct_expression("main()");
     let call = &call["FnCall"];
-    assert!(!call["function"]["Id"].is_null());
+    assert_eq!(call["func"]["Id"]["id"], "main");
     assert_eq!(call["arguments"], JsonValue::Array(vec![]));
-    assert_eq!(Type::Str, call["expr_type"]);
+  }
+
+  #[test]
+  fn parse_function_call_with_arguments() {
+    let call = parse_correct_expression("main(1, 2, \"str\")");
+    let call = &call["FnCall"];
+    assert_eq!(call["func"]["Id"]["id"], "main");
+    assert_eq!(call["arguments"].len(), 3);
+    assert_eq!(
+      call["arguments"][0]["Literal"]["value"],
+      JsonValue::from(Token::Number(1.0))
+    );
+    assert_eq!(
+      call["arguments"][1]["Literal"]["value"],
+      JsonValue::from(Token::Number(2.0))
+    );
+    assert_eq!(
+      call["arguments"][2]["Literal"]["value"],
+      JsonValue::from(Token::String("str"))
+    );
   }
 
   #[test]
   fn parse_empty_dot_call_on_number() {
-    let call = TestParser::new("1.op()")
-      .declare_name(
-        "op",
-        FunctionSignature::new(vec![Type::Num], Type::Nothing).into(),
-      )
-      .parse_correct_expression();
+    let call = parse_correct_expression("1.op()");
     let call = &call["DotCall"];
-    assert!(!call.is_null());
-    assert_eq!(call["lhs"]["LiteralNumber"]["value"], "1");
+    assert_eq!(
+      call["lhs"]["Literal"]["value"],
+      JsonValue::from(Token::Number(1.0))
+    );
     assert!(call["arguments"].is_empty());
   }
 
   #[test]
   fn parse_dot_call_on_number_with_arguments() {
-    let call = TestParser::new("1.op(\"1234string\")")
-      .declare_name(
-        "op",
-        FunctionSignature::new(vec![Type::Num, Type::Str], Type::Nothing).into(),
-      )
-      .parse_correct_expression();
+    let call = parse_correct_expression("1.op(\"1234string\")");
     let call = &call["DotCall"];
-    assert!(!call.is_null());
-    assert_eq!(call["lhs"]["LiteralNumber"]["value"], "1");
+    assert_eq!(
+      call["lhs"]["Literal"]["value"],
+      JsonValue::from(Token::Number(1.0))
+    );
     assert_eq!(call["arguments"].len(), 1);
-    assert_eq!(call["arguments"][0]["LiteralString"]["value"], "1234string");
-  }
-
-  #[test]
-  fn parse_function_call_with_arguments() {
-    let call = TestParser::new("main(1, 2, \"str\")")
-      .declare_name(
-        "main",
-        FunctionSignature::new(vec![Type::Num, Type::Num, Type::Str], Type::Num).into(),
-      )
-      .parse_correct_expression();
-    let call = &call["FnCall"];
-    assert!(!call["function"]["Id"].is_null());
-    assert_eq!(call["arguments"].len(), 3);
-    assert_eq!(Type::Num, call["expr_type"]);
+    assert_eq!(
+      call["arguments"][0]["Literal"]["value"],
+      JsonValue::from(Token::String("1234string"))
+    );
   }
 
   #[test]
   fn parse_empty_constructor() {
-    let constructor = TestParser::new("A{}")
-      .define_struct("A", vec![], vec![])
-      .parse_correct_expression();
-    assert!(!constructor["Constructor"].is_null());
+    let constructor = parse_correct_expression("A{}");
+    assert_eq!(constructor["Constructor"]["type_name"], "A");
     assert!(constructor["Constructor"]["arguments"].is_empty());
   }
 
   #[test]
   fn parse_non_empty_constructor() {
-    let constructor = TestParser::new("A{1, \"hello\"}")
-      .define_struct("A", vec!["a", "b"], vec![Type::Num, Type::Str])
-      .parse_correct_expression();
+    let constructor = parse_correct_expression("SeriousStruct{1, \"hello\"}");
     let constructor = &constructor["Constructor"];
-    assert!(!constructor.is_null());
+    assert_eq!(constructor["type_name"], "SeriousStruct");
     assert_eq!(constructor["arguments"].len(), 2);
-    assert_eq!(constructor["arguments"][0]["LiteralNumber"]["value"], "1");
     assert_eq!(
-      constructor["arguments"][1]["LiteralString"]["value"],
-      "hello"
+      constructor["arguments"][0]["Literal"]["value"],
+      JsonValue::from(Token::Number(1.0))
+    );
+    assert_eq!(
+      constructor["arguments"][1]["Literal"]["value"],
+      JsonValue::from(Token::String("hello"))
     );
   }
 }
