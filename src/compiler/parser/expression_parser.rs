@@ -126,6 +126,7 @@ impl<'src> Parser<'src> {
     let rhs = self.match_id();
     if self.lookahead == Token::Basic('(') {
       let call_start = self.lex.previous_token_range();
+      self.advance();
       let arguments = self.parse_arguments(call_start, ')');
       let expr_end = self.lex.previous_token_range();
       self.match_token(Token::Basic(')'));
