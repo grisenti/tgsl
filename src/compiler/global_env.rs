@@ -4,7 +4,7 @@ use core::panic;
 use std::collections::HashMap;
 
 use super::identifier::{ExternId, GlobalIdentifier, GlobalVarId, ModuleId, StructId};
-use super::lexer::SourceRange;
+
 use super::types::Type;
 
 pub struct Module {
@@ -70,8 +70,6 @@ pub struct GlobalEnv {
   structs_count: u32,
   exported_functions: u32,
 }
-
-pub struct ParsedModule {}
 
 impl GlobalEnv {
   pub fn get_module(&self, module_name: &str) -> Option<&Module> {

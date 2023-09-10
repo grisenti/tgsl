@@ -4,10 +4,10 @@ use crate::compiler::ast::statement::stmt::{
 };
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{StmtHandle, AST};
-use crate::compiler::codegen::bytecode::ConstantValue::FunctionId;
+
 use crate::compiler::codegen::bytecode::OpCode;
-use crate::compiler::errors::{import_err, sema_err, ty_err, CompilerResult};
-use crate::compiler::lexer::SourceRange;
+use crate::compiler::errors::{import_err, sema_err, ty_err};
+
 use crate::compiler::semantics::environment::{DeclarationError, ImportError};
 use crate::compiler::semantics::{combine_returns, ReturnKind, SemanticChecker};
 use crate::compiler::types::{FunctionSignature, Type};
@@ -47,7 +47,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     ReturnKind::None
   }
 
-  fn visit_block(&mut self, ast: &'a AST, block: &Block, stmt_handle: StmtHandle) -> ReturnKind {
+  fn visit_block(&mut self, _ast: &'a AST, block: &Block, _stmt_handle: StmtHandle) -> ReturnKind {
     self.env.push_scope();
     let return_type = self.visit_statements(&block.statements);
     let locals = self.env.pop_scope();
@@ -159,7 +159,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     ReturnKind::None
   }
 
-  fn visit_break(&mut self, ast: &'a AST, _: StmtHandle) -> ReturnKind {
+  fn visit_break(&mut self, _ast: &'a AST, _: StmtHandle) -> ReturnKind {
     todo!()
   }
 

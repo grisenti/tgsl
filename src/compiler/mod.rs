@@ -1,7 +1,7 @@
 use crate::compiler::ast::json::ASTJSONPrinter;
-use crate::compiler::ast::AST;
+
 use crate::compiler::codegen::ModuleCode;
-use crate::compiler::errors::ErrorPrinter;
+
 use crate::compiler::global_env::GlobalEnv;
 use crate::compiler::identifier::ModuleId;
 use crate::compiler::semantics::SemanticChecker;

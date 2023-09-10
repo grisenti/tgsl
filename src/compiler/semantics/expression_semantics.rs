@@ -2,7 +2,7 @@ use crate::compiler::ast::expression::expr::{
   Assignment, Binary, Construct, DotCall, FnCall, Id, Lambda, Literal, MemberGet, MemberSet, Paren,
   Unary,
 };
-use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
+use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor};
 use crate::compiler::ast::{ExprHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::errors::{ty_err, CompilerError};
@@ -12,7 +12,7 @@ use crate::compiler::operators::{BinaryOperator, UnaryOperator};
 use crate::compiler::semantics::environment::ResolvedIdentifier;
 use crate::compiler::semantics::SemanticChecker;
 use crate::compiler::types::{FunctionSignature, Type};
-use std::process::id;
+
 
 #[rustfmt::skip]
 const BINARY_OPERATORS: &[(Token, Type, Type, Type, BinaryOperator)] = &[
@@ -74,7 +74,7 @@ fn check_arguments(
 }
 
 impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
-  fn visit_literal(&mut self, ast: &'a AST, literal: &Literal, _: ExprHandle) -> Type {
+  fn visit_literal(&mut self, _ast: &'a AST, literal: &Literal, _: ExprHandle) -> Type {
     match literal.value {
       Token::Number(value) => {
         unsafe { self.code().push_constant(ConstantValue::Number(value)) };
@@ -416,8 +416,8 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
         }
       }
       Ok(ResolvedIdentifier::ResolvedIdentifier {
-        id: Identifier::Function(function_id),
-        type_: Type::Function(signature),
+        id: Identifier::Function(_function_id),
+        type_: Type::Function(_signature),
       }) => todo!(),
       _ => todo!(),
     };

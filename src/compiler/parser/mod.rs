@@ -7,7 +7,7 @@ use super::errors::CompilerError;
 use super::lexer::*;
 use super::*;
 use crate::compiler::ast::parsed_type::{ParsedFunctionType, ParsedType};
-use crate::compiler::ast::statement::{stmt, Stmt};
+use crate::compiler::ast::statement::{stmt};
 
 #[derive(PartialEq, Eq)]
 enum ParserState {
@@ -293,10 +293,10 @@ mod test {
   use crate::compiler::ast::visitor::{ExprVisitor, StmtVisitor};
   use crate::compiler::ast::AST;
   use crate::compiler::errors::CompilerError;
-  use crate::compiler::global_env::test::EMPTY_GLOBAL_ENV;
-  use crate::compiler::lexer::{Lexer, SourceRange, Token};
+  
+  use crate::compiler::lexer::{Lexer, Token};
   use crate::compiler::parser::{Parser, ParserState};
-  use crate::compiler::types::Type;
+  
   use json::JsonValue;
 
   pub struct TestParser {

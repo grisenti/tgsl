@@ -1,7 +1,7 @@
 use super::identifier::StructId;
-use crate::compiler::ast::parsed_type::ParsedFunctionType;
-use crate::compiler::ast::visitor::ParsedTypeVisitor;
-use crate::compiler::ast::AST;
+
+
+
 use crate::compiler::identifier::OverloadId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

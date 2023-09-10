@@ -1,4 +1,4 @@
-use crate::{compiler::errors::SourceRangeProvider, return_if_err};
+use crate::{return_if_err};
 
 use super::*;
 use ast::statement::*;
@@ -309,10 +309,10 @@ impl<'src> Parser<'src> {
 
 #[cfg(test)]
 mod test {
-  use json::{array, JsonValue};
+  use json::{JsonValue};
 
   use crate::compiler::parser::test::TestParser;
-  use crate::compiler::types::Type;
+  
 
   fn parse_correct_statement(stmt: &'static str) -> JsonValue {
     TestParser::new(stmt).parse_correct_statement()

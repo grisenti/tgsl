@@ -283,8 +283,8 @@ mod test {
   use json::JsonValue;
 
   use crate::compiler::parser::test::TestParser;
-  use crate::compiler::types::FunctionSignature;
-  use crate::compiler::types::Type;
+  
+  
 
   fn parse_correct_expression(expr: &'static str) -> JsonValue {
     TestParser::new(expr).parse_correct_expression()

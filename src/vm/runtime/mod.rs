@@ -12,7 +12,7 @@ use self::call_frame::{CallFrame, EMPTY_CALL_FRAME};
 use self::gc::GC;
 
 use super::{
-  chunk::{Chunk, Function},
+  chunk::{Function},
   value::TaggedValue,
   ExternFunction,
 };

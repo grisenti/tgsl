@@ -79,7 +79,7 @@ fn parsed_type_list_to_json(parsed_types: &[TypeHandle], ast: &AST) -> JsonValue
 pub struct ASTJSONPrinter {}
 
 impl ExprVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
-  fn visit_literal(&mut self, ast: &AST, literal: &expr::Literal, _: ExprHandle) -> JsonValue {
+  fn visit_literal(&mut self, _ast: &AST, literal: &expr::Literal, _: ExprHandle) -> JsonValue {
     object! {
       "Literal": {
         "value": literal.value
@@ -340,7 +340,7 @@ impl StmtVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_module_decl(&mut self, ast: &AST, module_decl: &ModuleDecl, _: StmtHandle) -> JsonValue {
+  fn visit_module_decl(&mut self, _ast: &AST, module_decl: &ModuleDecl, _: StmtHandle) -> JsonValue {
     object! {
       "ModuleDecl": {
         "name": module_decl.name
@@ -350,27 +350,27 @@ impl StmtVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
 }
 
 impl ParsedTypeVisitor<JsonValue> for ASTJSONPrinter {
-  fn visit_num(&mut self, ast: &AST) -> JsonValue {
+  fn visit_num(&mut self, _ast: &AST) -> JsonValue {
     JsonValue::String("num".to_string())
   }
 
-  fn visit_str(&mut self, ast: &AST) -> JsonValue {
+  fn visit_str(&mut self, _ast: &AST) -> JsonValue {
     JsonValue::String("str".to_string())
   }
 
-  fn visit_bool(&mut self, ast: &AST) -> JsonValue {
+  fn visit_bool(&mut self, _ast: &AST) -> JsonValue {
     JsonValue::String("bool".to_string())
   }
 
-  fn visit_nothing(&mut self, ast: &AST) -> JsonValue {
+  fn visit_nothing(&mut self, _ast: &AST) -> JsonValue {
     JsonValue::String("nothing".to_string())
   }
 
-  fn visit_any(&mut self, ast: &AST) -> JsonValue {
+  fn visit_any(&mut self, _ast: &AST) -> JsonValue {
     JsonValue::String("any".to_string())
   }
 
-  fn visit_named(&mut self, ast: &AST, name: &str) -> JsonValue {
+  fn visit_named(&mut self, _ast: &AST, name: &str) -> JsonValue {
     object! {named: name}
   }
 

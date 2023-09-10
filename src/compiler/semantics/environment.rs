@@ -2,7 +2,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use crate::compiler::codegen::function_code::FunctionCode;
-use crate::compiler::errors::CompilerResult;
+
 use crate::compiler::identifier::{FunctionId, OverloadId};
 use crate::compiler::overload_set::{OverloadSet, ResolvedOverload};
 use crate::compiler::types::{FunctionSignature, Type};

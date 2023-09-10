@@ -1,5 +1,5 @@
-use language::compiler::errors::ErrorPrinter;
-use language::compiler::Compiler;
+
+
 use language::vm::VM;
 use std::fs;
 

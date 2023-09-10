@@ -1,22 +1,22 @@
-use crate::compiler::ast::expression::expr;
-use crate::compiler::ast::parsed_type::{ParsedFunctionType, ParsedType};
+
+use crate::compiler::ast::parsed_type::{ParsedFunctionType};
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::codegen::ModuleCode;
 use crate::compiler::errors::{sema_err, ty_err, CompilerError};
-use crate::compiler::global_env::{GlobalEnv, MemberIndex, Struct};
+use crate::compiler::global_env::{GlobalEnv, Struct};
 use crate::compiler::identifier::{
-  FunctionId, GlobalIdentifier, Identifier, ModuleId, StructId, VariableIdentifier,
+  FunctionId, GlobalIdentifier, Identifier, VariableIdentifier,
 };
 use crate::compiler::lexer::SourceRange;
 use crate::compiler::overload_set::OverloadSet;
 use crate::compiler::semantics::environment::{
-  DeclarationError, Environment, NameError, NameResult, ResolvedIdentifier,
+  DeclarationError, Environment, NameError, ResolvedIdentifier,
 };
 use crate::compiler::types::{FunctionSignature, Type};
-use crate::return_if_err;
+
 use std::collections::HashMap;
 
 mod environment;
@@ -294,27 +294,27 @@ impl<'a> SemanticChecker<'a> {
 }
 
 impl ParsedTypeVisitor<Type> for SemanticChecker<'_> {
-  fn visit_num(&mut self, ast: &AST) -> Type {
+  fn visit_num(&mut self, _ast: &AST) -> Type {
     Type::Num
   }
 
-  fn visit_str(&mut self, ast: &AST) -> Type {
+  fn visit_str(&mut self, _ast: &AST) -> Type {
     Type::Str
   }
 
-  fn visit_bool(&mut self, ast: &AST) -> Type {
+  fn visit_bool(&mut self, _ast: &AST) -> Type {
     Type::Bool
   }
 
-  fn visit_nothing(&mut self, ast: &AST) -> Type {
+  fn visit_nothing(&mut self, _ast: &AST) -> Type {
     Type::Nothing
   }
 
-  fn visit_any(&mut self, ast: &AST) -> Type {
+  fn visit_any(&mut self, _ast: &AST) -> Type {
     Type::Any
   }
 
-  fn visit_named(&mut self, ast: &AST, name: &str) -> Type {
+  fn visit_named(&mut self, _ast: &AST, name: &str) -> Type {
     match self.env.get_struct_id(name) {
       Ok(struct_it) => Type::Struct(struct_it),
       Err(_) => panic!(),
