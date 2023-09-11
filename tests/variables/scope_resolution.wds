@@ -4,8 +4,14 @@ var variable = "global";
 {
     var variable = "local";
     assert(variable == "local");
+    {
+        var variable = "local2";
+        assert(variable == "local2");
+    }
+    assert(variable == "local");
 }
 assert(variable == "global");
 {
     assert(variable == "global");
 }
+
