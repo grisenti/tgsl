@@ -11,6 +11,7 @@ use crate::compiler::{
   identifier::{ExternId, GlobalIdentifier, GlobalVarId, Identifier, StructId, VariableIdentifier},
 };
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum ResolvedIdentifier<'a> {
   UnresolvedOverload(OverloadId),
   ResolvedIdentifier { id: Identifier, type_: &'a Type },
@@ -46,7 +47,7 @@ pub struct FinalizedFunction {
   pub code: FunctionCode,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeclarationError {
   AlreadyDefined,
   TooManyLocalNames,
@@ -54,7 +55,7 @@ pub enum DeclarationError {
 
 pub type DeclarationResult<T> = Result<T, DeclarationError>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImportError {
   NameRedefinition(String),
   OverloadRedefinition(String),
@@ -63,7 +64,7 @@ pub enum ImportError {
 
 pub type ImportResult = Result<(), ImportError>;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NameError {
   UndeclaredName,
 }
@@ -194,19 +195,6 @@ impl<'src> Environment<'src> {
       })
     } else {
       self.get_global(name)
-    }
-  }
-
-  pub fn get_variable_id(&mut self, name: &str) -> NameResult<(VariableIdentifier, &Type)> {
-    if let Some(local) = self.find_local(name) {
-      Ok(self.capture(local))
-    } else if let Some(GlobalIdentifier::Variable(id)) = self.global_names.get(name).copied() {
-      Ok((
-        id.into(),
-        &self.module_global_variables_types[id.get_id() as usize],
-      ))
-    } else {
-      Err(NameError::UndeclaredName)
     }
   }
 
@@ -484,12 +472,13 @@ impl<'src> Environment<'src> {
   }
 }
 
-#[cfg(disable)]
+#[cfg(test)]
 mod test {
+  use crate::compiler::semantics::environment::ResolvedIdentifier::ResolvedIdentifier;
+  use crate::compiler::types::Type;
   use crate::compiler::{
     global_env::GlobalEnv,
     identifier::{GlobalVarId, VariableIdentifier},
-    lexer::SourceRange,
   };
 
   use super::Environment;
@@ -498,14 +487,19 @@ mod test {
   fn access_global_variable_from_global_scope() {
     let global_env = GlobalEnv::new();
     let mut env = Environment::new(&global_env);
-    env
-      .define_variable("x", SourceRange::EMPTY)
+    let var_id = env
+      .define_variable("x", Type::Any)
       .expect("could not define variable");
+    assert!(matches!(
+      VariableIdentifier::Global(GlobalVarId::relative(0)),
+      var_id
+    ));
     assert_eq!(
-      env.get_variable_id("x", SourceRange::EMPTY),
-      Ok(VariableIdentifier::Global(
-        GlobalVarId::relative(0).into_public()
-      ))
+      env.get_id("x"),
+      Ok(ResolvedIdentifier {
+        id: var_id.into(),
+        type_: &Type::Any
+      })
     );
   }
 
@@ -513,15 +507,16 @@ mod test {
   fn access_global_variable_from_local_scope() {
     let global_env = GlobalEnv::new();
     let mut env = Environment::new(&global_env);
-    env
-      .define_variable("x", SourceRange::EMPTY)
+    let var_id = env
+      .define_variable("x", Type::Str)
       .expect("counld not define global variable");
     env.push_scope();
     assert_eq!(
-      env.get_variable_id("x", SourceRange::EMPTY),
-      Ok(VariableIdentifier::Global(
-        GlobalVarId::relative(0).into_public()
-      ))
+      env.get_id("x"),
+      Ok(ResolvedIdentifier {
+        id: var_id.into(),
+        type_: &Type::Str
+      })
     );
   }
 
@@ -529,44 +524,56 @@ mod test {
   fn capture_once() {
     let global_env = GlobalEnv::new();
     let mut env = Environment::new(&global_env);
-    env.push_function();
-    env
-      .define_variable("x", SourceRange::EMPTY)
+    env.push_function("outer".to_string(), Type::Nothing);
+    let var_id = env
+      .define_variable("x", Type::Bool)
       .expect("could not declare name");
-    env.push_function();
+    env.push_function("inner".to_string(), Type::Nothing);
     assert_eq!(
-      env.get_variable_id("x", SourceRange::EMPTY),
-      Ok(VariableIdentifier::Capture(0))
+      env.get_id("x"),
+      Ok(ResolvedIdentifier {
+        id: VariableIdentifier::Capture(0).into(),
+        type_: &Type::Bool
+      })
     );
     assert_eq!(
-      env.get_variable_id("x", SourceRange::EMPTY),
-      Ok(VariableIdentifier::Capture(0))
+      env.get_id("x"),
+      Ok(ResolvedIdentifier {
+        id: VariableIdentifier::Capture(0).into(),
+        type_: &Type::Bool
+      })
     );
     assert_eq!(
-      env.get_variable_id("x", SourceRange::EMPTY),
-      Ok(VariableIdentifier::Capture(0))
+      env.get_id("x"),
+      Ok(ResolvedIdentifier {
+        id: VariableIdentifier::Capture(0).into(),
+        type_: &Type::Bool
+      })
     );
-    let captures = env.pop_function();
-    assert_eq!(captures, vec![VariableIdentifier::Local(0)]);
+    let function = env.pop_function();
+    assert_eq!(function.captures, vec![var_id]);
   }
 
   #[test]
   fn multilevel_capture() {
     let global_env = GlobalEnv::new();
     let mut env = Environment::new(&global_env);
-    env.push_function();
+    env.push_function("1".to_string(), Type::Nothing);
     env
-      .define_variable("x", SourceRange::EMPTY)
+      .define_variable("x", Type::Num)
       .expect("could not declare name");
-    env.push_function();
-    env.push_function();
+    env.push_function("2".to_string(), Type::Nothing);
+    env.push_function("3".to_string(), Type::Nothing);
     assert_eq!(
-      env.get_variable_id("x", SourceRange::EMPTY),
-      Ok(VariableIdentifier::Capture(0))
+      env.get_id("x"),
+      Ok(ResolvedIdentifier {
+        id: VariableIdentifier::Capture(0).into(),
+        type_: &Type::Num
+      })
     );
-    let captures = env.pop_function();
+    let captures = env.pop_function().captures;
     assert_eq!(captures, vec![VariableIdentifier::Capture(0)]);
-    let captures = env.pop_function();
+    let captures = env.pop_function().captures;
     assert_eq!(captures, vec![VariableIdentifier::Local(0)]);
   }
 
@@ -575,10 +582,11 @@ mod test {
     let global_env = GlobalEnv::new();
     let mut env = Environment::new(&global_env);
     env
-      .define_variable("x", SourceRange::EMPTY)
+      .define_variable("x", Type::Bool)
       .expect("could not declare name");
-    env.push_function();
-    assert_eq!(env.pop_function(), vec![]);
+    env.push_function("func".to_string(), Type::Nothing);
+    env.get_id("x").expect("could not get variable");
+    assert_eq!(env.pop_function().captures, vec![]);
   }
 
   #[test]
@@ -586,15 +594,16 @@ mod test {
     let global_env = GlobalEnv::new();
     let mut env = Environment::new(&global_env);
     env
-      .define_variable("x", SourceRange::EMPTY)
+      .define_variable("x", Type::Str)
       .expect("could not declare name");
-    env.push_function();
+    env.push_function("h".to_string(), Type::Bool);
     env.push_scope();
     assert_eq!(
-      env.get_variable_id("x", SourceRange::EMPTY),
-      Ok(VariableIdentifier::Global(
-        GlobalVarId::relative(0).into_public()
-      ))
+      env.get_id("x"),
+      Ok(ResolvedIdentifier {
+        id: GlobalVarId::relative(0).into_public().into(),
+        type_: &Type::Str
+      })
     );
   }
 
@@ -602,36 +611,17 @@ mod test {
   fn no_capture_same_function_different_scope() {
     let global_env = GlobalEnv::new();
     let mut env = Environment::new(&global_env);
-    env.push_function();
+    env.push_function("f".to_string(), Type::Nothing);
     env
-      .define_variable("x", SourceRange::EMPTY)
+      .define_variable("x", Type::Str)
       .expect("could not declare name");
     env.push_scope();
     assert_eq!(
-      env.get_variable_id("x", SourceRange::EMPTY),
-      Ok(VariableIdentifier::Local(0))
+      env.get_id("x"),
+      Ok(ResolvedIdentifier {
+        id: VariableIdentifier::Local(0).into(),
+        type_: &Type::Str
+      })
     );
   }
-
-  // #[test]
-  // fn can_use_imported_names_in_anonymous_module() {
-  //   let global_env = GlobalEnv::new();
-  //   let module_id = global_env
-  //     .new_module("test", SourceRange::EMPTY)
-  //     .expect("could not create test module");
-  //   let name_id = global_env.new_global_id();
-  //   global_env.export_module(
-  //     module_id,
-  //     Module {
-  //       public_names: HashMap::from([("x".to_string(), name_id)]),
-  //     },
-  //   );
-  //   let mut env = Environment::new(&global_env);
-  //   env
-  //     .import_module("test", SourceRange::EMPTY)
-  //     .expect("could not import test module");
-  //   env
-  //     .get_name("x", SourceRange::EMPTY)
-  //     .expect("could not get id");
-  // }
 }
