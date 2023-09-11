@@ -33,6 +33,11 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
       ));
       return ReturnKind::None;
     }
+    if let Type::UnresolvedOverload(_) = var_type {
+      self.emit_error(ty_err::cannot_initialize_with_overloaded_function(stmt_sr));
+      self.new_variable(var_decl.name, Type::Error, stmt_sr);
+      return ReturnKind::None;
+    }
     let id = self.new_variable(var_decl.name, var_type, stmt_sr);
     if self.env.in_global_scope() {
       unsafe { self.code().set_variable(id) };

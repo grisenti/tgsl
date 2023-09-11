@@ -13,7 +13,6 @@ use crate::compiler::semantics::environment::ResolvedIdentifier;
 use crate::compiler::semantics::SemanticChecker;
 use crate::compiler::types::{FunctionSignature, Type};
 
-
 #[rustfmt::skip]
 const BINARY_OPERATORS: &[(Token, Type, Type, Type, BinaryOperator)] = &[
   // number
@@ -136,6 +135,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       ));
       Type::Error
     } else {
+      assert!(!matches!(rhs_type, Type::UnresolvedOverload(_)));
       unsafe { self.code().set_variable(var_id) };
       rhs_type
     }
