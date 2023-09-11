@@ -358,7 +358,7 @@ impl<'src> Environment<'src> {
       .locals
       .truncate(self.locals.len() - names_in_current_scope as usize);
     if let Some(local) = self.locals.last() {
-      self.names_in_current_scope = local.scope_local_id;
+      self.names_in_current_scope = local.scope_local_id + 1;
     } else {
       self.names_in_current_scope = 0;
     }
