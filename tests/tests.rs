@@ -79,7 +79,8 @@ test_files!(ufc,
 #[rustfmt::skip]
 test_files!(overloading,
   resolve_dot_call,
-  resolve_simple
+  resolve_simple,
+  single_overload_can_be_assigned
 );
 
 #[rustfmt::skip]

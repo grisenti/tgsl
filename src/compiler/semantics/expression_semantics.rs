@@ -103,9 +103,19 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     let resolved_id = self.get_id(id.id, expr_handle.get_source_range(ast));
     match resolved_id {
       ResolvedIdentifier::UnresolvedOverload(overload_id) => Type::UnresolvedOverload(overload_id),
-      ResolvedIdentifier::ResolvedIdentifier { id, type_ } => {
+      ResolvedIdentifier::ResolvedVariable { id, type_ } => {
         let type_ = type_.clone();
-        unsafe { self.generate_identifier_code(id) };
+        unsafe { self.code().get_variable(id) };
+        type_
+      }
+      ResolvedIdentifier::ResolvedFunction { id, signature } => {
+        let type_ = signature.clone().into();
+        unsafe { self.code().push_constant(ConstantValue::FunctionId(id)) };
+        type_
+      }
+      ResolvedIdentifier::ExternFunction { id, type_ } => {
+        let type_ = type_.clone();
+        unsafe { self.code().push_constant(ConstantValue::ExternId(id)) };
         type_
       }
       ResolvedIdentifier::Struct(struct_id) => Type::Struct(struct_id),
@@ -415,10 +425,17 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
           Type::Error
         }
       }
-      Ok(ResolvedIdentifier::ResolvedIdentifier {
-        id: Identifier::Function(_function_id),
-        type_: Type::Function(_signature),
-      }) => todo!(),
+      Ok(ResolvedIdentifier::ResolvedFunction { id, signature }) => {
+        check_arguments(
+          &mut self.errors,
+          signature.get_parameters(),
+          &arguments,
+          call_sr,
+        );
+        let return_type = signature.get_return_type().clone();
+        unsafe { self.code().push_constant(ConstantValue::FunctionId(id)) };
+        return_type
+      }
       _ => todo!(),
     };
     unsafe { self.code().push_op2(OpCode::Call, arguments.len() as u8) };

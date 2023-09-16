@@ -1,5 +1,4 @@
-
-use crate::compiler::ast::parsed_type::{ParsedFunctionType};
+use crate::compiler::ast::parsed_type::ParsedFunctionType;
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
@@ -7,9 +6,7 @@ use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::codegen::ModuleCode;
 use crate::compiler::errors::{sema_err, ty_err, CompilerError};
 use crate::compiler::global_env::{GlobalEnv, Struct};
-use crate::compiler::identifier::{
-  FunctionId, GlobalIdentifier, Identifier, VariableIdentifier,
-};
+use crate::compiler::identifier::{FunctionId, GlobalIdentifier, Identifier, VariableIdentifier};
 use crate::compiler::lexer::SourceRange;
 use crate::compiler::overload_set::OverloadSet;
 use crate::compiler::semantics::environment::{
@@ -243,10 +240,7 @@ impl<'a> SemanticChecker<'a> {
 
   fn get_variable(&mut self, name: &str, sr: SourceRange) -> (VariableIdentifier, &Type) {
     match self.env.get_id(name) {
-      Ok(ResolvedIdentifier::ResolvedIdentifier {
-        id: Identifier::Variable(var_id),
-        type_,
-      }) => return (var_id, type_),
+      Ok(ResolvedIdentifier::ResolvedVariable { id, type_ }) => return (id, type_),
       Err(NameError::UndeclaredName) => {
         self.errors.push(sema_err::name_not_found(sr, name));
       }

@@ -41,6 +41,14 @@ impl OverloadSet {
     true
   }
 
+  pub fn auto_resolve(&self) -> Option<&(FunctionSignature, FunctionId)> {
+    if self.functions.len() == 1 {
+      Some(&self.functions[0])
+    } else {
+      None
+    }
+  }
+
   pub fn export_set(self, function_id_start: u32) -> (Self, usize) {
     let mut exported = Vec::new();
     for (signature, func_id) in self.functions {

@@ -14,8 +14,19 @@ use crate::compiler::{
 #[derive(Debug, Eq, PartialEq)]
 pub enum ResolvedIdentifier<'a> {
   UnresolvedOverload(OverloadId),
-  ResolvedIdentifier { id: Identifier, type_: &'a Type },
+  ResolvedFunction {
+    id: FunctionId,
+    signature: &'a FunctionSignature,
+  },
+  ResolvedVariable {
+    id: VariableIdentifier,
+    type_: &'a Type,
+  },
   Struct(StructId),
+  ExternFunction {
+    id: ExternId,
+    type_: &'a Type, // TODO: maybe make this FunctionSignature
+  },
   Error,
 }
 
@@ -147,31 +158,39 @@ impl<'src> Environment<'src> {
 
   fn get_global(&mut self, name: &str) -> NameResult<ResolvedIdentifier> {
     if let Some(&global_variable) = self.global_names.get(name) {
-      let type_ = match global_variable {
+      match global_variable {
         GlobalIdentifier::Variable(var_id) => {
-          if var_id.is_relative() {
+          let type_ = if var_id.is_relative() {
             &self.module_global_variables_types[var_id.get_id() as usize]
           } else {
             self.global_env.get_variable_type(var_id)
-          }
+          };
+          Ok(ResolvedIdentifier::ResolvedVariable {
+            id: var_id.into(),
+            type_,
+          })
         }
         GlobalIdentifier::ExternFunction(extern_id) => {
-          if extern_id.is_relative() {
+          let type_ = if extern_id.is_relative() {
             &self.extern_function_types[extern_id.get_id() as usize]
           } else {
             self.global_env.get_extern_function_type(extern_id)
+          };
+          Ok(ResolvedIdentifier::ExternFunction {
+            id: extern_id,
+            type_,
+          })
+        }
+        GlobalIdentifier::Struct(struct_id) => Ok(ResolvedIdentifier::Struct(struct_id)),
+        GlobalIdentifier::OverloadId(overload_id) => {
+          if let Some((signature, id)) = self.overloads[overload_id as usize].auto_resolve() {
+            Ok(ResolvedIdentifier::ResolvedFunction { signature, id: *id })
+          } else {
+            Ok(ResolvedIdentifier::UnresolvedOverload(overload_id))
           }
         }
-        GlobalIdentifier::Struct(struct_id) => return Ok(ResolvedIdentifier::Struct(struct_id)),
-        GlobalIdentifier::OverloadId(overload_id) => {
-          return Ok(ResolvedIdentifier::UnresolvedOverload(overload_id));
-        }
         GlobalIdentifier::Invalid => panic!(),
-      };
-      Ok(ResolvedIdentifier::ResolvedIdentifier {
-        id: global_variable.into(),
-        type_,
-      })
+      }
     } else {
       Err(NameError::UndeclaredName)
     }
@@ -189,9 +208,9 @@ impl<'src> Environment<'src> {
   pub fn get_id(&mut self, name: &str) -> NameResult<ResolvedIdentifier> {
     if let Some(local) = self.find_local(name) {
       let (local_id, type_) = self.capture(local);
-      Ok(ResolvedIdentifier::ResolvedIdentifier {
+      Ok(ResolvedIdentifier::ResolvedVariable {
         id: local_id.into(),
-        type_: type_,
+        type_,
       })
     } else {
       self.get_global(name)
@@ -474,8 +493,12 @@ impl<'src> Environment<'src> {
 
 #[cfg(test)]
 mod test {
-  use crate::compiler::semantics::environment::ResolvedIdentifier::ResolvedIdentifier;
-  use crate::compiler::types::Type;
+  use crate::compiler::identifier::FunctionId;
+  use crate::compiler::semantics::environment::ResolvedIdentifier;
+  use crate::compiler::semantics::environment::ResolvedIdentifier::{
+    ResolvedFunction, ResolvedVariable,
+  };
+  use crate::compiler::types::{FunctionSignature, Type};
   use crate::compiler::{
     global_env::GlobalEnv,
     identifier::{GlobalVarId, VariableIdentifier},
@@ -496,8 +519,8 @@ mod test {
     ));
     assert_eq!(
       env.get_id("x"),
-      Ok(ResolvedIdentifier {
-        id: var_id.into(),
+      Ok(ResolvedVariable {
+        id: var_id,
         type_: &Type::Any
       })
     );
@@ -513,7 +536,7 @@ mod test {
     env.push_scope();
     assert_eq!(
       env.get_id("x"),
-      Ok(ResolvedIdentifier {
+      Ok(ResolvedVariable {
         id: var_id.into(),
         type_: &Type::Str
       })
@@ -531,21 +554,21 @@ mod test {
     env.push_function("inner".to_string(), Type::Nothing);
     assert_eq!(
       env.get_id("x"),
-      Ok(ResolvedIdentifier {
+      Ok(ResolvedVariable {
         id: VariableIdentifier::Capture(0).into(),
         type_: &Type::Bool
       })
     );
     assert_eq!(
       env.get_id("x"),
-      Ok(ResolvedIdentifier {
+      Ok(ResolvedVariable {
         id: VariableIdentifier::Capture(0).into(),
         type_: &Type::Bool
       })
     );
     assert_eq!(
       env.get_id("x"),
-      Ok(ResolvedIdentifier {
+      Ok(ResolvedVariable {
         id: VariableIdentifier::Capture(0).into(),
         type_: &Type::Bool
       })
@@ -566,7 +589,7 @@ mod test {
     env.push_function("3".to_string(), Type::Nothing);
     assert_eq!(
       env.get_id("x"),
-      Ok(ResolvedIdentifier {
+      Ok(ResolvedVariable {
         id: VariableIdentifier::Capture(0).into(),
         type_: &Type::Num
       })
@@ -600,7 +623,7 @@ mod test {
     env.push_scope();
     assert_eq!(
       env.get_id("x"),
-      Ok(ResolvedIdentifier {
+      Ok(ResolvedVariable {
         id: GlobalVarId::relative(0).into_public().into(),
         type_: &Type::Str
       })
@@ -618,9 +641,26 @@ mod test {
     env.push_scope();
     assert_eq!(
       env.get_id("x"),
-      Ok(ResolvedIdentifier {
+      Ok(ResolvedVariable {
         id: VariableIdentifier::Local(0).into(),
         type_: &Type::Str
+      })
+    );
+  }
+
+  #[test]
+  fn overload_set_with_one_element_returns_the_element() {
+    let global_env = GlobalEnv::new();
+    let mut env = Environment::new(&global_env);
+    let signature = FunctionSignature::new(vec![Type::Str], Type::Num);
+    env
+      .define_global_function("get_object", signature.clone())
+      .expect("could not define function");
+    assert_eq!(
+      env.get_id("get_object"),
+      Ok(ResolvedFunction {
+        id: FunctionId::relative(0).into_public().into(),
+        signature: &signature
       })
     );
   }
