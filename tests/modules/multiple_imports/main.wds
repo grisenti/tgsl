@@ -1,0 +1,5 @@
+import mod1;
+import mod2;
+
+var platform_type_check: str = platform;
+var platform_id_type_check: num = platform_id;

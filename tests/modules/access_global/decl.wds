@@ -1,0 +1,3 @@
+module decl;
+
+var module_name = "decl";

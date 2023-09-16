@@ -1,0 +1,6 @@
+module vec2;
+
+struct Vec2 {
+    x: num,
+    y: num,
+}

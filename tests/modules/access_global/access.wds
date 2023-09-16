@@ -1,0 +1,3 @@
+import decl;
+
+var check_type: str = module_name;

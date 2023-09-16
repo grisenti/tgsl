@@ -17,6 +17,19 @@ macro_rules! test_files {
   };
 }
 
+macro_rules! modules_test {
+  ($test_name:ident, $($test_file:ident),+) => {
+    #[test]
+    #[allow(non_snake_case)]
+    fn $test_name() {
+      compile_and_run_multiple(
+        &[$(include_str!(concat!("../tests/modules/", stringify!($test_name), "/", stringify!($test_file), ".wds"))),+]
+      );
+    }
+
+  };
+}
+
 fn assert(args: Vec<TaggedValue>) -> TaggedValue {
   assert!(unsafe { args[0].value.boolean });
   TaggedValue::none()
@@ -31,6 +44,21 @@ fn compile_and_run(test_file: &str) {
   .expect("error in utils file");
   if let Err(msg) = vm.load_module(test_file, vec![]) {
     panic!("{}", msg);
+  }
+}
+
+fn compile_and_run_multiple(test_files: &[&str]) {
+  let mut vm = VM::new();
+  vm.load_module(
+    include_str!("../tests/test_utils.wds"),
+    vec![("assert", Box::new(assert))],
+  )
+  .expect("error in utils file");
+
+  for test_file in test_files {
+    if let Err(msg) = vm.load_module(test_file, vec![]) {
+      panic!("{}", msg);
+    }
   }
 }
 
@@ -90,3 +118,9 @@ test_files!(variables,
   scope_resolution,
   variable_declaration
 );
+
+modules_test!(access_global, decl, access);
+
+modules_test!(multiple_imports, mod1, mod2, main);
+
+modules_test!(access_struct, struct_decl, access);

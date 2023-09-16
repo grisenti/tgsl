@@ -1,0 +1,3 @@
+import vec2;
+
+var v: Vec2 = Vec2{1, 2};
