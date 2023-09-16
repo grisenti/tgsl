@@ -1,0 +1,7 @@
+import assert;
+
+fn get_platform() -> str { return "android"; }
+
+var f = get_platform;
+
+assert(f() == "android");

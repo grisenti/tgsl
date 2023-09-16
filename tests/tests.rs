@@ -47,7 +47,8 @@ test_files!(functions,
   function_call_before_definition,
   function_call,
   mutually_recursive_functions,
-  self_recursive_function
+  self_recursive_function,
+  function_definition
 );
 
 #[rustfmt::skip]
@@ -80,7 +81,7 @@ test_files!(ufc,
 test_files!(overloading,
   resolve_dot_call,
   resolve_simple,
-  single_overload_can_be_assigned
+  single_overload_can_be_assigned_and_called
 );
 
 #[rustfmt::skip]

@@ -1,0 +1,3 @@
+fn very_important_secret(param_1: num, param_2: num) -> num {
+    return param_1 + param_2;
+}
