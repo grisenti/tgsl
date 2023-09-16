@@ -132,8 +132,8 @@ impl GlobalEnv {
         }
         GlobalIdentifier::Struct(struct_id) => {
           if struct_id.is_relative() && struct_id.is_public() {
-            let absolute_id = GlobalVarId::absolute(struct_id.get_id() + self.structs_count);
-            module_names.insert(name, GlobalIdentifier::Variable(absolute_id));
+            let absolute_id = StructId::absolute(struct_id.get_id() + self.structs_count);
+            module_names.insert(name, GlobalIdentifier::Struct(absolute_id));
             exported_structs += 1;
           }
         }
@@ -143,6 +143,7 @@ impl GlobalEnv {
         _ => panic!(),
       }
     }
+    self.structs.extend(module_exports.structs);
     let mut exported_functions = 0;
     let overloads = module_exports
       .overloads

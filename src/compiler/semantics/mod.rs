@@ -50,7 +50,7 @@ pub struct ModuleExports {
   pub global_names: HashMap<String, GlobalIdentifier>,
   pub global_variables_types: Vec<Type>,
   pub extern_function_types: Vec<Type>,
-  pub structs: Vec<Option<Struct>>,
+  pub structs: Vec<Struct>,
   pub overloads: Vec<OverloadSet>,
 }
 
@@ -85,12 +85,18 @@ impl<'a> SemanticChecker<'a> {
     );
     if checker.errors.is_empty() {
       unsafe { checker.global_code.push_op(OpCode::Return) };
+      let structs = checker
+        .env
+        .module_structs
+        .into_iter()
+        .map(|s| s.unwrap())
+        .collect();
       let exported_module = ModuleExports {
         module_name: checker.module_name,
         global_names: checker.env.global_names,
         global_variables_types: checker.env.module_global_variables_types,
         extern_function_types: checker.env.extern_function_types,
-        structs: checker.env.module_structs,
+        structs,
         overloads: checker.env.overloads,
       };
       Ok((
