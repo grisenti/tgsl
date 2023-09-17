@@ -6,7 +6,7 @@ use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor};
 use crate::compiler::ast::{ExprHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::errors::{sema_err, ty_err, CompilerError};
-use crate::compiler::identifier::{FunctionId, Identifier, VariableIdentifier};
+use crate::compiler::identifier::{FunctionId, Identifier, OverloadId, VariableIdentifier};
 use crate::compiler::lexer::{SourceRange, Token};
 use crate::compiler::operators::{BinaryOperator, UnaryOperator};
 use crate::compiler::semantics::environment::{NameError, ResolvedIdentifier};
@@ -257,24 +257,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
         );
         signature.get_return_type().clone()
       }
-      Type::UnresolvedOverload(overload_id) => {
-        if let Some(resolved_overload) = self.env.resolve_overload(overload_id, &arguments) {
-          let function_id = resolved_overload.function_id;
-          let return_type = resolved_overload
-            .function_signature
-            .get_return_type()
-            .clone();
-          unsafe {
-            self
-              .code()
-              .push_constant(ConstantValue::FunctionId(function_id))
-          };
-          return_type
-        } else {
-          self.emit_error(ty_err::no_available_oveload(call_sr));
-          Type::Error
-        }
-      }
+      Type::UnresolvedOverload(overload_id) => self.call_overload(call_sr, &arguments, overload_id),
       Type::Error => Type::Error,
       _ => {
         self.emit_error(ty_err::cannot_call_type(
@@ -408,22 +391,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     arguments.push(lhs_type);
     let expr_type = match function_id {
       Ok(ResolvedIdentifier::UnresolvedOverload(overload_id)) => {
-        if let Some(resolved_overload) = self.env.resolve_overload(overload_id, &arguments) {
-          let function_id = resolved_overload.function_id;
-          let return_type = resolved_overload
-            .function_signature
-            .get_return_type()
-            .clone();
-          unsafe {
-            self
-              .code()
-              .push_constant(ConstantValue::FunctionId(function_id))
-          };
-          return_type
-        } else {
-          self.emit_error(ty_err::no_available_oveload(call_sr));
-          Type::Error
-        }
+        self.call_overload(call_sr, &arguments, overload_id)
       }
       Ok(ResolvedIdentifier::ResolvedFunction { id, signature }) => {
         check_arguments(
@@ -471,6 +439,32 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       Type::Struct(struct_id)
     } else {
       todo!("struct was not defined");
+    }
+  }
+}
+
+impl<'a> SemanticChecker<'a> {
+  fn call_overload(
+    &mut self,
+    call_sr: SourceRange,
+    arguments: &[Type],
+    overload_id: OverloadId,
+  ) -> Type {
+    if let Some(resolved_overload) = self.env.resolve_overload(overload_id, &arguments) {
+      let function_id = resolved_overload.function_id;
+      let return_type = resolved_overload
+        .function_signature
+        .get_return_type()
+        .clone();
+      unsafe {
+        self
+          .code()
+          .push_constant(ConstantValue::FunctionId(function_id))
+      };
+      return_type
+    } else {
+      self.emit_error(ty_err::no_available_oveload(call_sr));
+      Type::Error
     }
   }
 }
