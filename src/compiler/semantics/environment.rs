@@ -230,11 +230,11 @@ impl<'src> Environment<'src> {
     &mut self,
     name: &str,
     signature: FunctionSignature,
-  ) -> NameResult<FunctionId> {
+  ) -> DeclarationResult<FunctionId> {
     self.declare_global_function(name, signature)
   }
 
-  fn get_or_create_overload_id(&mut self, name: &str) -> NameResult<OverloadId> {
+  fn get_or_create_overload_id(&mut self, name: &str) -> DeclarationResult<OverloadId> {
     if let Some(id) = self.global_names.get(name) {
       if let GlobalIdentifier::OverloadId(overload_id) = id {
         Ok(*overload_id)
@@ -255,7 +255,7 @@ impl<'src> Environment<'src> {
     &mut self,
     name: &str,
     signature: FunctionSignature,
-  ) -> NameResult<FunctionId> {
+  ) -> DeclarationResult<FunctionId> {
     let overload_id = self.get_or_create_overload_id(name)?;
     if let Some(overload) = &self.overloads[overload_id as usize].find(signature.get_parameters()) {
       if overload.function_signature.get_return_type() != signature.get_return_type() {
@@ -286,6 +286,12 @@ impl<'src> Environment<'src> {
     }
   }
 
+  pub fn declare_struct(&mut self, name: &str) -> DeclarationResult<StructId> {
+    let id = StructId::relative(self.module_structs.len() as u32).into_public();
+    self.declare_global(name, id.into())?;
+    Ok(id)
+  }
+
   pub fn define_struct(
     &mut self,
     name: &str,
@@ -294,14 +300,26 @@ impl<'src> Environment<'src> {
   ) -> DeclarationResult<StructId> {
     assert_eq!(member_types.len(), member_names.len());
 
-    let id = StructId::relative(self.module_structs.len() as u32).into_public();
-    self.declare_global(name, id.into())?;
-    self.module_structs.push(Some(Struct::new(
-      name.to_string(),
-      member_names,
-      member_types,
-    )));
-    Ok(id)
+    if let Some(GlobalIdentifier::Struct(struct_id)) = self.global_names.get(name) {
+      if !struct_id.is_relative() {
+        return Err(DeclarationError::AlreadyDefined);
+      }
+      let struct_ = &mut self.module_structs[struct_id.get_id() as usize];
+      if struct_.is_some() {
+        Err(DeclarationError::AlreadyDefined)
+      } else {
+        *struct_ = Some(Struct::new(name.to_string(), member_names, member_types));
+        Ok(*struct_id)
+      }
+    } else {
+      let id = self.declare_struct(name)?;
+      self.module_structs.push(Some(Struct::new(
+        name.to_string(),
+        member_names,
+        member_types,
+      )));
+      Ok(id)
+    }
   }
 
   fn define_local_variable(

@@ -10,7 +10,7 @@ use crate::compiler::identifier::{FunctionId, GlobalIdentifier, Identifier, Vari
 use crate::compiler::lexer::SourceRange;
 use crate::compiler::overload_set::OverloadSet;
 use crate::compiler::semantics::environment::{
-  DeclarationError, Environment, NameError, ResolvedIdentifier,
+  DeclarationError, DeclarationResult, Environment, NameError, ResolvedIdentifier,
 };
 use crate::compiler::types::{FunctionSignature, Type};
 
@@ -282,6 +282,26 @@ impl<'a> SemanticChecker<'a> {
       false
     } else {
       true
+    }
+  }
+
+  fn check_declaration<T>(
+    &mut self,
+    name: &str,
+    decl: DeclarationResult<T>,
+    stmt_sr: SourceRange,
+  ) -> Option<T> {
+    match decl {
+      Ok(value) => Some(value),
+      Err(DeclarationError::AlreadyDefined) => {
+        self.emit_error(sema_err::name_already_defined(stmt_sr, name));
+        None
+      }
+      Err(DeclarationError::TooManyLocalNames) => {
+        assert!(!self.env.in_global_scope());
+        self.emit_error(sema_err::too_many_local_names(stmt_sr));
+        None
+      }
     }
   }
 

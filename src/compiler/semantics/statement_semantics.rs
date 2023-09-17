@@ -206,6 +206,8 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     struct_decl: &StructDeclaration,
     stmt_handle: StmtHandle,
   ) -> ReturnKind {
+    let decl = self.env.declare_struct(struct_decl.name);
+    self.check_declaration(struct_decl.name, decl, stmt_handle.get_source_range(ast));
     ReturnKind::None
   }
 
@@ -221,18 +223,10 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
       .map(|s| s.to_string())
       .collect();
     let member_types = self.convert_type_list(&struct_def.member_types);
-    match self
+    let decl = self
       .env
-      .define_struct(struct_def.name, member_names, member_types)
-    {
-      Err(DeclarationError::AlreadyDefined) => self.emit_error(sema_err::name_already_defined(
-        stmt_handle.get_source_range(ast),
-        struct_def.name,
-      )),
-      Err(DeclarationError::TooManyLocalNames) => unreachable!(),
-      Ok(_) => {}
-    }
-
+      .define_struct(struct_def.name, member_names, member_types);
+    self.check_declaration(struct_def.name, decl, stmt_handle.get_source_range(ast));
     ReturnKind::None
   }
 
