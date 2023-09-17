@@ -115,65 +115,39 @@ impl<'a> SemanticChecker<'a> {
     self.errors.push(error);
   }
 
-  fn start_function(&mut self, name: &str, signature: FunctionSignature) -> FunctionId {
+  fn check_declaration<T>(
+    &mut self,
+    name: &str,
+    decl: DeclarationResult<T>,
+    stmt_sr: SourceRange,
+  ) -> Option<T> {
+    match decl {
+      Ok(value) => Some(value),
+      Err(DeclarationError::AlreadyDefined) => {
+        self.emit_error(sema_err::name_already_defined(stmt_sr, name));
+        None
+      }
+      Err(DeclarationError::TooManyLocalNames) => {
+        assert!(!self.env.in_global_scope());
+        self.emit_error(sema_err::too_many_local_names(stmt_sr));
+        None
+      }
+    }
+  }
+
+  fn new_variable(&mut self, name: &'a str, type_: Type, sr: SourceRange) -> VariableIdentifier {
+    let decl = self.env.define_variable(name, type_);
     self
-      .env
-      .push_function(name.to_string(), signature.get_return_type().clone());
-    self.checked_functions.push(FunctionCode::default());
-    match self.env.define_global_function(name, signature) {
-      Ok(function_id) => function_id,
-      Err(_) => panic!(),
-    }
+      .check_declaration(name, decl, sr)
+      .unwrap_or(VariableIdentifier::Invalid)
   }
 
-  fn end_function(&mut self, function_id: FunctionId) {
-    let index = function_id.get_id() as usize;
-    assert!(index < self.checked_functions.len());
-
+  fn finalize_function_code(&mut self) {
     if *self.env.get_current_function_return_type().unwrap() == Type::Nothing {
       unsafe {
         self.code().push_constant_none();
         self.code().push_op(OpCode::Return);
       }
-    }
-    let function = self.env.pop_function();
-    self.checked_functions[index] = function.code;
-  }
-
-  fn start_lambda(&mut self, return_type: Type) {
-    let path = self
-      .env
-      .get_current_function_code()
-      .map(|f| f.get_name())
-      .unwrap_or("");
-    let name = format!("{path}::<lambda>");
-    self.env.push_function(name, return_type);
-  }
-
-  fn end_lambda(&mut self) -> (FunctionId, Vec<VariableIdentifier>) {
-    if *self.env.get_current_function_return_type().unwrap() == Type::Nothing {
-      unsafe {
-        self.code().push_constant_none();
-        self.code().push_op(OpCode::Return);
-      }
-    }
-    let function = self.env.pop_function();
-    let function_id = self.env.new_function_id();
-    assert_eq!(function_id.get_id() as usize, self.checked_functions.len());
-    self.checked_functions.push(function.code);
-    (function_id, function.captures)
-  }
-
-  fn declare_function(&mut self, name: &str, signature: FunctionSignature) {
-    match self.env.declare_global_function(name, signature) {
-      Ok(function_id) => {
-        let index = function_id.get_id() as usize;
-        assert!(index <= self.checked_functions.len());
-        if index == self.checked_functions.len() {
-          self.checked_functions.push(FunctionCode::default());
-        }
-      }
-      Err(_) => panic!(),
     }
   }
 
@@ -214,23 +188,6 @@ impl<'a> SemanticChecker<'a> {
   fn declare_function_parameters(&mut self, names: &[&'a str], types: &[Type], sr: SourceRange) {
     for (name, type_) in names.iter().zip(types) {
       self.new_variable(name, type_.clone(), sr);
-    }
-  }
-
-  fn new_variable(&mut self, name: &'a str, type_: Type, sr: SourceRange) -> VariableIdentifier {
-    match self.env.define_variable(name, type_) {
-      Ok(var_id) => var_id,
-      Err(err) => {
-        match err {
-          DeclarationError::AlreadyDefined => {
-            self.emit_error(sema_err::name_already_defined(sr, name))
-          }
-          DeclarationError::TooManyLocalNames => {
-            self.emit_error(sema_err::too_many_local_names(sr))
-          }
-        }
-        VariableIdentifier::Invalid
-      }
     }
   }
 
@@ -282,26 +239,6 @@ impl<'a> SemanticChecker<'a> {
       false
     } else {
       true
-    }
-  }
-
-  fn check_declaration<T>(
-    &mut self,
-    name: &str,
-    decl: DeclarationResult<T>,
-    stmt_sr: SourceRange,
-  ) -> Option<T> {
-    match decl {
-      Ok(value) => Some(value),
-      Err(DeclarationError::AlreadyDefined) => {
-        self.emit_error(sema_err::name_already_defined(stmt_sr, name));
-        None
-      }
-      Err(DeclarationError::TooManyLocalNames) => {
-        assert!(!self.env.in_global_scope());
-        self.emit_error(sema_err::too_many_local_names(stmt_sr));
-        None
-      }
     }
   }
 

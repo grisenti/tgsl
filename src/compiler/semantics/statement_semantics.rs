@@ -6,9 +6,12 @@ use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor}
 use crate::compiler::ast::{StmtHandle, AST};
 
 use crate::compiler::codegen::bytecode::OpCode;
+use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::errors::{import_err, sema_err, ty_err};
+use crate::compiler::identifier::FunctionId;
+use crate::compiler::lexer::SourceRange;
 
-use crate::compiler::semantics::environment::{DeclarationError, ImportError};
+use crate::compiler::semantics::environment::ImportError;
 use crate::compiler::semantics::{combine_returns, ReturnKind, SemanticChecker};
 use crate::compiler::types::{FunctionSignature, Type};
 
@@ -114,7 +117,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     let function_signature = FunctionSignature::new(parameter_types.clone(), return_type);
     let stmt_sr = stmt_handle.get_source_range(ast);
 
-    let function_id = self.start_function(function_definition.name, function_signature);
+    let function_id = self.start_function(function_definition.name, function_signature, stmt_sr);
     self.declare_function_parameters(
       &function_definition.parameter_names,
       &parameter_types,
@@ -134,11 +137,12 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
   ) -> ReturnKind {
     let parameter_types = self.convert_type_list(&function_declaration.parameter_types);
     let return_type = self.visit_parsed_type(ast, function_declaration.return_type);
-    let _stmt_sr = stmt_handle.get_source_range(ast);
+    let stmt_sr = stmt_handle.get_source_range(ast);
 
     self.declare_function(
       function_declaration.name,
       FunctionSignature::new(parameter_types, return_type).into(),
+      stmt_sr,
     );
 
     ReturnKind::None
@@ -264,5 +268,43 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
       ))
     }
     ReturnKind::None
+  }
+}
+
+impl<'a> SemanticChecker<'a> {
+  fn declare_function(&mut self, name: &str, signature: FunctionSignature, stmt_sr: SourceRange) {
+    let decl = self.env.declare_global_function(name, signature);
+    if let Some(function_id) = self.check_declaration(name, decl, stmt_sr) {
+      let index = function_id.get_id() as usize;
+      assert!(index <= self.checked_functions.len());
+      if index == self.checked_functions.len() {
+        self.checked_functions.push(FunctionCode::default());
+      }
+    }
+  }
+
+  fn start_function(
+    &mut self,
+    name: &str,
+    signature: FunctionSignature,
+    stmt_sr: SourceRange,
+  ) -> FunctionId {
+    self
+      .env
+      .push_function(name.to_string(), signature.get_return_type().clone());
+    self.checked_functions.push(FunctionCode::default());
+    let decl = self.env.define_global_function(name, signature);
+    self
+      .check_declaration(name, decl, stmt_sr)
+      .unwrap_or(FunctionId::INVALID)
+  }
+
+  fn end_function(&mut self, function_id: FunctionId) {
+    let index = function_id.get_id() as usize;
+    assert!(index < self.checked_functions.len());
+
+    self.finalize_function_code();
+    let function = self.env.pop_function();
+    self.checked_functions[index] = function.code;
   }
 }

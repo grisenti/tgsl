@@ -6,7 +6,7 @@ use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor};
 use crate::compiler::ast::{ExprHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::errors::{ty_err, CompilerError};
-use crate::compiler::identifier::Identifier;
+use crate::compiler::identifier::{FunctionId, Identifier, VariableIdentifier};
 use crate::compiler::lexer::{SourceRange, Token};
 use crate::compiler::operators::{BinaryOperator, UnaryOperator};
 use crate::compiler::semantics::environment::ResolvedIdentifier;
@@ -472,5 +472,26 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     } else {
       todo!("struct was not defined");
     }
+  }
+}
+
+impl<'a> SemanticChecker<'a> {
+  fn start_lambda(&mut self, return_type: Type) {
+    let path = self
+      .env
+      .get_current_function_code()
+      .map(|f| f.get_name())
+      .unwrap_or("");
+    let name = format!("{path}::<lambda>");
+    self.env.push_function(name, return_type);
+  }
+
+  fn end_lambda(&mut self) -> (FunctionId, Vec<VariableIdentifier>) {
+    self.finalize_function_code();
+    let function = self.env.pop_function();
+    let function_id = self.env.new_function_id();
+    assert_eq!(function_id.get_id() as usize, self.checked_functions.len());
+    self.checked_functions.push(function.code);
+    (function_id, function.captures)
   }
 }

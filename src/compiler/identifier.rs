@@ -12,6 +12,8 @@ macro_rules! define_identifier {
       const IS_RELATIVE_BIT: u32 = 0x80000000;
       const IS_PUBLIC_ID_BIT: u32 = 0x40000000;
 
+      pub const INVALID: Self = Self(u32::MAX);
+
       pub fn relative(id: u32) -> Self {
         assert!(id < Self::MODIFIERS_MASK);
         Self(id | Self::IS_RELATIVE_BIT)
@@ -30,14 +32,17 @@ macro_rules! define_identifier {
       }
 
       pub fn get_id(self) -> u32 {
+        assert!(self != Self::INVALID);
         self.0 & !Self::MODIFIERS_MASK
       }
 
       pub fn is_relative(self) -> bool {
+        assert!(self != Self::INVALID);
         (self.0 & Self::IS_RELATIVE_BIT) != 0
       }
 
       pub fn is_public(self) -> bool {
+        assert!(self != Self::INVALID);
         (self.0 & Self::IS_PUBLIC_ID_BIT) != 0
       }
     }
