@@ -191,28 +191,6 @@ impl<'a> SemanticChecker<'a> {
     }
   }
 
-  fn get_id(&mut self, name: &str, sr: SourceRange) -> ResolvedIdentifier {
-    match self.env.get_id(name) {
-      Ok(resolved_id) => resolved_id,
-      Err(NameError::UndeclaredName) => {
-        self.errors.push(sema_err::name_not_found(sr, name));
-        ResolvedIdentifier::Error
-      }
-    }
-  }
-
-  fn get_variable(&mut self, name: &str, sr: SourceRange) -> (VariableIdentifier, &Type) {
-    match self.env.get_id(name) {
-      Ok(ResolvedIdentifier::ResolvedVariable { id, type_ }) => return (id, type_),
-      Err(NameError::UndeclaredName) => {
-        self.errors.push(sema_err::name_not_found(sr, name));
-      }
-      _ => self.errors.push(sema_err::not_a_variable(sr, name)),
-    }
-
-    (VariableIdentifier::Invalid, &Type::Error)
-  }
-
   unsafe fn generate_identifier_code(&mut self, id: Identifier) {
     match id {
       Identifier::Variable(var_id) => {

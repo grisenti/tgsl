@@ -5,11 +5,11 @@ use crate::compiler::ast::expression::expr::{
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor};
 use crate::compiler::ast::{ExprHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
-use crate::compiler::errors::{ty_err, CompilerError};
+use crate::compiler::errors::{sema_err, ty_err, CompilerError};
 use crate::compiler::identifier::{FunctionId, Identifier, VariableIdentifier};
 use crate::compiler::lexer::{SourceRange, Token};
 use crate::compiler::operators::{BinaryOperator, UnaryOperator};
-use crate::compiler::semantics::environment::ResolvedIdentifier;
+use crate::compiler::semantics::environment::{NameError, ResolvedIdentifier};
 use crate::compiler::semantics::SemanticChecker;
 use crate::compiler::types::{FunctionSignature, Type};
 
@@ -493,5 +493,27 @@ impl<'a> SemanticChecker<'a> {
     assert_eq!(function_id.get_id() as usize, self.checked_functions.len());
     self.checked_functions.push(function.code);
     (function_id, function.captures)
+  }
+
+  fn get_id(&mut self, name: &str, sr: SourceRange) -> ResolvedIdentifier {
+    match self.env.get_id(name) {
+      Ok(resolved_id) => resolved_id,
+      Err(NameError::UndeclaredName) => {
+        self.errors.push(sema_err::name_not_found(sr, name));
+        ResolvedIdentifier::Error
+      }
+    }
+  }
+
+  fn get_variable(&mut self, name: &str, sr: SourceRange) -> (VariableIdentifier, &Type) {
+    match self.env.get_id(name) {
+      Ok(ResolvedIdentifier::ResolvedVariable { id, type_ }) => return (id, type_),
+      Err(NameError::UndeclaredName) => {
+        self.errors.push(sema_err::name_not_found(sr, name));
+      }
+      _ => self.errors.push(sema_err::not_a_variable(sr, name)),
+    }
+
+    (VariableIdentifier::Invalid, &Type::Error)
   }
 }
