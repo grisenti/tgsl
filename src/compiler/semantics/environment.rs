@@ -289,6 +289,7 @@ impl<'src> Environment<'src> {
   pub fn declare_struct(&mut self, name: &str) -> DeclarationResult<StructId> {
     let id = StructId::relative(self.module_structs.len() as u32).into_public();
     self.declare_global(name, id.into())?;
+    self.module_structs.push(None);
     Ok(id)
   }
 
@@ -312,7 +313,8 @@ impl<'src> Environment<'src> {
         Ok(*struct_id)
       }
     } else {
-      let id = self.declare_struct(name)?;
+      let id = StructId::relative(self.module_structs.len() as u32).into_public();
+      self.declare_global(name, id.into())?;
       self.module_structs.push(Some(Struct::new(
         name.to_string(),
         member_names,

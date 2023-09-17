@@ -93,7 +93,8 @@ test_files!(structs,
   member_access,
   member_set,
   nesting,
-  reference_semantics
+  reference_semantics,
+  mutually_recursive
 );
 
 #[rustfmt::skip]

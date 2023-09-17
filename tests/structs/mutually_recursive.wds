@@ -1,0 +1,5 @@
+struct A;
+
+struct B {a: A}
+
+struct A {b: B}
