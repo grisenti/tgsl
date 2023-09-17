@@ -1,4 +1,4 @@
-use crate::{return_if_err};
+use crate::return_if_err;
 
 use super::*;
 use ast::statement::*;
@@ -223,6 +223,14 @@ impl<'src> Parser<'src> {
     let stmt_start = self.lex.previous_token_range();
     self.advance();
     let name = self.match_id();
+    if self.lookahead == Token::Basic(';') {
+      let stmt_end = self.lex.previous_token_range();
+      self.advance();
+      return self.ast.add_statement(
+        stmt::StructDeclaration { name },
+        SourceRange::combine(stmt_start, stmt_end),
+      );
+    }
     self.match_token(Token::Basic('{'));
     let mut member_names = Vec::new();
     let mut member_types = Vec::new();
@@ -236,7 +244,7 @@ impl<'src> Parser<'src> {
     let stmt_end = self.lex.previous_token_range();
     self.match_token(Token::Basic('}'));
     self.ast.add_statement(
-      stmt::Struct {
+      stmt::StructDefinition {
         name,
         member_names,
         member_types,
@@ -309,10 +317,9 @@ impl<'src> Parser<'src> {
 
 #[cfg(test)]
 mod test {
-  use json::{JsonValue};
+  use json::{parse, JsonValue};
 
   use crate::compiler::parser::test::TestParser;
-  
 
   fn parse_correct_statement(stmt: &'static str) -> JsonValue {
     TestParser::new(stmt).parse_correct_statement()
@@ -328,5 +335,11 @@ mod test {
       function_decl["parameter_types"].len()
     );
     assert_eq!(function_decl["return_type"], "num")
+  }
+
+  #[test]
+  fn parse_struct_declaration() {
+    let struct_def = parse_correct_statement("struct VeryImportantType;");
+    assert_eq!(struct_def["StructDeclaration"]["name"], "VeryImportantType");
   }
 }

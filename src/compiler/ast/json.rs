@@ -1,6 +1,6 @@
 use crate::compiler::ast::expression::expr::{DotCall, MemberGet, MemberSet};
 use crate::compiler::ast::parsed_type::ParsedFunctionType;
-use crate::compiler::ast::statement::stmt::ModuleDecl;
+use crate::compiler::ast::statement::stmt::{ModuleDecl, StructDeclaration};
 use crate::compiler::ast::visitor::ParsedTypeVisitor;
 use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle};
 use json::object;
@@ -322,12 +322,30 @@ impl StmtVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_struct(&mut self, ast: &AST, struct_stmt: &stmt::Struct, _: StmtHandle) -> JsonValue {
+  fn visit_struct_declaration(
+    &mut self,
+    ast: &'_ AST,
+    struct_decl: &'_ StructDeclaration<'_>,
+    _: StmtHandle,
+  ) -> JsonValue {
     object! {
-      "Struct": {
-        "name": struct_stmt.name,
-        "member_names": struct_stmt.member_names.clone(),
-        "member_types": parsed_type_list_to_json(&struct_stmt.member_types, ast)
+      "StructDeclaration": {
+        "name": struct_decl.name,
+      }
+    }
+  }
+
+  fn visit_struct_definition(
+    &mut self,
+    ast: &AST,
+    struct_def: &stmt::StructDefinition,
+    _: StmtHandle,
+  ) -> JsonValue {
+    object! {
+      "StructDefinition": {
+        "name": struct_def.name,
+        "member_names": struct_def.member_names.clone(),
+        "member_types": parsed_type_list_to_json(&struct_def.member_types, ast)
       }
     }
   }
@@ -340,7 +358,12 @@ impl StmtVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_module_decl(&mut self, _ast: &AST, module_decl: &ModuleDecl, _: StmtHandle) -> JsonValue {
+  fn visit_module_decl(
+    &mut self,
+    _ast: &AST,
+    module_decl: &ModuleDecl,
+    _: StmtHandle,
+  ) -> JsonValue {
     object! {
       "ModuleDecl": {
         "name": module_decl.name

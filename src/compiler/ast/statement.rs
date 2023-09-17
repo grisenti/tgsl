@@ -34,32 +34,28 @@ pub mod stmt {
     };
   }
 
-  src_stmt_node!(VarDecl,
+  src_stmt_node!(
+    VarDecl,
     name: &'src str,
     specified_type: TypeHandle,
     init_expr: ExprHandle
   );
 
-  stmt_node!(StmtExpr,
-    expr: ExprHandle
-  );
+  stmt_node!(StmtExpr, expr: ExprHandle);
 
-  stmt_node!(Block,
-    statements: Vec<StmtHandle>
-  );
+  stmt_node!(Block, statements: Vec<StmtHandle>);
 
-  stmt_node!(IfBranch,
+  stmt_node!(
+    IfBranch,
     condition: ExprHandle,
     true_branch: StmtHandle,
     else_branch: Option<StmtHandle>
   );
 
-  stmt_node!(While,
-    condition: ExprHandle,
-    loop_body: StmtHandle
-  );
+  stmt_node!(While, condition: ExprHandle, loop_body: StmtHandle);
 
-  src_stmt_node!(FunctionDefinition,
+  src_stmt_node!(
+    FunctionDefinition,
     name: &'src str,
     parameter_names: Vec<&'src str>,
     parameter_types: Vec<TypeHandle>,
@@ -67,37 +63,36 @@ pub mod stmt {
     body: Vec<StmtHandle>
   );
 
-  src_stmt_node!(FunctionDeclaration,
+  src_stmt_node!(
+    FunctionDeclaration,
     name: &'src str,
     parameter_names: Vec<&'src str>,
     parameter_types: Vec<TypeHandle>,
     return_type: TypeHandle
   );
 
-  src_stmt_node!(ExternFunction,
+  src_stmt_node!(
+    ExternFunction,
     name: &'src str,
     parameter_names: Vec<&'src str>,
     parameter_types: Vec<TypeHandle>,
     return_type: TypeHandle
   );
 
-  stmt_node!(Return,
-    expr: Option<ExprHandle>
-  );
+  stmt_node!(Return, expr: Option<ExprHandle>);
 
-  src_stmt_node!(Struct,
+  src_stmt_node!(StructDeclaration, name: &'src str);
+
+  src_stmt_node!(
+    StructDefinition,
     name: &'src str,
     member_names: Vec<&'src str>,
     member_types: Vec<TypeHandle>
   );
 
-  src_stmt_node!(Import,
-    module_name: &'src str
-  );
+  src_stmt_node!(Import, module_name: &'src str);
 
-  src_stmt_node!(ModuleDecl,
-    name: &'src str
-  );
+  src_stmt_node!(ModuleDecl, name: &'src str);
 }
 
 use stmt::*;
@@ -114,7 +109,8 @@ pub enum Stmt<'src> {
   ExternFunction(ExternFunction<'src>),
   Break,
   Return(Return),
-  Struct(Struct<'src>),
+  StructDeclaration(StructDeclaration<'src>),
+  StructDefinition(StructDefinition<'src>),
   Import(Import<'src>),
   ModuleDecl(ModuleDecl<'src>),
 }

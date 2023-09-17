@@ -1,7 +1,6 @@
 use crate::compiler::ast::parsed_type::{ParsedFunctionType, ParsedType};
 use crate::compiler::ast::TypeHandle;
 
-
 use super::{expression::*, statement::*, ExprHandle, StmtHandle, AST};
 
 pub trait ExprVisitor<'ast, 'src, T> {
@@ -128,10 +127,16 @@ pub trait StmtVisitor<'ast, 'src, T> {
     return_stmt: &'ast stmt::Return,
     stmt_handle: StmtHandle,
   ) -> T;
-  fn visit_struct(
+  fn visit_struct_declaration(
     &mut self,
     ast: &'ast AST,
-    struct_stmt: &'ast stmt::Struct<'src>,
+    struct_decl: &'ast stmt::StructDeclaration<'src>,
+    stmt_handle: StmtHandle,
+  ) -> T;
+  fn visit_struct_definition(
+    &mut self,
+    ast: &'ast AST,
+    struct_def: &'ast stmt::StructDefinition<'src>,
     stmt_handle: StmtHandle,
   ) -> T;
   fn visit_import(
@@ -159,7 +164,8 @@ pub trait StmtVisitor<'ast, 'src, T> {
       Stmt::ExternFunction(value) => self.visit_extern_function(ast, value, stmt),
       Stmt::Break => self.visit_break(ast, stmt),
       Stmt::Return(value) => self.visit_return(ast, value, stmt),
-      Stmt::Struct(value) => self.visit_struct(ast, value, stmt),
+      Stmt::StructDeclaration(value) => self.visit_struct_declaration(ast, value, stmt),
+      Stmt::StructDefinition(value) => self.visit_struct_definition(ast, value, stmt),
       Stmt::Import(value) => self.visit_import(ast, value, stmt),
       Stmt::ModuleDecl(value) => self.visit_module_decl(ast, value, stmt),
     }

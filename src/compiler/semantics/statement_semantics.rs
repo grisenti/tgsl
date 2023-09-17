@@ -1,6 +1,6 @@
 use crate::compiler::ast::statement::stmt::{
   Block, ExternFunction, FunctionDeclaration, FunctionDefinition, IfBranch, Import, ModuleDecl,
-  Return, StmtExpr, Struct, VarDecl, While,
+  Return, StmtExpr, StructDeclaration, StructDefinition, VarDecl, While,
 };
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{StmtHandle, AST};
@@ -200,25 +200,34 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     }
   }
 
-  fn visit_struct(
+  fn visit_struct_declaration(
     &mut self,
-    ast: &'a AST,
-    struct_stmt: &Struct,
+    ast: &AST,
+    struct_decl: &StructDeclaration,
     stmt_handle: StmtHandle,
   ) -> ReturnKind {
-    let member_names = struct_stmt
+    ReturnKind::None
+  }
+
+  fn visit_struct_definition(
+    &mut self,
+    ast: &'a AST,
+    struct_def: &StructDefinition,
+    stmt_handle: StmtHandle,
+  ) -> ReturnKind {
+    let member_names = struct_def
       .member_names
       .iter()
       .map(|s| s.to_string())
       .collect();
-    let member_types = self.convert_type_list(&struct_stmt.member_types);
+    let member_types = self.convert_type_list(&struct_def.member_types);
     match self
       .env
-      .define_struct(struct_stmt.name, member_names, member_types)
+      .define_struct(struct_def.name, member_names, member_types)
     {
       Err(DeclarationError::AlreadyDefined) => self.emit_error(sema_err::name_already_defined(
         stmt_handle.get_source_range(ast),
-        struct_stmt.name,
+        struct_def.name,
       )),
       Err(DeclarationError::TooManyLocalNames) => unreachable!(),
       Ok(_) => {}
