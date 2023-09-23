@@ -317,7 +317,7 @@ impl<'src> Parser<'src> {
 
 #[cfg(test)]
 mod test {
-  use json::{parse, JsonValue};
+  use json::{JsonValue};
 
   use crate::compiler::parser::test::TestParser;
 

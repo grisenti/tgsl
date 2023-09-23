@@ -29,4 +29,5 @@ impl Hasher for IdHasher {
   }
 }
 
+#[allow(unused)]
 pub type IdBuildHasher = BuildHasherDefault<IdHasher>;

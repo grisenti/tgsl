@@ -1,17 +1,15 @@
 use crate::compiler::ast::parsed_type::ParsedFunctionType;
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle, AST};
-use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
+use crate::compiler::codegen::bytecode::OpCode;
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::codegen::ModuleCode;
 use crate::compiler::errors::{sema_err, ty_err, CompilerError};
 use crate::compiler::global_env::{GlobalEnv, Struct};
-use crate::compiler::identifier::{FunctionId, GlobalIdentifier, Identifier, VariableIdentifier};
+use crate::compiler::identifier::{GlobalIdentifier, VariableIdentifier};
 use crate::compiler::lexer::SourceRange;
 use crate::compiler::overload_set::OverloadSet;
-use crate::compiler::semantics::environment::{
-  DeclarationError, DeclarationResult, Environment, NameError, ResolvedIdentifier,
-};
+use crate::compiler::semantics::environment::{DeclarationError, DeclarationResult, Environment};
 use crate::compiler::types::{FunctionSignature, Type};
 
 use std::collections::HashMap;
@@ -188,21 +186,6 @@ impl<'a> SemanticChecker<'a> {
   fn declare_function_parameters(&mut self, names: &[&'a str], types: &[Type], sr: SourceRange) {
     for (name, type_) in names.iter().zip(types) {
       self.new_variable(name, type_.clone(), sr);
-    }
-  }
-
-  unsafe fn generate_identifier_code(&mut self, id: Identifier) {
-    match id {
-      Identifier::Variable(var_id) => {
-        self.code().get_variable(var_id);
-      }
-      Identifier::ExternFunction(extern_id) => self
-        .code()
-        .push_constant(ConstantValue::ExternId(extern_id)),
-      Identifier::Function(function_id) => self
-        .code()
-        .push_constant(ConstantValue::FunctionId(function_id)),
-      _ => panic!("invalid identifier"),
     }
   }
 

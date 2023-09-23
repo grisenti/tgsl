@@ -324,7 +324,7 @@ impl StmtVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
 
   fn visit_struct_declaration(
     &mut self,
-    ast: &'_ AST,
+    _ast: &'_ AST,
     struct_decl: &'_ StructDeclaration<'_>,
     _: StmtHandle,
   ) -> JsonValue {

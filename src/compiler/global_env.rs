@@ -170,28 +170,10 @@ impl GlobalEnv {
     !self.module_names.contains_key(name)
   }
 
-  pub fn get_id(&self, module_id: ModuleId, name: &str) -> Option<GlobalIdentifier> {
-    self.modules[module_id.0 as usize]
-      .global_names
-      .get(name)
-      .copied()
-  }
-
   pub fn new() -> Self {
     Default::default()
   }
 }
 
 #[cfg(test)]
-pub mod test {
-  use super::{GlobalEnv, Module};
-  use lazy_static::lazy_static;
-
-  lazy_static! {
-    pub static ref EMPTY_GLOBAL_ENV: GlobalEnv = GlobalEnv::new();
-  }
-
-  impl GlobalEnv {
-    pub fn add_fake_module(&mut self, _module: Module) {}
-  }
-}
+pub mod test {}

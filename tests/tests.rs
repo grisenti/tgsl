@@ -1,5 +1,5 @@
 use language::vm::extern_function::ExternFunction;
-use language::vm::{value::TaggedValue, VM};
+use language::vm::{VM};
 
 macro_rules! test_files {
   ($module:ident, $($test:ident),+) => {

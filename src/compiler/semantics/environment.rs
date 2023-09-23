@@ -8,7 +8,7 @@ use crate::compiler::overload_set::{OverloadSet, ResolvedOverload};
 use crate::compiler::types::{FunctionSignature, Type};
 use crate::compiler::{
   global_env::{GlobalEnv, Struct},
-  identifier::{ExternId, GlobalIdentifier, GlobalVarId, Identifier, StructId, VariableIdentifier},
+  identifier::{ExternId, GlobalIdentifier, GlobalVarId, StructId, VariableIdentifier},
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -514,7 +514,7 @@ impl<'src> Environment<'src> {
 #[cfg(test)]
 mod test {
   use crate::compiler::identifier::FunctionId;
-  use crate::compiler::semantics::environment::ResolvedIdentifier;
+  
   use crate::compiler::semantics::environment::ResolvedIdentifier::{
     ResolvedFunction, ResolvedVariable,
   };
@@ -535,7 +535,7 @@ mod test {
       .expect("could not define variable");
     assert!(matches!(
       VariableIdentifier::Global(GlobalVarId::relative(0)),
-      var_id
+      _var_id
     ));
     assert_eq!(
       env.get_id("x"),

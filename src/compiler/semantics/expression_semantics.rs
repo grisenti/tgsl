@@ -6,7 +6,7 @@ use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor};
 use crate::compiler::ast::{ExprHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::errors::{sema_err, ty_err, CompilerError};
-use crate::compiler::identifier::{FunctionId, Identifier, OverloadId, VariableIdentifier};
+use crate::compiler::identifier::{FunctionId, OverloadId, VariableIdentifier};
 use crate::compiler::lexer::{SourceRange, Token};
 use crate::compiler::operators::{BinaryOperator, UnaryOperator};
 use crate::compiler::semantics::environment::{NameError, ResolvedIdentifier};
