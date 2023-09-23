@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
 use crate::{
-  compiler::{errors::ErrorPrinter, identifier::ExternId, Compiler},
+  compiler::{errors::ErrorPrinter, Compiler},
   standard_library::load_standard_library,
 };
 
@@ -12,7 +10,8 @@ pub mod extern_function;
 pub mod runtime;
 pub mod value;
 
-use crate::vm::extern_function::ExternFunction;
+use crate::compiler::ModuleExternFunctions;
+use crate::vm::extern_function::{ExternFunction, ExternFunctionInfo};
 use chunk::*;
 
 use self::{address_table::AddressTable, runtime::RunTime};
@@ -23,27 +22,53 @@ pub struct VM {
   run_time: RunTime,
 }
 
-impl VM {
-  fn process_extern_functions(
-    &mut self,
-    declared_extern_functions: &HashMap<String, ExternId>,
-    extern_functions: Vec<ExternFunction>,
-  ) -> Result<Vec<(ExternId, ExternFunction)>, String> {
-    let mut vec = vec![];
-    for func in extern_functions {
-      if let Some(id) = declared_extern_functions.get(func.get_name()) {
-        vec.push((*id, func));
-      } else {
-        return Err("invalid extern function".to_string());
-      }
-    }
-    Ok(vec)
-  }
+fn process_extern_functions(
+  runtime_extern_functions: &mut Vec<ExternFunction>,
+  declared_extern_functions: &ModuleExternFunctions,
+  extern_functions: Vec<ExternFunctionInfo>,
+) -> Result<(), String> {
+  // ensure all declared functions are provided
+  // ensure all provided functions exist
 
+  let mut functions = Vec::with_capacity(extern_functions.len());
+  for extern_func in extern_functions {
+    if let Some(func_info) = declared_extern_functions.get(extern_func.get_name()) {
+      if func_info.signature.get_parameters() != extern_func.get_parameters() {
+        return Err(format!(
+          "inconsistent parameters for function '{}'",
+          extern_func.get_name()
+        ));
+      }
+      if func_info.signature.get_return_type() != extern_func.get_return_type() {
+        return Err(format!(
+          "inconsistent return types for function '{}'",
+          extern_func.get_name()
+        ));
+      }
+      functions.push((func_info.id, extern_func.get_extern_function()))
+    } else {
+      return Err(format!(
+        "no extern function named {} in module",
+        extern_func.get_name()
+      ));
+    }
+  }
+  assert!(functions.len() <= declared_extern_functions.len());
+  if functions.len() < declared_extern_functions.len() {
+    return Err("missing extern function".to_string());
+  }
+  functions.sort_by_key(|(key, _)| key.get_id());
+  for (_, func) in functions {
+    runtime_extern_functions.push(func);
+  }
+  Ok(())
+}
+
+impl VM {
   pub fn load_module(
     &mut self,
     source: &str,
-    extern_functions: Vec<ExternFunction>,
+    extern_functions: Vec<ExternFunctionInfo>,
   ) -> Result<(), String> {
     let compiled_module = match self.compiler.compile(source) {
       Err(errs) => return Err(ErrorPrinter::to_string(&errs, source)),
@@ -51,13 +76,17 @@ impl VM {
     };
     let globals_count = compiled_module.globals_count;
     let functions_count = compiled_module.code.functions.len();
-    let external_functions =
-      self.process_extern_functions(&compiled_module.extern_functions, extern_functions)?;
-    self.run_time.interpret(
-      GlobalChunk::new(compiled_module.code, &self.address_table),
-      external_functions,
-      globals_count as u32,
-    );
+    process_extern_functions(
+      &mut self.run_time.extern_functions,
+      &compiled_module.extern_functions,
+      extern_functions,
+    )?;
+    unsafe {
+      self.run_time.interpret(
+        GlobalChunk::new(compiled_module.code, &self.address_table),
+        globals_count as u32,
+      )
+    };
     self.address_table.update_table(
       globals_count as u32,
       compiled_module.extern_functions.len() as u32,

@@ -1,5 +1,5 @@
-use language::vm::extern_function::ExternFunction;
-use language::vm::{VM};
+use language::vm::extern_function::ExternFunctionInfo;
+use language::vm::VM;
 
 macro_rules! test_files {
   ($module:ident, $($test:ident),+) => {
@@ -39,7 +39,7 @@ fn compile_and_run(test_file: &str) {
   let mut vm = VM::new();
   vm.load_module(
     include_str!("../tests/test_utils.wds"),
-    vec![ExternFunction::create("assert", assert)],
+    vec![ExternFunctionInfo::create("assert", assert)],
   )
   .expect("error in utils file");
   if let Err(msg) = vm.load_module(test_file, vec![]) {
@@ -51,7 +51,7 @@ fn compile_and_run_multiple(test_files: &[&str]) {
   let mut vm = VM::new();
   vm.load_module(
     include_str!("../tests/test_utils.wds"),
-    vec![ExternFunction::create("assert", assert)],
+    vec![ExternFunctionInfo::create("assert", assert)],
   )
   .expect("error in utils file");
 

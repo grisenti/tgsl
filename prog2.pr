@@ -1,9 +1,6 @@
-module mod1;
+module vec2;
 
-fn not(x: bool) -> bool {
-    return !x;
-}
-
-fn not(s: str) -> str {
-    return "not " + s;
+struct Vec2 {
+    x: num,
+    y: num,
 }

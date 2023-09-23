@@ -27,14 +27,16 @@ pub trait FunctionParameters {
   fn parameter_types() -> Vec<Type>;
 }
 
-pub struct ExternFunction {
+pub type ExternFunction = Box<dyn Fn(&[TaggedValue]) -> TaggedValue>;
+
+pub struct ExternFunctionInfo {
   name: &'static str,
   parameter_types: Vec<Type>,
   return_type: Type,
-  pub function: Box<dyn Fn(&[TaggedValue]) -> TaggedValue>,
+  function: ExternFunction,
 }
 
-impl ExternFunction {
+impl ExternFunctionInfo {
   pub fn create<P, R, F>(name: &'static str, func: F) -> Self
   where
     P: FunctionParameters,
@@ -59,6 +61,10 @@ impl ExternFunction {
 
   pub fn get_return_type(&self) -> &Type {
     &self.return_type
+  }
+
+  pub fn get_extern_function(self) -> ExternFunction {
+    self.function
   }
 }
 

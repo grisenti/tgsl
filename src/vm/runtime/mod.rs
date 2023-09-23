@@ -4,10 +4,7 @@ use std::ptr;
 use crate::compiler::codegen::bytecode::OpCode;
 use crate::vm::chunk::GlobalChunk;
 use crate::vm::extern_function::ExternFunction;
-use crate::{
-  compiler::identifier::ExternId,
-  vm::value::{Value, ValueType},
-};
+use crate::vm::value::{Value, ValueType};
 
 use self::call_frame::{CallFrame, EMPTY_CALL_FRAME};
 use self::gc::GC;
@@ -51,7 +48,7 @@ pub struct RunTime {
   function_call: usize,
   globals: Vec<TaggedValue>,
   functions: Vec<Function>,
-  extern_functions: Vec<ExternFunction>,
+  pub extern_functions: Vec<ExternFunction>,
 }
 
 impl RunTime {
@@ -224,7 +221,7 @@ impl RunTime {
               let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
               let id = unsafe { function_value.value.id as usize };
               frame.pop_n(arguments);
-              frame.push((self.extern_functions[id].function)(args));
+              frame.push(self.extern_functions[id](args));
               continue;
             }
             _ => unreachable!(),
@@ -310,15 +307,7 @@ impl RunTime {
     }
   }
 
-  pub fn interpret(
-    &mut self,
-    global_chunk: GlobalChunk,
-    extern_functions: Vec<(ExternId, ExternFunction)>,
-    globals_count: u32,
-  ) {
-    self
-      .extern_functions
-      .extend(extern_functions.into_iter().map(|(_, func)| func));
+  pub unsafe fn interpret(&mut self, global_chunk: GlobalChunk, globals_count: u32) {
     self.globals.resize(
       self.globals.len() + globals_count as usize,
       TaggedValue::none(),

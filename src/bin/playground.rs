@@ -1,4 +1,4 @@
-use language::vm::extern_function::ExternFunction;
+use language::vm::extern_function::ExternFunctionInfo;
 use language::vm::VM;
 use std::fs;
 
@@ -10,7 +10,7 @@ fn test() -> Result<(), String> {
   let source = fs::read_to_string("program.pr").unwrap();
   let mut vm = VM::new();
   vm.load_module(&fs::read_to_string("prog2.pr").unwrap(), vec![])?;
-  vm.load_module(&source, vec![ExternFunction::create("add", add)])?;
+  vm.load_module(&source, vec![ExternFunctionInfo::create("add", add)])?;
   Ok(())
 }
 

@@ -1,4 +1,4 @@
-use crate::vm::extern_function::ExternFunction;
+use crate::vm::extern_function::ExternFunctionInfo;
 use crate::vm::{value::TaggedValue, VM};
 
 fn println(value: TaggedValue) {
@@ -13,8 +13,8 @@ pub fn load_standard_library(vm: &mut VM) {
   vm.load_module(
     include_str!("../../standard-library/io.wds"),
     vec![
-      ExternFunction::create("print", print),
-      ExternFunction::create("println", println),
+      ExternFunctionInfo::create("print", print),
+      ExternFunctionInfo::create("println", println),
     ],
   )
   .unwrap();

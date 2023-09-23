@@ -5,6 +5,7 @@ use crate::compiler::codegen::ModuleCode;
 use crate::compiler::global_env::GlobalEnv;
 use crate::compiler::identifier::ModuleId;
 use crate::compiler::semantics::SemanticChecker;
+use crate::compiler::types::{FunctionSignature, Type};
 use std::collections::HashMap;
 
 use self::{
@@ -25,22 +26,34 @@ mod parser;
 mod semantics;
 pub mod types;
 
+pub struct ExternFunctionInfo {
+  pub id: ExternId,
+  pub signature: FunctionSignature,
+}
+
+pub type ModuleExternFunctions = HashMap<String, ExternFunctionInfo>;
+
 pub struct CompiledModule {
   pub module_id: Option<ModuleId>,
   pub globals_count: u16,
-  pub extern_functions: HashMap<String, ExternId>,
+  pub extern_functions: ModuleExternFunctions,
   pub code: ModuleCode,
 }
 
 pub fn module_extern_functions(
   names: &HashMap<String, GlobalIdentifier>,
-) -> HashMap<String, ExternId> {
+  types: &[Type],
+) -> ModuleExternFunctions {
   names
     .iter()
     .filter_map(|(name, id)| {
       if let GlobalIdentifier::ExternFunction(id) = id {
         if id.is_relative() {
-          Some((name.clone(), *id))
+          if let Type::Function(signature) = types[id.get_id() as usize].clone() {
+            Some((name.clone(), ExternFunctionInfo { id: *id, signature }))
+          } else {
+            panic!()
+          }
         } else {
           None
         }
@@ -62,7 +75,8 @@ impl Compiler {
     let (code, exports) = SemanticChecker::check_program(&ast, &self.global_env)?;
     println!("{:?}", &code);
     let globals_count = exports.global_variables_types.len() as u16;
-    let extern_functions = module_extern_functions(&exports.global_names);
+    let extern_functions =
+      module_extern_functions(&exports.global_names, &exports.extern_function_types);
     let module_id = self.global_env.export_module(exports);
 
     Ok(CompiledModule {
