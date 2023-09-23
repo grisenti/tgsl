@@ -23,7 +23,7 @@ mod operators;
 mod overload_set;
 mod parser;
 mod semantics;
-mod types;
+pub mod types;
 
 pub struct CompiledModule {
   pub module_id: Option<ModuleId>,

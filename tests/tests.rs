@@ -1,3 +1,4 @@
+use language::vm::extern_function::ExternFunction;
 use language::vm::{value::TaggedValue, VM};
 
 macro_rules! test_files {
@@ -30,16 +31,15 @@ macro_rules! modules_test {
   };
 }
 
-fn assert(args: Vec<TaggedValue>) -> TaggedValue {
-  assert!(unsafe { args[0].value.boolean });
-  TaggedValue::none()
+fn assert(value: bool) {
+  assert!(value);
 }
 
 fn compile_and_run(test_file: &str) {
   let mut vm = VM::new();
   vm.load_module(
     include_str!("../tests/test_utils.wds"),
-    vec![("assert", Box::new(assert))],
+    vec![ExternFunction::create("assert", assert)],
   )
   .expect("error in utils file");
   if let Err(msg) = vm.load_module(test_file, vec![]) {
@@ -51,7 +51,7 @@ fn compile_and_run_multiple(test_files: &[&str]) {
   let mut vm = VM::new();
   vm.load_module(
     include_str!("../tests/test_utils.wds"),
-    vec![("assert", Box::new(assert))],
+    vec![ExternFunction::create("assert", assert)],
   )
   .expect("error in utils file");
 

@@ -42,6 +42,10 @@ impl CallFrame {
     unsafe { *self.sp }
   }
 
+  pub fn pop_n(&mut self, n: usize) {
+    unsafe { self.sp = self.sp.sub(n) }
+  }
+
   pub fn push(&mut self, val: TaggedValue) {
     unsafe {
       std::ptr::write(self.sp, val);

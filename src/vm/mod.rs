@@ -8,14 +8,14 @@ use crate::{
 mod address_table;
 mod chunk;
 
-mod runtime;
+pub mod extern_function;
+pub mod runtime;
 pub mod value;
+
+use crate::vm::extern_function::ExternFunction;
 use chunk::*;
-use value::*;
 
 use self::{address_table::AddressTable, runtime::RunTime};
-
-pub type ExternFunction = Box<dyn Fn(Vec<TaggedValue>) -> TaggedValue>;
 
 pub struct VM {
   compiler: Compiler,
@@ -27,11 +27,11 @@ impl VM {
   fn process_extern_functions(
     &mut self,
     declared_extern_functions: &HashMap<String, ExternId>,
-    extern_functions: Vec<(&str, ExternFunction)>,
+    extern_functions: Vec<ExternFunction>,
   ) -> Result<Vec<(ExternId, ExternFunction)>, String> {
     let mut vec = vec![];
-    for (name, func) in extern_functions {
-      if let Some(id) = declared_extern_functions.get(name) {
+    for func in extern_functions {
+      if let Some(id) = declared_extern_functions.get(func.get_name()) {
         vec.push((*id, func));
       } else {
         return Err("invalid extern function".to_string());
@@ -43,7 +43,7 @@ impl VM {
   pub fn load_module(
     &mut self,
     source: &str,
-    extern_functions: Vec<(&str, ExternFunction)>,
+    extern_functions: Vec<ExternFunction>,
   ) -> Result<(), String> {
     let compiled_module = match self.compiler.compile(source) {
       Err(errs) => return Err(ErrorPrinter::to_string(&errs, source)),

@@ -1,19 +1,21 @@
+use crate::vm::extern_function::ExternFunction;
 use crate::vm::{value::TaggedValue, VM};
 
-fn println(args: Vec<TaggedValue>) -> TaggedValue {
-  println!("{}", args[0].to_string());
-  TaggedValue::none()
+fn println(value: TaggedValue) {
+  println!("{}", value.to_string());
 }
 
-fn print(args: Vec<TaggedValue>) -> TaggedValue {
-  print!("{}", args[0].to_string());
-  TaggedValue::none()
+fn print(value: TaggedValue) {
+  print!("{}", value.to_string());
 }
 
 pub fn load_standard_library(vm: &mut VM) {
   vm.load_module(
     include_str!("../../standard-library/io.wds"),
-    vec![("println", Box::new(println)), ("print", Box::new(print))],
+    vec![
+      ExternFunction::create("print", print),
+      ExternFunction::create("println", println),
+    ],
   )
   .unwrap();
 }

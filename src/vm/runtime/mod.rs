@@ -3,6 +3,7 @@ use std::ptr;
 
 use crate::compiler::codegen::bytecode::OpCode;
 use crate::vm::chunk::GlobalChunk;
+use crate::vm::extern_function::ExternFunction;
 use crate::{
   compiler::identifier::ExternId,
   vm::value::{Value, ValueType},
@@ -11,14 +12,10 @@ use crate::{
 use self::call_frame::{CallFrame, EMPTY_CALL_FRAME};
 use self::gc::GC;
 
-use super::{
-  chunk::{Function},
-  value::TaggedValue,
-  ExternFunction,
-};
+use super::{chunk::Function, value::TaggedValue};
 
 mod call_frame;
-mod gc;
+pub mod gc;
 
 const MAX_CALLS: usize = 64;
 const MAX_LOCALS: usize = u8::MAX as usize;
@@ -224,9 +221,10 @@ impl RunTime {
               },
             ),
             ValueType::ExternFunctionId => {
-              let args = (0..arguments).map(|_| frame.pop()).collect();
+              let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
               let id = unsafe { function_value.value.id as usize };
-              frame.push(self.extern_functions[id](args));
+              frame.pop_n(arguments);
+              frame.push((self.extern_functions[id].function)(args));
               continue;
             }
             _ => unreachable!(),
