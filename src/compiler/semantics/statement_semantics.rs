@@ -11,7 +11,7 @@ use crate::compiler::errors::{import_err, sema_err, ty_err};
 use crate::compiler::identifier::FunctionId;
 use crate::compiler::lexer::SourceRange;
 
-use crate::compiler::semantics::environment::ImportError;
+use crate::compiler::semantics::environment::imports::ImportError;
 use crate::compiler::semantics::{combine_returns, ReturnKind, SemanticChecker};
 use crate::compiler::types::{FunctionSignature, Type};
 

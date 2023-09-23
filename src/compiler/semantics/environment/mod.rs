@@ -1,3 +1,5 @@
+pub mod imports;
+
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
@@ -65,15 +67,6 @@ pub enum DeclarationError {
 }
 
 pub type DeclarationResult<T> = Result<T, DeclarationError>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ImportError {
-  NameRedefinition(String),
-  OverloadRedefinition(String),
-  NotAValidModule,
-}
-
-pub type ImportResult = Result<(), ImportError>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NameError {
@@ -449,48 +442,6 @@ impl<'src> Environment<'src> {
     Ok(id)
   }
 
-  pub fn import_module(&mut self, name: &str) -> ImportResult {
-    let module = if let Some(module_id) = self.global_env.get_module(name) {
-      module_id
-    } else {
-      return Err(ImportError::NotAValidModule);
-    };
-    for (name, global_id) in &module.global_names {
-      match global_id {
-        GlobalIdentifier::OverloadId(module_overload_id) => {
-          if let Some(global_id) = self.global_names.get(name).copied() {
-            if let GlobalIdentifier::OverloadId(overload_id) = global_id {
-              if !self.overloads[overload_id as usize]
-                .merge(&module.overloads[*module_overload_id as usize])
-              {
-                return Err(ImportError::OverloadRedefinition(name.clone()));
-              }
-              self.global_names.insert(name.clone(), global_id);
-            } else {
-              return Err(ImportError::NameRedefinition(name.clone()));
-            }
-          } else {
-            let overload_id = self.overloads.len();
-            self
-              .overloads
-              .push(module.overloads[*module_overload_id as usize].clone());
-            self.global_names.insert(
-              name.clone(),
-              GlobalIdentifier::OverloadId(overload_id as u32),
-            );
-          }
-        }
-        other => match self.global_names.entry(name.clone()) {
-          Entry::Occupied(_) => return Err(ImportError::NameRedefinition(name.clone())),
-          Entry::Vacant(entry) => {
-            entry.insert(*other);
-          }
-        },
-      }
-    }
-    Ok(())
-  }
-
   pub fn new(global_env: &'src GlobalEnv) -> Self {
     Self {
       global_env,
@@ -514,7 +465,7 @@ impl<'src> Environment<'src> {
 #[cfg(test)]
 mod test {
   use crate::compiler::identifier::FunctionId;
-  
+
   use crate::compiler::semantics::environment::ResolvedIdentifier::{
     ResolvedFunction, ResolvedVariable,
   };
