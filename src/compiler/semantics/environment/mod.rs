@@ -1,17 +1,18 @@
-pub mod imports;
-
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use crate::compiler::codegen::function_code::FunctionCode;
-
 use crate::compiler::identifier::{FunctionId, OverloadId};
 use crate::compiler::overload_set::{OverloadSet, ResolvedOverload};
+use crate::compiler::structs::GlobalStructs;
 use crate::compiler::types::{FunctionSignature, Type};
 use crate::compiler::{
-  global_env::{GlobalEnv, Struct},
-  identifier::{ExternId, GlobalIdentifier, GlobalVarId, StructId, VariableIdentifier},
+  global_env::GlobalEnv,
+  identifier::{ExternId, GlobalIdentifier, GlobalVarId, VariableIdentifier},
 };
+
+pub mod imports;
+pub mod types;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ResolvedIdentifier<'a> {
@@ -24,7 +25,6 @@ pub enum ResolvedIdentifier<'a> {
     id: VariableIdentifier,
     type_: &'a Type,
   },
-  Struct(StructId),
   ExternFunction {
     id: ExternId,
     type_: &'a Type, // TODO: maybe make this FunctionSignature
@@ -86,9 +86,9 @@ pub struct Environment<'src> {
   declared_functions: u32,
 
   pub global_names: HashMap<String, GlobalIdentifier>,
+  pub global_structs: GlobalStructs<'src>,
   pub module_global_variables_types: Vec<Type>,
   pub extern_function_types: Vec<Type>,
-  pub module_structs: Vec<Option<Struct>>,
   pub overloads: Vec<OverloadSet>,
 }
 
@@ -174,7 +174,6 @@ impl<'src> Environment<'src> {
             type_,
           })
         }
-        GlobalIdentifier::Struct(struct_id) => Ok(ResolvedIdentifier::Struct(struct_id)),
         GlobalIdentifier::OverloadId(overload_id) => {
           if let Some((signature, id)) = self.overloads[overload_id as usize].auto_resolve() {
             Ok(ResolvedIdentifier::ResolvedFunction { signature, id: *id })
@@ -182,7 +181,7 @@ impl<'src> Environment<'src> {
             Ok(ResolvedIdentifier::UnresolvedOverload(overload_id))
           }
         }
-        GlobalIdentifier::Invalid => panic!(),
+        GlobalIdentifier::Invalid | GlobalIdentifier::Struct(_) => panic!(),
       }
     } else {
       Err(NameError::UndeclaredName)
@@ -207,15 +206,6 @@ impl<'src> Environment<'src> {
       })
     } else {
       self.get_global(name)
-    }
-  }
-
-  pub fn get_struct_id(&mut self, name: &str) -> NameResult<StructId> {
-    let id = self.global_names.get(name).copied();
-    if let Some(GlobalIdentifier::Struct(id)) = id {
-      Ok(id)
-    } else {
-      panic!();
     }
   }
 
@@ -269,52 +259,6 @@ impl<'src> Environment<'src> {
     parameters: &[Type],
   ) -> Option<ResolvedOverload> {
     self.overloads[overload_id as usize].find(parameters)
-  }
-
-  pub fn get_struct(&self, id: StructId) -> Option<&Struct> {
-    if id.is_relative() {
-      self.module_structs[id.get_id() as usize].as_ref()
-    } else {
-      Some(self.global_env.get_struct(id))
-    }
-  }
-
-  pub fn declare_struct(&mut self, name: &str) -> DeclarationResult<StructId> {
-    let id = StructId::relative(self.module_structs.len() as u32).into_public();
-    self.declare_global(name, id.into())?;
-    self.module_structs.push(None);
-    Ok(id)
-  }
-
-  pub fn define_struct(
-    &mut self,
-    name: &str,
-    member_names: Vec<String>,
-    member_types: Vec<Type>,
-  ) -> DeclarationResult<StructId> {
-    assert_eq!(member_types.len(), member_names.len());
-
-    if let Some(GlobalIdentifier::Struct(struct_id)) = self.global_names.get(name) {
-      if !struct_id.is_relative() {
-        return Err(DeclarationError::AlreadyDefined);
-      }
-      let struct_ = &mut self.module_structs[struct_id.get_id() as usize];
-      if struct_.is_some() {
-        Err(DeclarationError::AlreadyDefined)
-      } else {
-        *struct_ = Some(Struct::new(name.to_string(), member_names, member_types));
-        Ok(*struct_id)
-      }
-    } else {
-      let id = StructId::relative(self.module_structs.len() as u32).into_public();
-      self.declare_global(name, id.into())?;
-      self.module_structs.push(Some(Struct::new(
-        name.to_string(),
-        member_names,
-        member_types,
-      )));
-      Ok(id)
-    }
   }
 
   fn define_local_variable(
@@ -429,6 +373,14 @@ impl<'src> Environment<'src> {
     self.global_env.is_module_name_available(name)
   }
 
+  pub fn get_overload_set(&self, name: &str) -> Option<&OverloadSet> {
+    let id = self.global_names.get(name)?;
+    match id {
+      GlobalIdentifier::OverloadId(id) => Some(&self.overloads[*id as usize]),
+      _ => None,
+    }
+  }
+
   pub fn declare_extern_function(
     &mut self,
     name: &str,
@@ -454,9 +406,9 @@ impl<'src> Environment<'src> {
       declared_functions: 0,
 
       global_names: HashMap::new(),
+      global_structs: Default::default(),
       module_global_variables_types: Vec::new(),
       extern_function_types: Vec::new(),
-      module_structs: Vec::new(),
       overloads: Vec::new(),
     }
   }
@@ -465,7 +417,6 @@ impl<'src> Environment<'src> {
 #[cfg(test)]
 mod test {
   use crate::compiler::identifier::FunctionId;
-
   use crate::compiler::semantics::environment::ResolvedIdentifier::{
     ResolvedFunction, ResolvedVariable,
   };

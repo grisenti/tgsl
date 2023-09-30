@@ -1,7 +1,8 @@
+use std::collections::hash_map::Entry;
+
 use crate::compiler::global_env::Module;
 use crate::compiler::identifier::{GlobalIdentifier, OverloadId};
 use crate::compiler::semantics::environment::Environment;
-use std::collections::hash_map::Entry;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImportError {
@@ -72,6 +73,10 @@ impl<'src> Environment<'src> {
     for (name, global_id) in &module.global_names {
       self.import_name(&module, name, global_id)?;
     }
+    self
+      .global_structs
+      .import(&module.structs)
+      .expect("todo: consider errors");
     Ok(())
   }
 }

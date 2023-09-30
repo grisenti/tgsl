@@ -1,12 +1,11 @@
+use std::collections::HashMap;
+
 use crate::compiler::ast::json::ASTJSONPrinter;
-
 use crate::compiler::codegen::ModuleCode;
-
 use crate::compiler::global_env::GlobalEnv;
 use crate::compiler::identifier::ModuleId;
 use crate::compiler::semantics::SemanticChecker;
 use crate::compiler::types::{FunctionSignature, Type};
-use std::collections::HashMap;
 
 use self::{
   errors::CompilerError,
@@ -24,6 +23,7 @@ mod operators;
 mod overload_set;
 mod parser;
 mod semantics;
+mod structs;
 pub mod types;
 
 pub struct ExternFunctionInfo {

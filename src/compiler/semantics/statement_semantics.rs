@@ -1,16 +1,16 @@
+use std::rc::Rc;
+
 use crate::compiler::ast::statement::stmt::{
   Block, ExternFunction, FunctionDeclaration, FunctionDefinition, IfBranch, Import, ModuleDecl,
   Return, StmtExpr, StructDeclaration, StructDefinition, VarDecl, While,
 };
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{StmtHandle, AST};
-
 use crate::compiler::codegen::bytecode::OpCode;
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::errors::{import_err, sema_err, ty_err};
 use crate::compiler::identifier::FunctionId;
 use crate::compiler::lexer::SourceRange;
-
 use crate::compiler::semantics::environment::imports::ImportError;
 use crate::compiler::semantics::{combine_returns, ReturnKind, SemanticChecker};
 use crate::compiler::types::{FunctionSignature, Type};
@@ -260,7 +260,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
   ) -> ReturnKind {
     assert!(self.module_name.is_none());
     if self.env.ensure_module_name_available(module_decl.name) {
-      self.module_name = Some(module_decl.name.to_string());
+      self.module_name = Some(Rc::from(module_decl.name));
     } else {
       self.emit_error(import_err::module_already_declared(
         stmt_handle.get_source_range(ast),

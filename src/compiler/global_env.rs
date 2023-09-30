@@ -1,73 +1,27 @@
-use crate::compiler::overload_set::OverloadSet;
-use crate::compiler::semantics::ModuleExports;
 use core::panic;
 use std::collections::HashMap;
 
-use super::identifier::{ExternId, GlobalIdentifier, GlobalVarId, ModuleId, StructId};
+use crate::compiler::overload_set::OverloadSet;
+use crate::compiler::semantics::ModuleExports;
+use crate::compiler::structs::ExportedGlobalStructs;
 
+use super::identifier::{ExternId, GlobalIdentifier, GlobalVarId, ModuleId};
 use super::types::Type;
 
 pub struct Module {
   pub global_names: HashMap<String, GlobalIdentifier>,
   pub overloads: Vec<OverloadSet>,
-}
-
-pub struct Struct {
-  name: String,
-  member_names: Vec<String>,
-  member_types: Vec<Type>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
-pub struct MemberIndex(usize);
-
-impl MemberIndex {
-  pub fn get_index(self) -> usize {
-    self.0
-  }
-}
-
-impl Struct {
-  pub fn new(name: String, member_names: Vec<String>, member_types: Vec<Type>) -> Self {
-    assert_eq!(member_types.len(), member_types.len());
-    Self {
-      name,
-      member_names,
-      member_types,
-    }
-  }
-
-  pub fn get_member_index(&self, member_name: &str) -> Option<MemberIndex> {
-    self
-      .member_names
-      .iter()
-      .position(|name| name == member_name)
-      .map(MemberIndex)
-  }
-  pub fn member_info(&self, index: MemberIndex) -> (&str, &Type) {
-    assert!(index.0 < self.member_types.len());
-    (&self.member_names[index.0], &self.member_types[index.0])
-  }
-
-  pub fn get_name(&self) -> &str {
-    &self.name
-  }
-
-  pub fn get_member_types(&self) -> &[Type] {
-    &self.member_types
-  }
+  pub structs: ExportedGlobalStructs,
 }
 
 #[derive(Default)]
 pub struct GlobalEnv {
   variable_types: Vec<Type>,
   extern_functions_types: Vec<Type>,
-  structs: Vec<Struct>,
   module_names: HashMap<String, ModuleId>,
   modules: Vec<Module>,
   global_variables_count: u32,
   extern_functions_count: u32,
-  structs_count: u32,
   exported_functions: u32,
 }
 
@@ -85,11 +39,6 @@ impl GlobalEnv {
   pub fn get_extern_function_type(&self, id: ExternId) -> &Type {
     assert!(!id.is_relative());
     &self.extern_functions_types[id.get_id() as usize]
-  }
-
-  pub fn get_struct(&self, id: StructId) -> &Struct {
-    assert!(!id.is_relative());
-    &self.structs[id.get_id() as usize]
   }
 
   pub fn export_module(&mut self, module_exports: ModuleExports) -> Option<ModuleId> {
@@ -113,7 +62,6 @@ impl GlobalEnv {
     let mut module_names = HashMap::new();
     let mut exported_variables = 0;
     let mut exported_extern_functions = 0;
-    let mut exported_structs = 0;
     for (name, id) in module_exports.global_names {
       match id {
         GlobalIdentifier::Variable(var_id) => {
@@ -130,20 +78,12 @@ impl GlobalEnv {
             exported_extern_functions += 1;
           }
         }
-        GlobalIdentifier::Struct(struct_id) => {
-          if struct_id.is_relative() && struct_id.is_public() {
-            let absolute_id = StructId::absolute(struct_id.get_id() + self.structs_count);
-            module_names.insert(name, GlobalIdentifier::Struct(absolute_id));
-            exported_structs += 1;
-          }
-        }
         GlobalIdentifier::OverloadId(overload_id) => {
           module_names.insert(name, GlobalIdentifier::OverloadId(overload_id));
         }
         _ => panic!(),
       }
     }
-    self.structs.extend(module_exports.structs);
     let mut exported_functions = 0;
     let overloads = module_exports
       .overloads
@@ -157,11 +97,11 @@ impl GlobalEnv {
 
     self.global_variables_count += exported_variables;
     self.extern_functions_count += exported_extern_functions;
-    self.structs_count += exported_structs;
     self.exported_functions += exported_functions as u32;
     self.modules.push(Module {
       global_names: module_names,
       overloads,
+      structs: module_exports.structs,
     });
     Some(ModuleId(module_id))
   }

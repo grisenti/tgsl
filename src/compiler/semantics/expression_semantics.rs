@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::compiler::ast::expression::expr::{
   Assignment, Binary, Construct, DotCall, FnCall, Id, Lambda, Literal, MemberGet, MemberSet, Paren,
   Unary,
@@ -9,6 +11,7 @@ use crate::compiler::errors::{sema_err, ty_err, CompilerError};
 use crate::compiler::identifier::{FunctionId, OverloadId, VariableIdentifier};
 use crate::compiler::lexer::{SourceRange, Token};
 use crate::compiler::operators::{BinaryOperator, UnaryOperator};
+use crate::compiler::semantics::environment::types::StructGetError;
 use crate::compiler::semantics::environment::{NameError, ResolvedIdentifier};
 use crate::compiler::semantics::SemanticChecker;
 use crate::compiler::types::{FunctionSignature, Type};
@@ -118,7 +121,6 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
         unsafe { self.code().push_constant(ConstantValue::ExternId(id)) };
         type_
       }
-      ResolvedIdentifier::Struct(struct_id) => Type::Struct(struct_id),
       ResolvedIdentifier::Error => Type::Error,
     }
   }
@@ -285,8 +287,11 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     if lhs_type.is_error() {
       return Type::Error;
     }
-    if let Type::Struct(struct_id) = lhs_type {
-      let struct_ = self.env.get_struct(struct_id).unwrap();
+    if let Type::Struct { name, .. } = lhs_type {
+      let struct_ = self
+        .env
+        .get_struct(&name)
+        .expect("temporary: deal with struct not defined");
       if let Some(index) = struct_.get_member_index(member_get.member_name) {
         let (_, member_type) = struct_.member_info(index);
         let member_type = member_type.clone();
@@ -323,8 +328,11 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     if lhs_type.is_error() {
       return Type::Error;
     }
-    if let Type::Struct(struct_id) = lhs_type {
-      let struct_ = self.env.get_struct(struct_id).unwrap();
+    if let Type::Struct { name, .. } = lhs_type {
+      let struct_ = self
+        .env
+        .get_struct(&name)
+        .expect("temporary: deal with struct not being defined");
       if let Some(index) = struct_.get_member_index(member_set.member_name) {
         let (_, member_type) = struct_.member_info(index);
         let member_type = member_type.clone();
@@ -361,53 +369,39 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     let mid = self.code().get_next_instruction_address();
     let mut arguments = self.visit_expr_list(ast, &dot_call.arguments);
     let end = self.code().get_next_instruction_address();
-    if let Type::Struct(struct_id) = lhs_type {
-      if let Some(struct_) = self.env.get_struct(struct_id) {
-        if let Some(member_index) = struct_.get_member_index(dot_call.function_name) {
-          let (_, member_type) = struct_.member_info(member_index);
-          if let Type::Function(signature) = member_type {
-            let return_type = signature.get_return_type().clone();
-            check_arguments(
-              &mut self.errors,
-              signature.get_parameters(),
-              &arguments,
-              expr_handle.get_source_range(ast),
-            );
-            self.code().swap(start, mid, end);
-            unsafe {
-              self
-                .code()
-                .push_op2(OpCode::GetMember, member_index.get_index() as u8);
-              self.code().push_op2(OpCode::Call, arguments.len() as u8);
-            }
-            return return_type;
-          } // its not a function
-        } // its not a member
-      } else {
-        todo!("dot call with undefined struct")
+
+    if let Type::Struct { name, .. } = &lhs_type {
+      match self.env.get_struct(&name) {
+        Ok(struct_) => {
+          if let Some(member_index) = struct_.get_member_index(dot_call.function_name) {
+            let (_, member_type) = struct_.member_info(member_index);
+            if let Type::Function(signature) = member_type {
+              let return_type = signature.get_return_type().clone();
+              check_arguments(
+                &mut self.errors,
+                signature.get_parameters(),
+                &arguments,
+                expr_handle.get_source_range(ast),
+              );
+              self.code().swap(start, mid, end);
+              unsafe {
+                self
+                  .code()
+                  .push_op2(OpCode::GetMember, member_index.get_index() as u8);
+                self.code().push_op2(OpCode::Call, arguments.len() as u8);
+              }
+              return return_type;
+            } // its not a function
+          } // its not a member
+        }
+        Err(StructGetError::NotDefined) => {
+          todo!("error: struct was not defined, we don't know if the right side is a member")
+        }
+        _ => {}
       }
     }
-    let function_id = self.env.get_id(dot_call.function_name);
     arguments.push(lhs_type);
-    let expr_type = match function_id {
-      Ok(ResolvedIdentifier::UnresolvedOverload(overload_id)) => {
-        self.call_overload(call_sr, &arguments, overload_id)
-      }
-      Ok(ResolvedIdentifier::ResolvedFunction { id, signature }) => {
-        check_arguments(
-          &mut self.errors,
-          signature.get_parameters(),
-          &arguments,
-          call_sr,
-        );
-        let return_type = signature.get_return_type().clone();
-        unsafe { self.code().push_constant(ConstantValue::FunctionId(id)) };
-        return_type
-      }
-      _ => todo!(),
-    };
-    unsafe { self.code().push_op2(OpCode::Call, arguments.len() as u8) };
-    expr_type
+    self.call_function(&arguments, dot_call.function_name, call_sr)
   }
 
   fn visit_constructor(
@@ -418,27 +412,35 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
   ) -> Type {
     let expr_sr = expr_handle.get_source_range(ast);
     let arguments = self.visit_expr_list(ast, &constructor.arguments);
-    let struct_id = if let Ok(struct_id) = self.env.get_struct_id(constructor.type_name) {
-      struct_id
-    } else {
-      self.emit_error(ty_err::not_struct_name(expr_sr, constructor.type_name));
-      return Type::Error;
-    };
-    if let Some(struct_) = self.env.get_struct(struct_id) {
-      check_arguments(
-        &mut self.errors,
-        struct_.get_member_types(),
-        &arguments,
-        expr_sr,
-      );
-      unsafe {
-        self
-          .code()
-          .push_op2(OpCode::Construct, constructor.arguments.len() as u8)
-      };
-      Type::Struct(struct_id)
-    } else {
-      todo!("struct was not defined");
+    match self.env.get_struct(constructor.type_name) {
+      Ok(struct_) => {
+        let type_ = Type::Struct {
+          name: struct_.clone_name(),
+          module_name: self
+            .module_name
+            .clone()
+            .unwrap_or(Rc::from(Type::ANONYMOUS_MODULE)),
+        };
+        check_arguments(
+          &mut self.errors,
+          struct_.get_member_types(),
+          &arguments,
+          expr_sr,
+        );
+        unsafe {
+          self
+            .code()
+            .push_op2(OpCode::Construct, constructor.arguments.len() as u8)
+        };
+        type_
+      }
+      Err(StructGetError::NotAStruct) => {
+        self.emit_error(ty_err::not_struct_name(expr_sr, constructor.type_name));
+        Type::Error
+      }
+      Err(StructGetError::NotDefined) => {
+        todo!("error: struct was not defined");
+      }
     }
   }
 }
@@ -509,5 +511,58 @@ impl<'a> SemanticChecker<'a> {
     }
 
     (VariableIdentifier::Invalid, &Type::Error)
+  }
+
+  unsafe fn call_end(&mut self, arguments: usize, return_type: Type) -> Type {
+    self.code().push_op2(OpCode::Call, arguments as u8);
+    return_type.clone()
+  }
+
+  fn call_function(
+    &mut self,
+    arguments: &[Type],
+    function_name: &str,
+    call_sr: SourceRange,
+  ) -> Type {
+    // TODO: improve errors for overload sets with only one element (use `check_arguments`)
+    if let Some(overload_set) = self.env.get_overload_set(function_name) {
+      if let Some(resolved_overload) = overload_set.find(&arguments) {
+        let return_type = resolved_overload
+          .function_signature
+          .get_return_type()
+          .clone();
+        let function_id = resolved_overload.function_id;
+        unsafe {
+          self
+            .code()
+            .push_constant(ConstantValue::FunctionId(function_id));
+          self.call_end(arguments.len(), return_type)
+        }
+      } else {
+        todo!("error: no valid overload")
+      }
+    } else {
+      let (_, var_type) = self.get_variable(function_name, call_sr);
+      let var_type = var_type.clone();
+      self.call_value(&var_type, arguments, call_sr)
+    }
+  }
+
+  fn call_value(&mut self, value_type: &Type, arguments: &[Type], call_sr: SourceRange) -> Type {
+    if value_type.is_error() {
+      return Type::Error;
+    }
+
+    if let Type::Function(signature) = value_type {
+      check_arguments(
+        &mut self.errors,
+        signature.get_parameters(),
+        arguments,
+        call_sr,
+      );
+      unsafe { self.call_end(arguments.len(), signature.get_return_type().clone()) }
+    } else {
+      todo!("error: not a function")
+    }
   }
 }

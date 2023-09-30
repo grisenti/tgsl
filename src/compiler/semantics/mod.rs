@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::rc::Rc;
+
 use crate::compiler::ast::parsed_type::ParsedFunctionType;
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle, AST};
@@ -5,14 +8,13 @@ use crate::compiler::codegen::bytecode::OpCode;
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::codegen::ModuleCode;
 use crate::compiler::errors::{sema_err, ty_err, CompilerError};
-use crate::compiler::global_env::{GlobalEnv, Struct};
+use crate::compiler::global_env::GlobalEnv;
 use crate::compiler::identifier::{GlobalIdentifier, VariableIdentifier};
 use crate::compiler::lexer::SourceRange;
 use crate::compiler::overload_set::OverloadSet;
 use crate::compiler::semantics::environment::{DeclarationError, DeclarationResult, Environment};
+use crate::compiler::structs::ExportedGlobalStructs;
 use crate::compiler::types::{FunctionSignature, Type};
-
-use std::collections::HashMap;
 
 mod environment;
 mod expression_semantics;
@@ -48,7 +50,7 @@ pub struct ModuleExports {
   pub global_names: HashMap<String, GlobalIdentifier>,
   pub global_variables_types: Vec<Type>,
   pub extern_function_types: Vec<Type>,
-  pub structs: Vec<Struct>,
+  pub structs: ExportedGlobalStructs,
   pub overloads: Vec<OverloadSet>,
 }
 
@@ -58,7 +60,7 @@ pub struct SemanticChecker<'a> {
   errors: Vec<CompilerError>,
   checked_functions: Vec<FunctionCode>,
   global_code: FunctionCode,
-  module_name: Option<String>,
+  module_name: Option<Rc<str>>,
 }
 
 impl<'a> SemanticChecker<'a> {
@@ -83,18 +85,12 @@ impl<'a> SemanticChecker<'a> {
     );
     if checker.errors.is_empty() {
       unsafe { checker.global_code.push_op(OpCode::Return) };
-      let structs = checker
-        .env
-        .module_structs
-        .into_iter()
-        .map(|s| s.unwrap())
-        .collect();
       let exported_module = ModuleExports {
-        module_name: checker.module_name,
+        module_name: checker.module_name.map(|name| String::from(name.as_ref())),
         global_names: checker.env.global_names,
         global_variables_types: checker.env.module_global_variables_types,
         extern_function_types: checker.env.extern_function_types,
-        structs,
+        structs: checker.env.global_structs.export(),
         overloads: checker.env.overloads,
       };
       Ok((
@@ -233,9 +229,12 @@ impl ParsedTypeVisitor<Type> for SemanticChecker<'_> {
   }
 
   fn visit_named(&mut self, _ast: &AST, name: &str) -> Type {
-    match self.env.get_struct_id(name) {
-      Ok(struct_it) => Type::Struct(struct_it),
-      Err(_) => panic!(),
+    Type::Struct {
+      name: Rc::from(name),
+      module_name: self
+        .module_name
+        .clone()
+        .unwrap_or(Rc::from(Type::ANONYMOUS_MODULE)),
     }
   }
 

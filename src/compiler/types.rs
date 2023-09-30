@@ -1,6 +1,4 @@
-use super::identifier::StructId;
-
-
+use std::rc::Rc;
 
 use crate::compiler::identifier::OverloadId;
 
@@ -54,7 +52,7 @@ pub enum Type {
   Str,
   Num,
   Bool,
-  Struct(StructId),
+  Struct { module_name: Rc<str>, name: Rc<str> },
   Function(FunctionSignature),
   UnresolvedOverload(OverloadId),
   Unknown,
@@ -63,6 +61,8 @@ pub enum Type {
 }
 
 impl Type {
+  pub const ANONYMOUS_MODULE: &'static str = "<this>";
+
   pub fn is_error(&self) -> bool {
     *self == Type::Error
   }
@@ -70,6 +70,7 @@ impl Type {
   pub fn print_pretty(&self) -> String {
     match self {
       Type::Function(signature) => signature.print_pretty(),
+      Type::Struct { module_name, name } => format!("{module_name}::{name}"),
       other => format!("{:?}", other),
     }
   }
