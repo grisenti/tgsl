@@ -1,7 +1,8 @@
+use ast::statement::*;
+
 use crate::return_if_err;
 
 use super::*;
-use ast::statement::*;
 
 impl<'src> Parser<'src> {
   pub(super) fn parse_block_components(&mut self) -> (Vec<StmtHandle>, SourceRange) {
@@ -234,11 +235,13 @@ impl<'src> Parser<'src> {
     self.match_token(Token::Basic('{'));
     let mut member_names = Vec::new();
     let mut member_types = Vec::new();
-    self.parse_member(&mut member_names, &mut member_types);
-    while self.lookahead != Token::Basic('}') {
-      self.match_token(Token::Basic(','));
-      if self.lookahead != Token::Basic('}') {
-        self.parse_member(&mut member_names, &mut member_types);
+    if self.lookahead != Token::Basic('}') {
+      self.parse_member(&mut member_names, &mut member_types);
+      while self.lookahead != Token::Basic('}') {
+        self.match_token(Token::Basic(','));
+        if self.lookahead != Token::Basic('}') {
+          self.parse_member(&mut member_names, &mut member_types);
+        }
       }
     }
     let stmt_end = self.lex.previous_token_range();
@@ -317,7 +320,7 @@ impl<'src> Parser<'src> {
 
 #[cfg(test)]
 mod test {
-  use json::{JsonValue};
+  use json::JsonValue;
 
   use crate::compiler::parser::test::TestParser;
 
@@ -341,5 +344,14 @@ mod test {
   fn parse_struct_declaration() {
     let struct_def = parse_correct_statement("struct VeryImportantType;");
     assert_eq!(struct_def["StructDeclaration"]["name"], "VeryImportantType");
+  }
+
+  #[test]
+  fn parse_empty_struct_definition() {
+    let struct_def = parse_correct_statement("struct Aggregate {}");
+    let struct_def = &struct_def["StructDefinition"];
+    assert_eq!(struct_def["name"], "Aggregate");
+    assert!(struct_def["member_names"].is_empty());
+    assert!(struct_def["member_types"].is_empty());
   }
 }

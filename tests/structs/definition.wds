@@ -4,3 +4,5 @@ struct A {
 	c: bool,
 }
 
+struct B {}
+
