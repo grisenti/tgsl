@@ -5,14 +5,16 @@ use crate::compiler::identifier::OverloadId;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionSignature {
   // signature has always at least one element, the return type.
-  signature: Vec<Type>,
+  signature: Rc<[Type]>,
 }
 
 impl FunctionSignature {
   pub fn new(parameters: Vec<Type>, return_type: Type) -> Self {
     let mut signature = parameters;
     signature.push(return_type);
-    Self { signature }
+    Self {
+      signature: Rc::from(signature),
+    }
   }
 
   pub fn get_return_type(&self) -> &Type {
@@ -21,11 +23,6 @@ impl FunctionSignature {
 
   pub fn get_parameters(&self) -> &[Type] {
     &self.signature[0..self.signature.len() - 1]
-  }
-
-  pub fn into_parts(mut self) -> (Vec<Type>, Type) {
-    let return_type = self.signature.pop().unwrap();
-    (self.signature, return_type)
   }
 
   pub fn print_pretty(&self) -> String {
