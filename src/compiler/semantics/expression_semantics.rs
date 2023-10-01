@@ -11,9 +11,9 @@ use crate::compiler::errors::{sema_err, ty_err, CompilerError};
 use crate::compiler::identifier::{FunctionId, OverloadId, VariableIdentifier};
 use crate::compiler::lexer::{SourceRange, Token};
 use crate::compiler::operators::{BinaryOperator, UnaryOperator};
-use crate::compiler::semantics::environment::types::StructGetError;
 use crate::compiler::semantics::environment::{NameError, ResolvedIdentifier};
 use crate::compiler::semantics::SemanticChecker;
+use crate::compiler::structs::StructGetError;
 use crate::compiler::types::{FunctionSignature, Type};
 
 #[rustfmt::skip]
@@ -290,7 +290,8 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     if let Type::Struct { name, .. } = lhs_type {
       let struct_ = self
         .env
-        .get_struct(&name)
+        .global_structs
+        .get(&name)
         .expect("temporary: deal with struct not defined");
       if let Some(index) = struct_.get_member_index(member_get.member_name) {
         let (_, member_type) = struct_.member_info(index);
@@ -331,7 +332,8 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     if let Type::Struct { name, .. } = lhs_type {
       let struct_ = self
         .env
-        .get_struct(&name)
+        .global_structs
+        .get(&name)
         .expect("temporary: deal with struct not being defined");
       if let Some(index) = struct_.get_member_index(member_set.member_name) {
         let (_, member_type) = struct_.member_info(index);
@@ -371,7 +373,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     let end = self.code().get_next_instruction_address();
 
     if let Type::Struct { name, .. } = &lhs_type {
-      match self.env.get_struct(&name) {
+      match self.env.global_structs.get(&name) {
         Ok(struct_) => {
           if let Some(member_index) = struct_.get_member_index(dot_call.function_name) {
             let (_, member_type) = struct_.member_info(member_index);
@@ -412,7 +414,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
   ) -> Type {
     let expr_sr = expr_handle.get_source_range(ast);
     let arguments = self.visit_expr_list(ast, &constructor.arguments);
-    match self.env.get_struct(constructor.type_name) {
+    match self.env.global_structs.get(constructor.type_name) {
       Ok(struct_) => {
         let type_ = Type::Struct {
           name: struct_.clone_name(),
@@ -440,6 +442,9 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       }
       Err(StructGetError::NotDefined) => {
         todo!("error: struct was not defined");
+      }
+      Err(StructGetError::MultipleDefinitions) | Err(StructGetError::RedefinedImport) => {
+        Type::Error
       }
     }
   }

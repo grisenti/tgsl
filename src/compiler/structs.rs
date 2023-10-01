@@ -4,28 +4,10 @@ use std::rc::Rc;
 
 use crate::compiler::types::Type;
 
-type StructModifierT = u8;
-
-#[derive(Clone, Copy)]
-struct StructModifiers(StructModifierT);
-
-impl StructModifiers {
-  const DEFINED: StructModifierT = 2;
-
-  fn check(self, bits: StructModifierT) -> bool {
-    (self.0 & bits) != 0
-  }
-
-  fn set(&mut self, bits: StructModifierT) {
-    self.0 |= bits;
-  }
-}
-
 pub struct Struct {
   name: Rc<str>,
   member_names: Vec<String>,
   member_types: Vec<Type>,
-  modifiers: StructModifiers,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
@@ -38,26 +20,6 @@ impl MemberIndex {
 }
 
 impl Struct {
-  pub fn new(name: Rc<str>) -> Self {
-    Self {
-      name,
-      member_names: Vec::new(),
-      member_types: Vec::new(),
-      modifiers: StructModifiers(0),
-    }
-  }
-
-  pub fn define(&mut self, member_names: Vec<String>, member_types: Vec<Type>) {
-    assert_eq!(member_types.len(), member_types.len());
-    self.member_names = member_names;
-    self.member_types = member_types;
-    self.modifiers.set(StructModifiers::DEFINED);
-  }
-
-  pub fn is_defined(&self) -> bool {
-    self.modifiers.check(StructModifiers::DEFINED)
-  }
-
   pub fn get_member_index(&self, member_name: &str) -> Option<MemberIndex> {
     self
       .member_names
@@ -83,87 +45,219 @@ impl Struct {
   }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum StructGetError {
+  NotDefined,
+  NotAStruct,
+  MultipleDefinitions,
+  RedefinedImport,
+}
+
+pub type StructGetResult<'s> = Result<&'s Struct, StructGetError>;
+
+#[derive(Copy, Clone, Debug)]
+pub enum StructInsertError {
+  AlreadyDefined,
+  AlreadyDeclared,
+  Imported,
+  TooManyStructs,
+}
+
+pub type StructInsertResult = Result<(), StructInsertError>;
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum StructIndexKind {
+  ImportedNative,
+  ModuleNative,
+  UndefinedModuleNative,
+  ErrorMultipleDefinitions,
+  ErrorRedefinedImport,
+}
+
+#[derive(Copy, Clone)]
+struct StructIndex {
+  index: u32,
+  kind: StructIndexKind,
+}
+
+impl StructIndex {
+  fn error_index(kind: StructIndexKind) -> Self {
+    Self {
+      kind,
+      index: u32::MAX,
+    }
+  }
+
+  fn undefined() -> Self {
+    Self {
+      kind: StructIndexKind::UndefinedModuleNative,
+      index: u32::MAX,
+    }
+  }
+}
+
 #[derive(Default)]
 pub struct GlobalStructs<'s> {
-  imported: HashMap<Rc<str>, &'s Struct>,
-  module: HashMap<Rc<str>, Struct>,
+  struct_names: HashMap<Rc<str>, StructIndex>,
+
+  imported_structs: Vec<&'s Struct>,
+  module_structs: Vec<Struct>,
 }
 
 pub struct ExportedGlobalStructs {
-  global_structs: HashMap<Rc<str>, Struct>,
+  struct_names: HashMap<Rc<str>, StructIndex>,
+  module_structs: Vec<Struct>,
 }
 
 impl<'s> GlobalStructs<'s> {
   pub fn import(&mut self, module_structs: &'s ExportedGlobalStructs) -> Result<(), ()> {
-    for (name, s) in &module_structs.global_structs {
-      assert!(!self.module.contains_key(name), "todo: consider errors");
-      match self.imported.entry(name.clone()) {
-        Entry::Occupied(_) => {
-          todo!("error: struct was already imported")
-        }
+    self
+      .imported_structs
+      .reserve(module_structs.module_structs.len());
+    self.struct_names.reserve(module_structs.struct_names.len());
+    let mut last_index = self.imported_structs.len();
+
+    for (name, index) in &module_structs.struct_names {
+      match self.struct_names.entry(name.clone()) {
+        Entry::Occupied(_) => todo!("error: struct was already imported"),
         Entry::Vacant(e) => {
-          e.insert(s);
+          e.insert(StructIndex {
+            index: last_index as u32,
+            kind: StructIndexKind::ImportedNative,
+          });
+          self
+            .imported_structs
+            .push(&module_structs.module_structs[index.index as usize]);
+          last_index += 1;
         }
       }
     }
     Ok(())
   }
 
-  pub fn get_mut(&mut self, name: &str) -> Option<&mut Struct> {
-    // TODO: what about imported
-    self.module.get_mut(name)
-  }
-
-  pub fn get(&self, name: &str) -> Option<&Struct> {
-    self
-      .module
+  pub fn get(&self, name: &str) -> StructGetResult {
+    let struct_index = self
+      .struct_names
       .get(name)
-      .or_else(|| self.imported.get(name).map(|s| *s))
-  }
+      .ok_or(StructGetError::NotAStruct)?;
 
-  pub fn export(self) -> ExportedGlobalStructs {
-    assert!(self.module.iter().all(|(_, s)| s.is_defined()));
-    ExportedGlobalStructs {
-      global_structs: self.module,
+    match struct_index.kind {
+      StructIndexKind::ImportedNative => Ok(self.imported_structs[struct_index.index as usize]),
+      StructIndexKind::ModuleNative => Ok(&self.module_structs[struct_index.index as usize]),
+      StructIndexKind::UndefinedModuleNative => Err(StructGetError::NotDefined),
+      StructIndexKind::ErrorMultipleDefinitions => Err(StructGetError::MultipleDefinitions),
+      StructIndexKind::ErrorRedefinedImport => Err(StructGetError::RedefinedImport),
     }
   }
 
-  pub fn declare(&mut self, name: &str) -> bool {
-    if self.imported.contains_key(name) {
-      return false;
+  pub fn export(mut self) -> Result<ExportedGlobalStructs, Vec<Rc<str>>> {
+    let mut undefined_structs = Vec::new();
+    self.struct_names.retain(|name, idx| {
+      if idx.kind == StructIndexKind::UndefinedModuleNative {
+        undefined_structs.push(name.clone());
+      }
+      idx.kind == StructIndexKind::ModuleNative
+    });
+    if undefined_structs.is_empty() {
+      Ok(ExportedGlobalStructs {
+        struct_names: self.struct_names,
+        module_structs: self.module_structs,
+      })
+    } else {
+      Err(undefined_structs)
     }
-    let name: Rc<str> = Rc::from(name);
-    match self.module.entry(name.clone()) {
+  }
+
+  pub fn declare(&mut self, name: &str) -> StructInsertResult {
+    if self.struct_names.len() > u32::MAX as usize {
+      return Err(StructInsertError::TooManyStructs);
+    }
+    match self.struct_names.entry(Rc::from(name)) {
+      Entry::Occupied(e) => match e.get().kind {
+        StructIndexKind::ImportedNative => Err(StructInsertError::Imported),
+        StructIndexKind::ModuleNative => Err(StructInsertError::AlreadyDefined),
+        StructIndexKind::UndefinedModuleNative
+        | StructIndexKind::ErrorMultipleDefinitions
+        | StructIndexKind::ErrorRedefinedImport => Err(StructInsertError::AlreadyDeclared),
+      },
       Entry::Vacant(e) => {
-        e.insert(Struct::new(name));
-        true
+        e.insert(StructIndex::undefined());
+        Ok(())
       }
-      Entry::Occupied(_) => false,
     }
   }
 
-  pub fn define(&mut self, name: &str, member_names: Vec<String>, member_types: Vec<Type>) -> bool {
-    assert!(!self.imported.contains_key(name));
+  /// panics if self.module_structs.len() > u32::MAX
+  fn add_struct(
+    &mut self,
+    name: Rc<str>,
+    member_names: Vec<String>,
+    member_types: Vec<Type>,
+  ) -> StructIndex {
+    let index = self.module_structs.len() as u32;
+    self.module_structs.push(Struct {
+      name,
+      member_names,
+      member_types,
+    });
+    StructIndex {
+      kind: StructIndexKind::ModuleNative,
+      index,
+    }
+  }
 
-    if let Some(s) = self.get_mut(name) {
-      if s.is_defined() {
-        false
-      } else {
-        s.define(member_names, member_types);
-        true
+  fn define_already_inserted(
+    &mut self,
+    name: Rc<str>,
+    member_names: Vec<String>,
+    member_types: Vec<Type>,
+    struct_index_kind: StructIndexKind,
+  ) -> Result<(), StructInsertError> {
+    match struct_index_kind {
+      StructIndexKind::ImportedNative => {
+        self.struct_names.insert(
+          name,
+          StructIndex::error_index(StructIndexKind::ErrorRedefinedImport),
+        );
+        Err(StructInsertError::Imported)
       }
+      StructIndexKind::ModuleNative => {
+        self.struct_names.insert(
+          name,
+          StructIndex::error_index(StructIndexKind::ErrorMultipleDefinitions),
+        );
+        Err(StructInsertError::AlreadyDefined)
+      }
+      StructIndexKind::UndefinedModuleNative => {
+        let new_struct_index = self.add_struct(name.clone(), member_names, member_types);
+        self.struct_names.insert(name, new_struct_index);
+        Ok(())
+      }
+      StructIndexKind::ErrorRedefinedImport | StructIndexKind::ErrorMultipleDefinitions => {
+        Err(StructInsertError::AlreadyDefined)
+      }
+    }
+  }
+
+  pub fn define(
+    &mut self,
+    name: &str,
+    member_names: Vec<String>,
+    member_types: Vec<Type>,
+  ) -> StructInsertResult {
+    if let Some((name, struct_index)) = self.struct_names.remove_entry(name) {
+      self.define_already_inserted(name, member_names, member_types, struct_index.kind)
+    } else if self.struct_names.len() > u32::MAX as usize {
+      Err(StructInsertError::TooManyStructs)
     } else {
       let name: Rc<str> = Rc::from(name);
-      self.module.insert(
-        name.clone(),
-        Struct {
-          name,
-          member_names,
-          member_types,
-          modifiers: StructModifiers(StructModifiers::DEFINED),
-        },
-      );
-      true
+      let struct_index = self.add_struct(name.clone(), member_names, member_types);
+      self.struct_names.insert(name, struct_index);
+      Ok(())
     }
+  }
+
+  pub fn is_struct(&self, name: &str) -> bool {
+    self.struct_names.contains_key(name)
   }
 }

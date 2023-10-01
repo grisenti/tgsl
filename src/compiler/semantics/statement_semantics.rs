@@ -13,6 +13,7 @@ use crate::compiler::identifier::FunctionId;
 use crate::compiler::lexer::SourceRange;
 use crate::compiler::semantics::environment::imports::ImportError;
 use crate::compiler::semantics::{combine_returns, ReturnKind, SemanticChecker};
+use crate::compiler::structs::StructInsertError;
 use crate::compiler::types::{FunctionSignature, Type};
 
 impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
@@ -210,8 +211,9 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     struct_decl: &StructDeclaration,
     stmt_handle: StmtHandle,
   ) -> ReturnKind {
-    let decl = self.env.declare_struct(struct_decl.name);
-    self.check_declaration(struct_decl.name, decl, stmt_handle.get_source_range(ast));
+    if let Err(err) = self.env.global_structs.declare(struct_decl.name) {
+      self.handle_struct_decl_error(err, struct_decl.name, stmt_handle.get_source_range(ast))
+    }
     ReturnKind::None
   }
 
@@ -227,10 +229,14 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
       .map(|s| s.to_string())
       .collect();
     let member_types = self.convert_type_list(&struct_def.member_types);
-    let decl = self
+    if let Err(err) = self
       .env
-      .define_struct(struct_def.name, member_names, member_types);
-    self.check_declaration(struct_def.name, decl, stmt_handle.get_source_range(ast));
+      .global_structs
+      .define(struct_def.name, member_names, member_types)
+    {
+      self.handle_struct_decl_error(err, struct_def.name, stmt_handle.get_source_range(ast))
+    }
+
     ReturnKind::None
   }
 
@@ -306,5 +312,21 @@ impl<'a> SemanticChecker<'a> {
     self.finalize_function_code();
     let function = self.env.pop_function();
     self.checked_functions[index] = function.code;
+  }
+
+  fn handle_struct_decl_error(
+    &mut self,
+    error: StructInsertError,
+    struct_name: &str,
+    sr: SourceRange,
+  ) {
+    match error {
+      StructInsertError::AlreadyDefined => {
+        self.emit_error(sema_err::name_already_defined(sr, struct_name));
+      }
+      StructInsertError::AlreadyDeclared => todo!(),
+      StructInsertError::Imported => todo!(),
+      StructInsertError::TooManyStructs => todo!(),
+    }
   }
 }

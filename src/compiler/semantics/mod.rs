@@ -90,7 +90,7 @@ impl<'a> SemanticChecker<'a> {
         global_names: checker.env.global_names,
         global_variables_types: checker.env.module_global_variables_types,
         extern_function_types: checker.env.extern_function_types,
-        structs: checker.env.global_structs.export(),
+        structs: checker.env.global_structs.export().unwrap(),
         overloads: checker.env.overloads,
       };
       Ok((
