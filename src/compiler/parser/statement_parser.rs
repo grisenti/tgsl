@@ -320,7 +320,7 @@ impl<'src> Parser<'src> {
 
 #[cfg(test)]
 mod test {
-  use json::JsonValue;
+  use json::{array, object, JsonValue};
 
   use crate::compiler::parser::test::TestParser;
 
@@ -353,5 +353,21 @@ mod test {
     assert_eq!(struct_def["name"], "Aggregate");
     assert!(struct_def["member_names"].is_empty());
     assert!(struct_def["member_types"].is_empty());
+  }
+
+  #[test]
+  fn parse_struct_definition() {
+    let struct_def =
+      parse_correct_statement("struct XYZ {x: num, other_member: OtherStruct, z_member1: bool}");
+    let struct_def = &struct_def["StructDefinition"];
+    assert_eq!(struct_def["name"], "XYZ");
+    assert_eq!(
+      struct_def["member_names"],
+      array!["x", "other_member", "z_member1"]
+    );
+    assert_eq!(
+      struct_def["member_types"],
+      array!["num", object! {named: "OtherStruct"}, "bool"]
+    );
   }
 }
