@@ -1,13 +1,11 @@
+use json::object;
+use json::JsonValue;
+
 use crate::compiler::ast::expression::expr::{DotCall, MemberGet, MemberSet};
 use crate::compiler::ast::parsed_type::ParsedFunctionType;
 use crate::compiler::ast::statement::stmt::{ModuleDecl, StructDeclaration};
 use crate::compiler::ast::visitor::ParsedTypeVisitor;
 use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle};
-use json::object;
-use json::JsonValue;
-
-use crate::compiler::identifier::{FunctionId, VariableIdentifier};
-use crate::compiler::identifier::{Identifier, StructId};
 use crate::compiler::lexer::Token;
 
 use super::expression::*;
@@ -15,30 +13,6 @@ use super::statement::*;
 use super::visitor::ExprVisitor;
 use super::visitor::StmtVisitor;
 use super::AST;
-
-impl From<Identifier> for JsonValue {
-  fn from(value: Identifier) -> Self {
-    JsonValue::String(format!("{value:?}"))
-  }
-}
-
-impl From<VariableIdentifier> for JsonValue {
-  fn from(value: VariableIdentifier) -> Self {
-    JsonValue::String(format!("{value:?}"))
-  }
-}
-
-impl From<StructId> for JsonValue {
-  fn from(value: StructId) -> Self {
-    JsonValue::String(format!("{value:?}"))
-  }
-}
-
-impl From<FunctionId> for JsonValue {
-  fn from(value: FunctionId) -> Self {
-    JsonValue::String(format!("{value:?}"))
-  }
-}
 
 impl From<Token<'_>> for JsonValue {
   fn from(value: Token) -> Self {
