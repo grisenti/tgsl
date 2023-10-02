@@ -1,7 +1,12 @@
+use chunk::*;
+
+use crate::vm::extern_function::{ExternFunction, ExternFunctionInfo};
 use crate::{
-  compiler::{errors::ErrorPrinter, Compiler},
+  compiler::{errors::ErrorPrinter, functions, Compiler},
   standard_library::load_standard_library,
 };
+
+use self::{address_table::AddressTable, runtime::RunTime};
 
 mod address_table;
 mod chunk;
@@ -9,12 +14,6 @@ mod chunk;
 pub mod extern_function;
 pub mod runtime;
 pub mod value;
-
-use crate::compiler::ModuleExternFunctions;
-use crate::vm::extern_function::{ExternFunction, ExternFunctionInfo};
-use chunk::*;
-
-use self::{address_table::AddressTable, runtime::RunTime};
 
 pub struct VM {
   compiler: Compiler,
@@ -24,7 +23,7 @@ pub struct VM {
 
 fn process_extern_functions(
   runtime_extern_functions: &mut Vec<ExternFunction>,
-  declared_extern_functions: &ModuleExternFunctions,
+  declared_extern_functions: &[functions::ExternFunction],
   extern_functions: Vec<ExternFunctionInfo>,
 ) -> Result<(), String> {
   // ensure all declared functions are provided
@@ -32,20 +31,17 @@ fn process_extern_functions(
 
   let mut functions = Vec::with_capacity(extern_functions.len());
   for extern_func in extern_functions {
-    if let Some(func_info) = declared_extern_functions.get(extern_func.get_name()) {
-      if func_info.signature.get_parameters() != extern_func.get_parameters() {
-        return Err(format!(
-          "inconsistent parameters for function '{}'",
-          extern_func.get_name()
-        ));
-      }
-      if func_info.signature.get_return_type() != extern_func.get_return_type() {
+    if let Some(func) = declared_extern_functions.iter().find(|(f)| {
+      f.name.as_ref() == extern_func.get_name()
+        && f.signature.get_parameters() == extern_func.get_parameters()
+    }) {
+      if func.signature.get_return_type() != extern_func.get_return_type() {
         return Err(format!(
           "inconsistent return types for function '{}'",
           extern_func.get_name()
         ));
       }
-      functions.push((func_info.id, extern_func.get_extern_function()))
+      functions.push((func.relative_address, extern_func.get_extern_function()))
     } else {
       return Err(format!(
         "no extern function named {} in module",
@@ -57,7 +53,7 @@ fn process_extern_functions(
   if functions.len() < declared_extern_functions.len() {
     return Err("missing extern function".to_string());
   }
-  functions.sort_by_key(|(key, _)| key.get_id());
+  functions.sort_by_key(|(key, _)| *key);
   for (_, func) in functions {
     runtime_extern_functions.push(func);
   }

@@ -6,10 +6,10 @@ use crate::vm::chunk::GlobalChunk;
 use crate::vm::extern_function::ExternFunction;
 use crate::vm::value::{Value, ValueType};
 
+use super::{chunk::Function, value::TaggedValue};
+
 use self::call_frame::{CallFrame, EMPTY_CALL_FRAME};
 use self::gc::GC;
-
-use super::{chunk::Function, value::TaggedValue};
 
 mod call_frame;
 pub mod gc;
@@ -92,7 +92,7 @@ impl RunTime {
         }
         OpCode::GetGlobal => {
           let id = unsafe { frame.pop().value.id };
-          let value = unsafe { self.globals.get_unchecked(id) };
+          let value = &self.globals[id];
           if value.kind == ValueType::None {
             panic!("trying to access undefined global variable");
           }
@@ -224,7 +224,7 @@ impl RunTime {
               frame.push(self.extern_functions[id](args));
               continue;
             }
-            _ => unreachable!(),
+            _ => unreachable!("trying to call invalid function {:?}", function_value.kind),
           };
           let bp = unsafe { frame.sp.sub(arguments) };
           let pc = unsafe { (*function).code.code.as_ptr() };

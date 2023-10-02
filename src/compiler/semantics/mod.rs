@@ -8,13 +8,14 @@ use crate::compiler::codegen::bytecode::OpCode;
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::codegen::ModuleCode;
 use crate::compiler::errors::{sema_err, ty_err, CompilerError};
+use crate::compiler::functions::ExportedFunctions;
 use crate::compiler::global_env::GlobalEnv;
 use crate::compiler::identifier::{GlobalIdentifier, VariableIdentifier};
 use crate::compiler::lexer::SourceRange;
-use crate::compiler::overload_set::OverloadSet;
 use crate::compiler::semantics::environment::{DeclarationError, DeclarationResult, Environment};
 use crate::compiler::structs::ExportedGlobalStructs;
 use crate::compiler::types::{FunctionSignature, Type};
+use crate::compiler::ExternFunction;
 
 mod environment;
 mod expression_semantics;
@@ -46,12 +47,18 @@ fn combine_returns(current: ReturnKind, new: ReturnKind) -> ReturnKind {
 }
 
 pub struct ModuleExports {
-  pub module_name: Option<String>,
+  pub module_name: String,
   pub global_names: HashMap<String, GlobalIdentifier>,
   pub global_variables_types: Vec<Type>,
-  pub extern_function_types: Vec<Type>,
   pub structs: ExportedGlobalStructs,
-  pub overloads: Vec<OverloadSet>,
+  pub functions: ExportedFunctions,
+}
+
+pub struct CompiledModule {
+  pub exports: Option<ModuleExports>,
+  pub extern_functions: Vec<ExternFunction>,
+  pub globals_count: u32,
+  pub module_code: ModuleCode,
 }
 
 pub struct SemanticChecker<'a> {
@@ -67,7 +74,7 @@ impl<'a> SemanticChecker<'a> {
   pub fn check_program(
     ast: &'a AST<'a>,
     global_env: &'a GlobalEnv,
-  ) -> Result<(ModuleCode, ModuleExports), Vec<CompilerError>> {
+  ) -> Result<CompiledModule, Vec<CompilerError>> {
     let mut checker = Self {
       env: Environment::new(global_env),
       ast,
@@ -85,21 +92,24 @@ impl<'a> SemanticChecker<'a> {
     );
     if checker.errors.is_empty() {
       unsafe { checker.global_code.push_op(OpCode::Return) };
-      let exported_module = ModuleExports {
-        module_name: checker.module_name.map(|name| String::from(name.as_ref())),
+      let globals_count = checker.env.global_names.len() as u32;
+      let (exported_functions, extern_functions) = checker.env.global_functions.export();
+      let exports = checker.module_name.map(|name| ModuleExports {
+        module_name: name.to_string(),
         global_names: checker.env.global_names,
         global_variables_types: checker.env.module_global_variables_types,
-        extern_function_types: checker.env.extern_function_types,
         structs: checker.env.global_structs.export().unwrap(),
-        overloads: checker.env.overloads,
-      };
-      Ok((
-        ModuleCode {
+        functions: exported_functions,
+      });
+      Ok(CompiledModule {
+        exports,
+        module_code: ModuleCode {
           global_code: checker.global_code,
           functions: checker.checked_functions,
         },
-        exported_module,
-      ))
+        globals_count,
+        extern_functions,
+      })
     } else {
       Err(checker.errors)
     }

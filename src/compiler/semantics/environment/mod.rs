@@ -2,35 +2,17 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use crate::compiler::codegen::function_code::FunctionCode;
-use crate::compiler::identifier::{FunctionId, OverloadId};
-use crate::compiler::overload_set::{OverloadSet, ResolvedOverload};
+use crate::compiler::functions::overload_set::OverloadSet;
+use crate::compiler::functions::GlobalFunctions;
 use crate::compiler::structs::GlobalStructs;
-use crate::compiler::types::{FunctionSignature, Type};
+use crate::compiler::types::Type;
 use crate::compiler::{
   global_env::GlobalEnv,
-  identifier::{ExternId, GlobalIdentifier, GlobalVarId, VariableIdentifier},
+  identifier::{GlobalIdentifier, GlobalVarId, VariableIdentifier},
 };
 
 pub mod imports;
 pub mod types;
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum ResolvedIdentifier<'a> {
-  UnresolvedOverload(OverloadId),
-  ResolvedFunction {
-    id: FunctionId,
-    signature: &'a FunctionSignature,
-  },
-  ResolvedVariable {
-    id: VariableIdentifier,
-    type_: &'a Type,
-  },
-  ExternFunction {
-    id: ExternId,
-    type_: &'a Type, // TODO: maybe make this FunctionSignature
-  },
-  Error,
-}
 
 #[derive(Debug, Clone)]
 struct Local<'src> {
@@ -87,20 +69,14 @@ pub struct Environment<'src> {
 
   pub global_names: HashMap<String, GlobalIdentifier>,
   pub global_structs: GlobalStructs<'src>,
+  pub global_functions: GlobalFunctions,
   pub module_global_variables_types: Vec<Type>,
-  pub extern_function_types: Vec<Type>,
   pub overloads: Vec<OverloadSet>,
 }
 
 impl<'src> Environment<'src> {
   pub fn in_global_scope(&self) -> bool {
     self.scope_depth == 0
-  }
-
-  pub fn new_function_id(&mut self) -> FunctionId {
-    let id = self.declared_functions;
-    self.declared_functions += 1;
-    FunctionId::relative(id).into_public()
   }
 
   fn find_local(&self, local_name: &str) -> Option<usize> {
@@ -149,42 +125,20 @@ impl<'src> Environment<'src> {
     (capture_id, &local.type_)
   }
 
-  fn get_global(&mut self, name: &str) -> NameResult<ResolvedIdentifier> {
+  fn get_global(&mut self, name: &str) -> Option<(VariableIdentifier, Type)> {
     if let Some(&global_variable) = self.global_names.get(name) {
-      match global_variable {
-        GlobalIdentifier::Variable(var_id) => {
-          let type_ = if var_id.is_relative() {
-            &self.module_global_variables_types[var_id.get_id() as usize]
-          } else {
-            self.global_env.get_variable_type(var_id)
-          };
-          Ok(ResolvedIdentifier::ResolvedVariable {
-            id: var_id.into(),
-            type_,
-          })
-        }
-        GlobalIdentifier::ExternFunction(extern_id) => {
-          let type_ = if extern_id.is_relative() {
-            &self.extern_function_types[extern_id.get_id() as usize]
-          } else {
-            self.global_env.get_extern_function_type(extern_id)
-          };
-          Ok(ResolvedIdentifier::ExternFunction {
-            id: extern_id,
-            type_,
-          })
-        }
-        GlobalIdentifier::OverloadId(overload_id) => {
-          if let Some((signature, id)) = self.overloads[overload_id as usize].auto_resolve() {
-            Ok(ResolvedIdentifier::ResolvedFunction { signature, id: *id })
-          } else {
-            Ok(ResolvedIdentifier::UnresolvedOverload(overload_id))
-          }
-        }
-        GlobalIdentifier::Invalid | GlobalIdentifier::Struct(_) => panic!(),
+      if let GlobalIdentifier::Variable(var_id) = global_variable {
+        let type_ = if var_id.is_relative() {
+          &self.module_global_variables_types[var_id.get_id() as usize]
+        } else {
+          self.global_env.get_variable_type(var_id)
+        };
+        Some((var_id.into(), type_.clone()))
+      } else {
+        panic!()
       }
     } else {
-      Err(NameError::UndeclaredName)
+      None
     }
   }
 
@@ -197,68 +151,13 @@ impl<'src> Environment<'src> {
     }
   }
 
-  pub fn get_id(&mut self, name: &str) -> NameResult<ResolvedIdentifier> {
+  pub fn get_variable(&mut self, name: &str) -> Option<(VariableIdentifier, Type)> {
     if let Some(local) = self.find_local(name) {
       let (local_id, type_) = self.capture(local);
-      Ok(ResolvedIdentifier::ResolvedVariable {
-        id: local_id.into(),
-        type_,
-      })
+      Some((local_id.into(), type_.clone()))
     } else {
       self.get_global(name)
     }
-  }
-
-  pub fn define_global_function(
-    &mut self,
-    name: &str,
-    signature: FunctionSignature,
-  ) -> DeclarationResult<FunctionId> {
-    self.declare_global_function(name, signature)
-  }
-
-  fn get_or_create_overload_id(&mut self, name: &str) -> DeclarationResult<OverloadId> {
-    if let Some(id) = self.global_names.get(name) {
-      if let GlobalIdentifier::OverloadId(overload_id) = id {
-        Ok(*overload_id)
-      } else {
-        panic!()
-      }
-    } else {
-      let overload_id = self.overloads.len() as u32;
-      self.overloads.push(OverloadSet::default());
-      self
-        .global_names
-        .insert(name.to_string(), GlobalIdentifier::OverloadId(overload_id));
-      Ok(overload_id as OverloadId)
-    }
-  }
-
-  pub fn declare_global_function(
-    &mut self,
-    name: &str,
-    signature: FunctionSignature,
-  ) -> DeclarationResult<FunctionId> {
-    let overload_id = self.get_or_create_overload_id(name)?;
-    if let Some(overload) = &self.overloads[overload_id as usize].find(signature.get_parameters()) {
-      if overload.function_signature.get_return_type() != signature.get_return_type() {
-        panic!()
-      } else {
-        Ok(overload.function_id)
-      }
-    } else {
-      let function_id = self.new_function_id();
-      self.overloads[overload_id as usize].insert(signature, function_id);
-      Ok(function_id)
-    }
-  }
-
-  pub fn resolve_overload(
-    &self,
-    overload_id: OverloadId,
-    parameters: &[Type],
-  ) -> Option<ResolvedOverload> {
-    self.overloads[overload_id as usize].find(parameters)
   }
 
   fn define_local_variable(
@@ -373,27 +272,6 @@ impl<'src> Environment<'src> {
     self.global_env.is_module_name_available(name)
   }
 
-  pub fn get_overload_set(&self, name: &str) -> Option<&OverloadSet> {
-    let id = self.global_names.get(name)?;
-    match id {
-      GlobalIdentifier::OverloadId(id) => Some(&self.overloads[*id as usize]),
-      _ => None,
-    }
-  }
-
-  pub fn declare_extern_function(
-    &mut self,
-    name: &str,
-    function_signature: FunctionSignature,
-  ) -> DeclarationResult<ExternId> {
-    let id = ExternId::relative(self.extern_function_types.len() as u32).into_public();
-    self.declare_global(name, GlobalIdentifier::ExternFunction(id))?;
-    self
-      .extern_function_types
-      .push(Type::Function(function_signature));
-    Ok(id)
-  }
-
   pub fn new(global_env: &'src GlobalEnv) -> Self {
     Self {
       global_env,
@@ -407,8 +285,8 @@ impl<'src> Environment<'src> {
 
       global_names: HashMap::new(),
       global_structs: Default::default(),
+      global_functions: Default::default(),
       module_global_variables_types: Vec::new(),
-      extern_function_types: Vec::new(),
       overloads: Vec::new(),
     }
   }

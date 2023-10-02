@@ -114,22 +114,34 @@ fn convert_constant(value: ConstantValue, address_table: &AddressTable) -> Tagge
       }
     }
     .into(),
-    ConstantValue::ExternId(id) => {
-      let id = address_table.resolve_extern_function(id);
-      TaggedValue {
-        kind: ValueType::ExternFunctionId,
-        value: Value { id: id as usize },
-      }
-      .into()
+    ConstantValue::RelativeNativeFn(address) => TaggedValue {
+      kind: ValueType::FunctionId,
+      value: Value {
+        id: address_table.resolve_global_function(address) as usize,
+      },
     }
-    ConstantValue::FunctionId(function_id) => {
-      let id = address_table.resolve_global_function(function_id);
-      TaggedValue {
-        kind: ValueType::FunctionId,
-        value: Value { id: id as usize },
-      }
-      .into()
+    .into(),
+    ConstantValue::RelativeExternFn(address) => TaggedValue {
+      kind: ValueType::ExternFunctionId,
+      value: Value {
+        id: address_table.resolve_extern_function(address) as usize,
+      },
     }
+    .into(),
+    ConstantValue::AbsoluteNativeFn(address) => TaggedValue {
+      kind: ValueType::FunctionId,
+      value: Value {
+        id: address as usize,
+      },
+    }
+    .into(),
+    ConstantValue::AbsoluteExternFn(address) => TaggedValue {
+      kind: ValueType::ExternFunctionId,
+      value: Value {
+        id: address as usize,
+      },
+    }
+    .into(),
     ConstantValue::Str(s) => s.into(),
     ConstantValue::None => TaggedValue::none().into(),
     ConstantValue::Stub => panic!("stub constant passed to vm"),

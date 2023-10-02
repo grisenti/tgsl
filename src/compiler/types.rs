@@ -1,7 +1,5 @@
 use std::rc::Rc;
 
-use crate::compiler::identifier::OverloadId;
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionSignature {
   // signature has always at least one element, the return type.
@@ -43,7 +41,7 @@ impl From<FunctionSignature> for Type {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Type {
   Any,
   Str,
@@ -51,7 +49,7 @@ pub enum Type {
   Bool,
   Struct { module_name: Rc<str>, name: Rc<str> },
   Function(FunctionSignature),
-  UnresolvedOverload(OverloadId),
+  UnresolvedOverload,
   Unknown,
   Nothing,
   Error,

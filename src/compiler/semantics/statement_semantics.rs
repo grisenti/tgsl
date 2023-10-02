@@ -9,7 +9,7 @@ use crate::compiler::ast::{StmtHandle, AST};
 use crate::compiler::codegen::bytecode::OpCode;
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::errors::{import_err, sema_err, ty_err};
-use crate::compiler::identifier::FunctionId;
+use crate::compiler::functions::RelativeFunctionAddress;
 use crate::compiler::lexer::SourceRange;
 use crate::compiler::semantics::environment::imports::ImportError;
 use crate::compiler::semantics::{combine_returns, ReturnKind, SemanticChecker};
@@ -37,7 +37,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
       ));
       return ReturnKind::None;
     }
-    if let Type::UnresolvedOverload(_) = var_type {
+    if Type::UnresolvedOverload == var_type {
       self.emit_error(ty_err::cannot_initialize_with_overloaded_function(stmt_sr));
       self.new_variable(var_decl.name, Type::Error, stmt_sr);
       return ReturnKind::None;
@@ -160,7 +160,8 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
 
     self
       .env
-      .declare_extern_function(
+      .global_functions
+      .declare_extern(
         extern_function.name,
         FunctionSignature::new(parameter_types, return_type).into(),
       )
@@ -279,13 +280,14 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
 
 impl<'a> SemanticChecker<'a> {
   fn declare_function(&mut self, name: &str, signature: FunctionSignature, stmt_sr: SourceRange) {
-    let decl = self.env.declare_global_function(name, signature);
-    if let Some(function_id) = self.check_declaration(name, decl, stmt_sr) {
-      let index = function_id.get_id() as usize;
-      assert!(index <= self.checked_functions.len());
-      if index == self.checked_functions.len() {
-        self.checked_functions.push(FunctionCode::default());
+    match self.env.global_functions.declare_native(name, signature) {
+      Ok(relative_address) => {
+        assert!(relative_address as usize <= self.checked_functions.len());
+        if relative_address as usize == self.checked_functions.len() {
+          self.checked_functions.push(FunctionCode::default());
+        }
       }
+      Err(_) => todo!(),
     }
   }
 
@@ -294,24 +296,24 @@ impl<'a> SemanticChecker<'a> {
     name: &str,
     signature: FunctionSignature,
     stmt_sr: SourceRange,
-  ) -> FunctionId {
+  ) -> RelativeFunctionAddress {
     self
       .env
       .push_function(name.to_string(), signature.get_return_type().clone());
     self.checked_functions.push(FunctionCode::default());
-    let decl = self.env.define_global_function(name, signature);
-    self
-      .check_declaration(name, decl, stmt_sr)
-      .unwrap_or(FunctionId::INVALID)
+    match self.env.global_functions.define_native(name, signature) {
+      Ok(relative_address) => relative_address,
+      Err(_) => panic!(),
+    }
   }
 
-  fn end_function(&mut self, function_id: FunctionId) {
-    let index = function_id.get_id() as usize;
-    assert!(index < self.checked_functions.len());
+  fn end_function(&mut self, function_id: RelativeFunctionAddress) {
+    let function_index = function_id as usize;
+    assert!(function_index < self.checked_functions.len());
 
     self.finalize_function_code();
     let function = self.env.pop_function();
-    self.checked_functions[index] = function.code;
+    self.checked_functions[function_index] = function.code;
   }
 
   fn handle_struct_decl_error(

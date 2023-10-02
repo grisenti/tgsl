@@ -1,10 +1,7 @@
-use crate::compiler::identifier::FunctionId;
-use crate::compiler::operators::BinaryOperator;
-use crate::compiler::{
-  identifier::{ExternId, GlobalVarId},
-  operators::UnaryOperator,
-};
 use core::fmt::Debug;
+
+use crate::compiler::operators::BinaryOperator;
+use crate::compiler::{identifier::GlobalVarId, operators::UnaryOperator};
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
@@ -111,8 +108,10 @@ impl From<UnaryOperator> for OpCode {
 pub enum ConstantValue {
   Number(f64),
   GlobalId(GlobalVarId),
-  ExternId(ExternId),
-  FunctionId(FunctionId),
+  RelativeNativeFn(u32),
+  RelativeExternFn(u32),
+  AbsoluteNativeFn(u32),
+  AbsoluteExternFn(u32),
   Bool(bool),
   Str(String),
   None,

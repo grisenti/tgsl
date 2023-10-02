@@ -52,7 +52,6 @@ macro_rules! define_identifier {
 define_identifier!(GlobalVarId);
 define_identifier!(ExternId);
 define_identifier!(StructId);
-define_identifier!(FunctionId);
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub enum VariableIdentifier {
@@ -73,7 +72,6 @@ pub enum Identifier {
   Variable(VariableIdentifier),
   ExternFunction(ExternId),
   Struct(StructId),
-  Function(FunctionId),
   Invalid,
 }
 
@@ -98,12 +96,6 @@ impl From<ExternId> for Identifier {
 impl From<StructId> for Identifier {
   fn from(value: StructId) -> Self {
     Identifier::Struct(value)
-  }
-}
-
-impl From<FunctionId> for Identifier {
-  fn from(value: FunctionId) -> Self {
-    Identifier::Function(value)
   }
 }
 

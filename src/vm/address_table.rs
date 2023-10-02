@@ -1,4 +1,4 @@
-use crate::compiler::identifier::{ExternId, FunctionId, GlobalVarId};
+use crate::compiler::identifier::GlobalVarId;
 
 #[derive(Default)]
 pub struct AddressTable {
@@ -16,20 +16,12 @@ impl AddressTable {
     }
   }
 
-  pub fn resolve_extern_function(&self, extern_id: ExternId) -> u32 {
-    if extern_id.is_relative() {
-      self.extern_functions + extern_id.get_id()
-    } else {
-      extern_id.get_id()
-    }
+  pub fn resolve_extern_function(&self, extern_id: u32) -> u32 {
+    self.extern_functions + extern_id
   }
 
-  pub fn resolve_global_function(&self, function_id: FunctionId) -> u32 {
-    if function_id.is_relative() {
-      self.global_functions + function_id.get_id()
-    } else {
-      function_id.get_id()
-    }
+  pub fn resolve_global_function(&self, function_id: u32) -> u32 {
+    self.global_functions + function_id
   }
 
   pub fn update_table(

@@ -4,14 +4,16 @@ use crate::compiler::ast::expression::expr::{
   Assignment, Binary, Construct, DotCall, FnCall, Id, Lambda, Literal, MemberGet, MemberSet, Paren,
   Unary,
 };
+use crate::compiler::ast::expression::Expr;
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor};
 use crate::compiler::ast::{ExprHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
-use crate::compiler::errors::{sema_err, ty_err, CompilerError};
-use crate::compiler::identifier::{FunctionId, OverloadId, VariableIdentifier};
+use crate::compiler::errors::{ty_err, CompilerError};
+use crate::compiler::functions::overload_set::FunctionAddress;
+use crate::compiler::functions::RelativeFunctionAddress;
+use crate::compiler::identifier::VariableIdentifier;
 use crate::compiler::lexer::{SourceRange, Token};
 use crate::compiler::operators::{BinaryOperator, UnaryOperator};
-use crate::compiler::semantics::environment::{NameError, ResolvedIdentifier};
 use crate::compiler::semantics::SemanticChecker;
 use crate::compiler::structs::StructGetError;
 use crate::compiler::types::{FunctionSignature, Type};
@@ -103,26 +105,20 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
   }
 
   fn visit_id(&mut self, ast: &'a AST, id: &Id, expr_handle: ExprHandle) -> Type {
-    let resolved_id = self.get_id(id.id, expr_handle.get_source_range(ast));
-    match resolved_id {
-      ResolvedIdentifier::UnresolvedOverload(overload_id) => Type::UnresolvedOverload(overload_id),
-      ResolvedIdentifier::ResolvedVariable { id, type_ } => {
-        let type_ = type_.clone();
-        unsafe { self.code().get_variable(id) };
-        type_
+    if let Some(overload_set) = self.env.global_functions.get_overload_set(id.id) {
+      match overload_set.auto_resolve() {
+        Ok(overloaded_function) => {
+          unsafe { self.emit_function_address(overloaded_function.function_address) };
+          return overloaded_function.function_signature.into();
+        }
+        Err(_) => todo!(),
       }
-      ResolvedIdentifier::ResolvedFunction { id, signature } => {
-        let type_ = signature.clone().into();
-        unsafe { self.code().push_constant(ConstantValue::FunctionId(id)) };
-        type_
-      }
-      ResolvedIdentifier::ExternFunction { id, type_ } => {
-        let type_ = type_.clone();
-        unsafe { self.code().push_constant(ConstantValue::ExternId(id)) };
-        type_
-      }
-      ResolvedIdentifier::Error => Type::Error,
     }
+    let (id, type_) = self.get_variable(id.id, expr_handle.get_source_range(ast));
+    unsafe {
+      self.code().get_variable(id);
+    }
+    type_
   }
 
   fn visit_paren(&mut self, ast: &'a AST, paren: &Paren, _: ExprHandle) -> Type {
@@ -138,7 +134,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     let expr_sr = expr_handle.get_source_range(ast);
     let rhs_type = self.visit_expr(ast, assignment.rhs);
     let (var_id, var_type) = self.get_variable(assignment.var_name, expr_sr);
-    if !var_type.is_error() && !rhs_type.is_error() && *var_type != rhs_type {
+    if !var_type.is_error() && !rhs_type.is_error() && var_type != rhs_type {
       let var_type = var_type.clone(); // we already borrowed self with get_variable
       self.emit_error(ty_err::assignment_of_incompatible_types(
         expr_sr,
@@ -147,7 +143,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       ));
       Type::Error
     } else {
-      assert!(!matches!(rhs_type, Type::UnresolvedOverload(_)));
+      assert!(!matches!(rhs_type, Type::UnresolvedOverload));
       unsafe { self.code().set_variable(var_id) };
       rhs_type
     }
@@ -239,7 +235,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     unsafe {
       self
         .code()
-        .push_constant(ConstantValue::FunctionId(function_id));
+        .push_constant(ConstantValue::RelativeNativeFn(function_id));
       self.code().maybe_create_closure(&captures);
     };
     FunctionSignature::new(parameter_types, return_type).into()
@@ -247,32 +243,12 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
 
   fn visit_fn_call(&mut self, ast: &'a AST, fn_call: &FnCall, expr_handle: ExprHandle) -> Type {
     let arguments = self.visit_expr_list(ast, &fn_call.arguments);
-    let function_expr = self.visit_expr(ast, fn_call.func);
     let call_sr = expr_handle.get_source_range(ast);
-    let expr_type = match function_expr {
-      Type::Function(signature) => {
-        check_arguments(
-          &mut self.errors,
-          signature.get_parameters(),
-          &arguments,
-          call_sr,
-        );
-        signature.get_return_type().clone()
-      }
-      Type::UnresolvedOverload(overload_id) => self.call_overload(call_sr, &arguments, overload_id),
-      Type::Error => Type::Error,
-      _ => {
-        self.emit_error(ty_err::cannot_call_type(
-          call_sr,
-          function_expr.print_pretty(),
-        ));
-        Type::Error
-      }
-    };
-    unsafe {
-      self
-        .code()
-        .push_op2(OpCode::Call, fn_call.arguments.len() as u8)
+    let expr_type = if let Expr::Id(id) = fn_call.func.get_expr(ast) {
+      self.call_function(&arguments, id.id, call_sr)
+    } else {
+      let lhs_type = self.visit_expr(ast, fn_call.func);
+      self.call_value(&lhs_type, &arguments, call_sr)
     };
     expr_type
   }
@@ -451,32 +427,6 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
 }
 
 impl<'a> SemanticChecker<'a> {
-  fn call_overload(
-    &mut self,
-    call_sr: SourceRange,
-    arguments: &[Type],
-    overload_id: OverloadId,
-  ) -> Type {
-    if let Some(resolved_overload) = self.env.resolve_overload(overload_id, &arguments) {
-      let function_id = resolved_overload.function_id;
-      let return_type = resolved_overload
-        .function_signature
-        .get_return_type()
-        .clone();
-      unsafe {
-        self
-          .code()
-          .push_constant(ConstantValue::FunctionId(function_id))
-      };
-      return_type
-    } else {
-      self.emit_error(ty_err::no_available_oveload(call_sr));
-      Type::Error
-    }
-  }
-}
-
-impl<'a> SemanticChecker<'a> {
   fn start_lambda(&mut self, return_type: Type) {
     let path = self
       .env
@@ -487,40 +437,42 @@ impl<'a> SemanticChecker<'a> {
     self.env.push_function(name, return_type);
   }
 
-  fn end_lambda(&mut self) -> (FunctionId, Vec<VariableIdentifier>) {
+  fn end_lambda(&mut self) -> (RelativeFunctionAddress, Vec<VariableIdentifier>) {
     self.finalize_function_code();
     let function = self.env.pop_function();
-    let function_id = self.env.new_function_id();
-    assert_eq!(function_id.get_id() as usize, self.checked_functions.len());
+    let function_id = self.env.global_functions.create_lambda();
+    assert_eq!(function_id as usize, self.checked_functions.len());
     self.checked_functions.push(function.code);
     (function_id, function.captures)
   }
 
-  fn get_id(&mut self, name: &str, sr: SourceRange) -> ResolvedIdentifier {
-    match self.env.get_id(name) {
-      Ok(resolved_id) => resolved_id,
-      Err(NameError::UndeclaredName) => {
-        self.errors.push(sema_err::name_not_found(sr, name));
-        ResolvedIdentifier::Error
-      }
+  fn get_variable(&mut self, name: &str, sr: SourceRange) -> (VariableIdentifier, Type) {
+    match self.env.get_variable(name) {
+      Some((id, type_)) => return (id, type_),
+      _ => panic!(),
     }
-  }
-
-  fn get_variable(&mut self, name: &str, sr: SourceRange) -> (VariableIdentifier, &Type) {
-    match self.env.get_id(name) {
-      Ok(ResolvedIdentifier::ResolvedVariable { id, type_ }) => return (id, type_),
-      Err(NameError::UndeclaredName) => {
-        self.errors.push(sema_err::name_not_found(sr, name));
-      }
-      _ => self.errors.push(sema_err::not_a_variable(sr, name)),
-    }
-
-    (VariableIdentifier::Invalid, &Type::Error)
   }
 
   unsafe fn call_end(&mut self, arguments: usize, return_type: Type) -> Type {
     self.code().push_op2(OpCode::Call, arguments as u8);
     return_type.clone()
+  }
+
+  unsafe fn emit_function_address(&mut self, function_address: FunctionAddress) {
+    match function_address {
+      FunctionAddress::RelativeNative(address) => self
+        .code()
+        .push_constant(ConstantValue::RelativeNativeFn(address)),
+      FunctionAddress::RelativeExtern(address) => self
+        .code()
+        .push_constant(ConstantValue::RelativeExternFn(address)),
+      FunctionAddress::AbsoluteNative(address) => self
+        .code()
+        .push_constant(ConstantValue::AbsoluteNativeFn(address)),
+      FunctionAddress::AbsoluteExtern(address) => self
+        .code()
+        .push_constant(ConstantValue::AbsoluteExternFn(address)),
+    }
   }
 
   fn call_function(
@@ -530,24 +482,25 @@ impl<'a> SemanticChecker<'a> {
     call_sr: SourceRange,
   ) -> Type {
     // TODO: improve errors for overload sets with only one element (use `check_arguments`)
-    if let Some(overload_set) = self.env.get_overload_set(function_name) {
-      if let Some(resolved_overload) = overload_set.find(&arguments) {
-        let return_type = resolved_overload
-          .function_signature
-          .get_return_type()
-          .clone();
-        let function_id = resolved_overload.function_id;
-        unsafe {
-          self
-            .code()
-            .push_constant(ConstantValue::FunctionId(function_id));
-          self.call_end(arguments.len(), return_type)
+    if let Some(overload_set) = self.env.global_functions.get_overload_set(function_name) {
+      match overload_set.find(&arguments) {
+        Ok(resolved_overload) => {
+          let return_type = resolved_overload
+            .function_signature
+            .get_return_type()
+            .clone();
+          unsafe {
+            self.emit_function_address(resolved_overload.function_address);
+            self.call_end(arguments.len(), return_type)
+          }
         }
-      } else {
-        todo!("error: no valid overload")
+        Err(_) => {
+          todo!()
+        }
       }
     } else {
-      let (_, var_type) = self.get_variable(function_name, call_sr);
+      let (id, var_type) = self.get_variable(function_name, call_sr);
+      unsafe { self.code().get_variable(id) };
       let var_type = var_type.clone();
       self.call_value(&var_type, arguments, call_sr)
     }

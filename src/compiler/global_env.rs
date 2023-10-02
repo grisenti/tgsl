@@ -1,28 +1,27 @@
 use core::panic;
 use std::collections::HashMap;
 
-use crate::compiler::overload_set::OverloadSet;
+use crate::compiler::functions::LinkedFunctions;
 use crate::compiler::semantics::ModuleExports;
 use crate::compiler::structs::ExportedGlobalStructs;
 
-use super::identifier::{ExternId, GlobalIdentifier, GlobalVarId, ModuleId};
+use super::identifier::{GlobalIdentifier, GlobalVarId, ModuleId};
 use super::types::Type;
 
 pub struct Module {
   pub global_names: HashMap<String, GlobalIdentifier>,
-  pub overloads: Vec<OverloadSet>,
   pub structs: ExportedGlobalStructs,
+  pub functions: LinkedFunctions,
 }
 
 #[derive(Default)]
 pub struct GlobalEnv {
   variable_types: Vec<Type>,
-  extern_functions_types: Vec<Type>,
   module_names: HashMap<String, ModuleId>,
   modules: Vec<Module>,
   global_variables_count: u32,
-  extern_functions_count: u32,
-  exported_functions: u32,
+  last_extern_function_address: u32,
+  last_native_function_address: u32,
 }
 
 impl GlobalEnv {
@@ -36,28 +35,20 @@ impl GlobalEnv {
     &self.variable_types[id.get_id() as usize]
   }
 
-  pub fn get_extern_function_type(&self, id: ExternId) -> &Type {
-    assert!(!id.is_relative());
-    &self.extern_functions_types[id.get_id() as usize]
-  }
-
-  pub fn export_module(&mut self, module_exports: ModuleExports) -> Option<ModuleId> {
-    let module_name = module_exports.module_name?;
-
+  pub fn export_module(&mut self, module_exports: ModuleExports) {
     debug_assert!(
-      !self.module_names.contains_key(&module_name),
+      !self.module_names.contains_key(&module_exports.module_name),
       "this error should have been detected earlier by calling `is_module_name_available`"
     );
 
     let module_id = self.modules.len() as u16;
-    self.module_names.insert(module_name, ModuleId(module_id));
+    self
+      .module_names
+      .insert(module_exports.module_name, ModuleId(module_id));
 
     self
       .variable_types
       .extend(module_exports.global_variables_types.into_iter());
-    self
-      .extern_functions_types
-      .extend(module_exports.extern_function_types.into_iter());
 
     let mut module_names = HashMap::new();
     let mut exported_variables = 0;
@@ -71,39 +62,25 @@ impl GlobalEnv {
             exported_variables += 1;
           }
         }
-        GlobalIdentifier::ExternFunction(ext_id) => {
-          if ext_id.is_relative() && ext_id.is_public() {
-            let absolute_id = ExternId::absolute(ext_id.get_id() + self.extern_functions_count);
-            module_names.insert(name, GlobalIdentifier::ExternFunction(absolute_id));
-            exported_extern_functions += 1;
-          }
-        }
-        GlobalIdentifier::OverloadId(overload_id) => {
-          module_names.insert(name, GlobalIdentifier::OverloadId(overload_id));
-        }
         _ => panic!(),
       }
     }
-    let mut exported_functions = 0;
-    let overloads = module_exports
-      .overloads
-      .into_iter()
-      .map(|overload_set| {
-        let (set, count) = overload_set.export_set(self.exported_functions);
-        exported_functions += count;
-        set
-      })
-      .collect();
+    let native_functions = module_exports.functions.native_count;
+    let extern_functions = module_exports.functions.extern_count;
+
+    let linked_functions = module_exports.functions.link(
+      self.last_native_function_address,
+      self.last_extern_function_address,
+    );
 
     self.global_variables_count += exported_variables;
-    self.extern_functions_count += exported_extern_functions;
-    self.exported_functions += exported_functions as u32;
+    self.last_extern_function_address += extern_functions;
+    self.last_native_function_address += native_functions;
     self.modules.push(Module {
       global_names: module_names,
-      overloads,
       structs: module_exports.structs,
+      functions: linked_functions,
     });
-    Some(ModuleId(module_id))
   }
 
   pub fn is_module_name_available(&self, name: &str) -> bool {
