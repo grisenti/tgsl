@@ -8,3 +8,10 @@ fn f(x: num) -> num {
 	while (false) return -1;
 	return 10;
 }
+
+fn other_f(x: num) {
+    if (x > 0) return;
+}
+
+fn other_other_f(x: num) {
+}

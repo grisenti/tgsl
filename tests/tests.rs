@@ -38,7 +38,8 @@ fn compile_and_run(test_file: &str) {
 test_files!(closures,
   capture_copy,
   capture_single_multi_level,
-  capture_single_one_level
+  capture_single_one_level,
+  empty_return_type_does_not_need_to_return
 );
 
 #[rustfmt::skip]
