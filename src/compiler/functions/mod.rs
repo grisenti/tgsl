@@ -171,6 +171,10 @@ impl GlobalFunctions {
     self.function_names.get(name)
   }
 
+  pub fn is_overload_set(&self, name: &str) -> bool {
+    self.function_names.contains_key(name)
+  }
+
   pub fn export(mut self) -> (ExportedFunctions, Vec<ExternFunction>) {
     let mut extern_functions = Vec::with_capacity(self.last_extern_function as usize);
 

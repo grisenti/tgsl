@@ -211,7 +211,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     struct_decl: &StructDeclaration,
     stmt_handle: StmtHandle,
   ) -> ReturnKind {
-    if let Err(err) = self.env.global_structs.declare(struct_decl.name) {
+    if let Err(err) = self.env.declare_struct(struct_decl.name) {
       self.handle_struct_decl_error(err, struct_decl.name, stmt_handle.get_source_range(ast))
     }
     ReturnKind::None
@@ -231,8 +231,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     let member_types = self.convert_type_list(&struct_def.member_types);
     if let Err(err) = self
       .env
-      .global_structs
-      .define(struct_def.name, member_names, member_types)
+      .define_struct(struct_def.name, member_names, member_types)
     {
       self.handle_struct_decl_error(err, struct_def.name, stmt_handle.get_source_range(ast))
     }
@@ -332,6 +331,8 @@ impl<'a> SemanticChecker<'a> {
       StructInsertError::AlreadyDeclared => todo!(),
       StructInsertError::Imported => todo!(),
       StructInsertError::TooManyStructs => todo!(),
+      StructInsertError::NameIsAlreadyAFunction => todo!(),
+      StructInsertError::NameIsAlreadyAVariable => todo!(),
     }
   }
 

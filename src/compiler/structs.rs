@@ -57,6 +57,8 @@ pub type StructGetResult<'s> = Result<&'s Struct, StructGetError>;
 
 #[derive(Copy, Clone, Debug)]
 pub enum StructInsertError {
+  NameIsAlreadyAFunction,
+  NameIsAlreadyAVariable,
   AlreadyDefined,
   AlreadyDeclared,
   Imported,

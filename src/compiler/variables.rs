@@ -137,4 +137,8 @@ impl GlobalVariables {
       )
     })
   }
+
+  pub fn is_global_variable(&self, name: &str) -> bool {
+    self.variables.contains_key(name)
+  }
 }
