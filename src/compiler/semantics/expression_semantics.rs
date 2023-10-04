@@ -14,7 +14,7 @@ use crate::compiler::lexer::{SourceRange, Token};
 use crate::compiler::operators::{BinaryOperator, UnaryOperator};
 use crate::compiler::semantics::environment::Capture;
 use crate::compiler::semantics::SemanticChecker;
-use crate::compiler::structs::StructGetError;
+use crate::compiler::structs::{MemberIndex, StructGetError};
 use crate::compiler::types::{parameter_types_to_string, FunctionSignature, Type};
 
 #[rustfmt::skip]
@@ -247,34 +247,20 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     if lhs_type.is_error() {
       return Type::Error;
     }
-    if let Type::Struct { name, .. } = lhs_type {
-      let struct_ = self
-        .env
-        .global_structs
-        .get(&name)
-        .expect("temporary: deal with struct not defined");
-      if let Some(index) = struct_.get_member_index(member_get.member_name) {
-        let (_, member_type) = struct_.member_info(index);
-        let member_type = member_type.clone();
-        unsafe {
-          self
-            .code()
-            .push_op2(OpCode::GetMember, index.get_index() as u8)
-        };
-        member_type
-      } else {
-        self.emit_error(ty_err::not_a_member(
-          expr_handle.get_source_range(ast),
-          member_get.member_name,
-          struct_.get_name(),
-        ));
-        Type::Error
-      }
+
+    if let Some((member_type, member_index)) = self.get_struct_member(
+      member_get.member_name,
+      &lhs_type,
+      expr_handle.get_source_range(ast),
+    ) {
+      let member_type = member_type.clone();
+      unsafe {
+        self
+          .code()
+          .push_op2(OpCode::GetMember, member_index.get_index() as u8)
+      };
+      member_type
     } else {
-      self.emit_error(ty_err::cannot_access_member_of_non_struct_type(
-        expr_handle.get_source_range(ast),
-        lhs_type.print_pretty(),
-      ));
       Type::Error
     }
   }
@@ -289,35 +275,21 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     if lhs_type.is_error() {
       return Type::Error;
     }
-    if let Type::Struct { name, .. } = lhs_type {
-      let struct_ = self
-        .env
-        .global_structs
-        .get(&name)
-        .expect("temporary: deal with struct not being defined");
-      if let Some(index) = struct_.get_member_index(member_set.member_name) {
-        let (_, member_type) = struct_.member_info(index);
-        let member_type = member_type.clone();
-        self.visit_expr(ast, member_set.value);
-        unsafe {
-          self
-            .code()
-            .push_op2(OpCode::SetMember, index.get_index() as u8)
-        };
-        member_type
-      } else {
-        self.emit_error(ty_err::not_a_member(
-          expr_handle.get_source_range(ast),
-          member_set.member_name,
-          struct_.get_name(),
-        ));
-        Type::Error
-      }
+
+    if let Some((member_type, member_index)) = self.get_struct_member(
+      member_set.member_name,
+      &lhs_type,
+      expr_handle.get_source_range(ast),
+    ) {
+      let member_type = member_type.clone();
+      self.visit_expr(ast, member_set.value);
+      unsafe {
+        self
+          .code()
+          .push_op2(OpCode::SetMember, member_index.get_index() as u8)
+      };
+      member_type
     } else {
-      self.emit_error(ty_err::cannot_access_member_of_non_struct_type(
-        expr_handle.get_source_range(ast),
-        lhs_type.print_pretty(),
-      ));
       Type::Error
     }
   }
@@ -559,6 +531,35 @@ impl SemanticChecker<'_> {
         }
         self.code().push_op(OpCode::Capture);
       }
+    }
+  }
+
+  fn get_struct_member(
+    &mut self,
+    member_name: &str,
+    type_: &Type,
+    sr: SourceRange,
+  ) -> Option<(&Type, MemberIndex)> {
+    if let Type::Struct { name, .. } = type_ {
+      if let Ok(struct_) = self.env.global_structs.get(name) {
+        if let Some(index) = struct_.get_member_index(member_name) {
+          let (_, member_type) = struct_.member_info(index);
+          Some((member_type, index))
+        } else {
+          self
+            .errors
+            .push(ty_err::not_a_member(sr, member_name, struct_.get_name()));
+          None
+        }
+      } else {
+        todo!("error: struct was not defined yet")
+      }
+    } else {
+      self.emit_error(ty_err::cannot_access_member_of_non_struct_type(
+        sr,
+        type_.print_pretty(),
+      ));
+      None
     }
   }
 }
