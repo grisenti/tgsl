@@ -11,7 +11,6 @@ pub mod codegen;
 pub mod errors;
 pub mod functions;
 mod global_env;
-pub mod identifier;
 mod lexer;
 mod operators;
 mod parser;

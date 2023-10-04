@@ -1,9 +1,9 @@
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::functions::GlobalFunctions;
+use crate::compiler::global_env::GlobalEnv;
 use crate::compiler::structs::GlobalStructs;
 use crate::compiler::types::Type;
 use crate::compiler::variables::GlobalVariables;
-use crate::compiler::{global_env::GlobalEnv, identifier::VariableIdentifier};
 
 pub mod imports;
 pub mod types;
@@ -103,28 +103,6 @@ pub struct Environment<'src> {
 impl<'src> Environment<'src> {
   pub fn in_global_scope(&self) -> bool {
     self.scope_depth == 0
-  }
-
-  fn define_local_variable(
-    &mut self,
-    name: &'src str,
-    var_type: Type,
-  ) -> DeclarationResult<VariableIdentifier> {
-    if self.last_local_id == u8::MAX {
-      return Err(DeclarationError::TooManyLocalNames);
-    }
-    let id = self.last_local_id;
-    let local = Local {
-      name,
-      id,
-      scope_local_id: self.names_in_current_scope,
-      function_depth: self.functions_declaration_stack.len() as u8,
-      type_: var_type,
-    };
-    self.last_local_id += 1;
-    self.names_in_current_scope += 1;
-    self.locals.push(local);
-    Ok(VariableIdentifier::Local(id))
   }
 
   pub fn get_current_function_return_type(&self) -> Option<&Type> {
