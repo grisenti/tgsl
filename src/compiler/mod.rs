@@ -12,7 +12,6 @@ pub mod errors;
 pub mod functions;
 mod global_env;
 mod lexer;
-mod operators;
 mod parser;
 mod semantics;
 mod structs;

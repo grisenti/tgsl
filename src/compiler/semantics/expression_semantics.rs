@@ -11,42 +11,41 @@ use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::errors::{sema_err, ty_err, CompilerError};
 use crate::compiler::functions::RelativeFunctionAddress;
 use crate::compiler::lexer::{SourceRange, Token};
-use crate::compiler::operators::{BinaryOperator, UnaryOperator};
 use crate::compiler::semantics::environment::Capture;
 use crate::compiler::semantics::SemanticChecker;
 use crate::compiler::structs::{MemberIndex, StructGetError};
 use crate::compiler::types::{parameter_types_to_string, FunctionSignature, Type};
 
 #[rustfmt::skip]
-const BINARY_OPERATORS: &[(Token, Type, Type, Type, BinaryOperator)] = &[
+const BINARY_OPERATORS: &[(Token, Type, Type, Type, OpCode)] = &[
   // number
-  (Token::Basic('+'), Type::Num, Type::Num, Type::Num, BinaryOperator::AddNum),
-  (Token::Basic('-'), Type::Num, Type::Num, Type::Num, BinaryOperator::SubNum),
-  (Token::Basic('*'), Type::Num, Type::Num, Type::Num, BinaryOperator::MulNum),
-  (Token::Basic('/'), Type::Num, Type::Num, Type::Num, BinaryOperator::DivNum),
-  (Token::Basic('<'), Type::Num, Type::Num, Type::Bool, BinaryOperator::LeNum),
-  (Token::Basic('>'), Type::Num, Type::Num, Type::Bool, BinaryOperator::GeNum),
-  (Token::Leq, Type::Num, Type::Num, Type::Bool, BinaryOperator::LeqNum),
-  (Token::Geq, Type::Num, Type::Num, Type::Bool, BinaryOperator::GeqNum),
-  (Token::Same, Type::Num, Type::Num, Type::Bool, BinaryOperator::SameNum),
-  (Token::Different, Type::Num, Type::Num, Type::Bool, BinaryOperator::DiffNum),
+  (Token::Basic('+'), Type::Num, Type::Num, Type::Num, OpCode::AddNum),
+  (Token::Basic('-'), Type::Num, Type::Num, Type::Num, OpCode::SubNum),
+  (Token::Basic('*'), Type::Num, Type::Num, Type::Num, OpCode::MulNum),
+  (Token::Basic('/'), Type::Num, Type::Num, Type::Num, OpCode::DivNum),
+  (Token::Basic('<'), Type::Num, Type::Num, Type::Bool, OpCode::LeNum),
+  (Token::Basic('>'), Type::Num, Type::Num, Type::Bool, OpCode::GeNum),
+  (Token::Leq, Type::Num, Type::Num, Type::Bool, OpCode::LeqNum),
+  (Token::Geq, Type::Num, Type::Num, Type::Bool, OpCode::GeqNum),
+  (Token::Same, Type::Num, Type::Num, Type::Bool, OpCode::SameNum),
+  (Token::Different, Type::Num, Type::Num, Type::Bool, OpCode::DiffNum),
   // string Token
-  (Token::Basic('+'), Type::Str, Type::Str, Type::Str, BinaryOperator::AddStr),
-  (Token::Basic('<'), Type::Str, Type::Str, Type::Bool, BinaryOperator::LeStr),
-  (Token::Basic('>'), Type::Str, Type::Str, Type::Bool, BinaryOperator::GeStr),
-  (Token::Leq, Type::Str, Type::Str, Type::Bool, BinaryOperator::LeqStr),
-  (Token::Geq, Type::Str, Type::Str, Type::Bool, BinaryOperator::GeqStr),
-  (Token::Same, Type::Str, Type::Str, Type::Bool, BinaryOperator::SameStr),
-  (Token::Different, Type::Str, Type::Str, Type::Bool, BinaryOperator::DiffStr),
+  (Token::Basic('+'), Type::Str, Type::Str, Type::Str, OpCode::AddStr),
+  (Token::Basic('<'), Type::Str, Type::Str, Type::Bool, OpCode::LeStr),
+  (Token::Basic('>'), Type::Str, Type::Str, Type::Bool, OpCode::GeStr),
+  (Token::Leq, Type::Str, Type::Str, Type::Bool, OpCode::LeqStr),
+  (Token::Geq, Type::Str, Type::Str, Type::Bool, OpCode::GeqStr),
+  (Token::Same, Type::Str, Type::Str, Type::Bool, OpCode::SameStr),
+  (Token::Different, Type::Str, Type::Str, Type::Bool, OpCode::DiffStr),
   // bool
-  (Token::Same, Type::Bool, Type::Bool, Type::Bool, BinaryOperator::SameBool),
-  (Token::Different, Type::Bool, Type::Bool, Type::Bool, BinaryOperator::DiffBool),
+  (Token::Same, Type::Bool, Type::Bool, Type::Bool, OpCode::SameBool),
+  (Token::Different, Type::Bool, Type::Bool, Type::Bool, OpCode::DiffBool),
 ];
 
 #[rustfmt::skip]
-const UNARY_OPERATORS: &[(Token, Type, Type, UnaryOperator)] = &[
-  (Token::Basic('-'), Type::Num, Type::Num, UnaryOperator::NegNum),
-  (Token::Basic('!'), Type::Bool, Type::Bool, UnaryOperator::NotBool),
+const UNARY_OPERATORS: &[(Token, Type, Type, OpCode)] = &[
+  (Token::Basic('-'), Type::Num, Type::Num, OpCode::NegNum),
+  (Token::Basic('!'), Type::Bool, Type::Bool, OpCode::NotBool),
 ];
 
 fn check_arguments(
@@ -170,7 +169,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       .find(|bin_op| bin_op.1 == lhs && bin_op.2 == rhs)
       .map(|e| (e.3.clone(), e.4));
     if let Some((expr_type, bin_op)) = result {
-      unsafe { self.code().push_op(bin_op.into()) };
+      unsafe { self.code().push_op(bin_op) };
       expr_type
     } else {
       self.emit_error(ty_err::incorrect_binary_operator(
@@ -190,7 +189,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       .find(|e| e.0 == unary.operator && e.1 == rhs)
       .map(|e| (e.2.clone(), e.3));
     if let Some((expr_type, unary_op)) = result {
-      unsafe { self.code().push_op(unary_op.into()) };
+      unsafe { self.code().push_op(unary_op) };
       expr_type
     } else {
       self.emit_error(ty_err::incorrect_unary_operator(

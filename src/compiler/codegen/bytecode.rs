@@ -1,12 +1,10 @@
 use core::fmt::Debug;
 
 use crate::compiler::functions::overload_set::FunctionAddress;
-use crate::compiler::operators::BinaryOperator;
-use crate::compiler::operators::UnaryOperator;
 use crate::compiler::variables::GlobalVarAddress;
 
 #[repr(u8)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum OpCode {
   Return,
 
@@ -67,43 +65,6 @@ pub enum OpCode {
   Pop,
 
   Last,
-}
-
-impl From<BinaryOperator> for OpCode {
-  fn from(value: BinaryOperator) -> Self {
-    match value {
-      BinaryOperator::AddNum => OpCode::AddNum,
-      BinaryOperator::SubNum => OpCode::SubNum,
-      BinaryOperator::MulNum => OpCode::MulNum,
-      BinaryOperator::DivNum => OpCode::DivNum,
-      BinaryOperator::LeNum => OpCode::LeNum,
-      BinaryOperator::GeNum => OpCode::GeNum,
-      BinaryOperator::LeqNum => OpCode::LeqNum,
-      BinaryOperator::GeqNum => OpCode::GeqNum,
-      BinaryOperator::SameNum => OpCode::SameNum,
-      BinaryOperator::DiffNum => OpCode::DiffNum,
-      BinaryOperator::AddStr => OpCode::AddStr,
-      BinaryOperator::LeStr => OpCode::LeStr,
-      BinaryOperator::GeStr => OpCode::GeStr,
-      BinaryOperator::LeqStr => OpCode::LeqStr,
-      BinaryOperator::GeqStr => OpCode::GeqStr,
-      BinaryOperator::SameStr => OpCode::SameStr,
-      BinaryOperator::DiffStr => OpCode::DiffStr,
-      BinaryOperator::SameBool => OpCode::SameBool,
-      BinaryOperator::DiffBool => OpCode::DiffBool,
-      BinaryOperator::Invalid => panic!("invalid binary operator"),
-    }
-  }
-}
-
-impl From<UnaryOperator> for OpCode {
-  fn from(value: UnaryOperator) -> Self {
-    match value {
-      UnaryOperator::NegNum => OpCode::NegNum,
-      UnaryOperator::NotBool => OpCode::NotBool,
-      UnaryOperator::Invalid => panic!(),
-    }
-  }
 }
 
 #[derive(Clone, Debug, PartialEq)]
