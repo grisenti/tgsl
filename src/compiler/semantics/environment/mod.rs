@@ -3,7 +3,7 @@ use crate::compiler::functions::GlobalFunctions;
 use crate::compiler::global_env::GlobalEnv;
 use crate::compiler::structs::GlobalStructs;
 use crate::compiler::types::Type;
-use crate::compiler::variables::GlobalVariables;
+use crate::compiler::variables::{CaptureAddress, GlobalVariables, LocalAddress};
 
 pub mod imports;
 pub mod types;
@@ -19,9 +19,6 @@ struct Local<'src> {
   function_depth: u8,
   type_: Type,
 }
-
-pub type LocalAddress = u8;
-pub type CaptureAddress = u8;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Capture {

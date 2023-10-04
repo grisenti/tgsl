@@ -4,6 +4,8 @@ use std::rc::Rc;
 
 use crate::compiler::types::Type;
 
+pub type LocalAddress = u8;
+pub type CaptureAddress = u8;
 pub type RelativeGlobalVarAddress = u32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

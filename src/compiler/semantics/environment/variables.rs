@@ -1,8 +1,8 @@
-use crate::compiler::semantics::environment::{CaptureAddress, Environment, Local, LocalAddress};
+use crate::compiler::semantics::environment::{Environment, Local};
 use crate::compiler::types::Type;
 use crate::compiler::variables::{
-  GlobalVarAddress, GlobalVarDeclarationResult, LocalVarDeclarationError,
-  LocalVarDeclarationResult, RelativeGlobalVarAddress,
+  CaptureAddress, GlobalVarAddress, GlobalVarDeclarationResult, LocalAddress,
+  LocalVarDeclarationError, LocalVarDeclarationResult, RelativeGlobalVarAddress,
 };
 
 impl<'a> Environment<'a> {
