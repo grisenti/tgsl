@@ -1,123 +1,292 @@
-# Hot-reloading
-if the line being executed does not change, restart execution as normal, otherwise have to restart
+# Language
 
-# Environment
-resolve all bindings during parsing and assign an id to each named identifier (function or variable). The id is then used in the interpreter to get the value of the identifier from an array
+## Types
 
-# Syntax
-## Variables
-```rs
-var x = 0;
-vax x; // cannot be used, only initialized
+The default types are the following:
+
+- `num`: 64 bit floating point number.
+- `str`: utf8 string
+- `bool`: boolean type
+
+### Functions
+
+given a comma separated list of types (`T1, T2, ...`), a function type is defined as follows:
+
+```
+fn (<type_list>) -> <type>
 ```
 
-## Functions
-```rs
-fn combine(x, y, op) { // define via function declaration
-	return op(x, y);
+### Structs
+
+#### Definition
+
+structs are defined with the struct keyword, followed by a comma separated list of members, of the
+form `<identifier> : <type>`, where the last member can specify an optional comma.
+
+```
+struct <name> {
+    <member_list>
+}
+```
+
+#### Construction
+
+Instantiating a struct is done by using the structs name followed by curly brackets and a comma separated list of
+expressions for each member in order.
+
+```
+<struct_name> { <expressions> }
+```
+
+#### Reference semantics
+
+Structs are always allocated on the heap and their type is implicitly a reference, meaning that passing a struct
+instance to a function or assigning it to a variable does not copy its members.
+
+```
+struct MyNum { value: num }
+
+fn f(my_num: MyNum) {
+  my_num.value = 1;
 }
 
-combine(x: 1, y: 2, op: fn (x, y) {x + y}) // optional named arguments
+var x = MyNum{0};
+f(x);
+assert(x.value == 1);
 
-var add = fn (x, y) { // define assigning the closure to a variable
-	return x + y;
+var y = x;
+y.value = 2;
+assert(x.value == 2);
+```
+
+## Scopes and name resolution
+
+Variable identifiers are bound to their most recent declaration still in scope. Same scope re-declarations are not
+allowed
+
+```
+var x = "global";
+{
+    var x = "local";
+    assert(x == "local");  
+}
+assert(x == "global");
+```
+
+### Overloading
+
+Global functions are added to a set of functions with the same name. These function have to differ in their parameters,
+they cannot be overloaded based on their return type
+
+```
+fn add(a: num, b: num) -> num {
+    return a + b;
 }
 
-//uniform function call syntax
-print 1.add(2); // 3
-"hello".add(" world!"); // hello world!
-```
-
-## Built-in types
-```rs
-"string"; // dynamic string
-1; // f64
-true; // bool
-[1,2,3]; // array
-map["a": 1, "b": 2]; // map
-set["a", "b", "c"]; // set
-null; // no value
-```
-
-## User defined types
-```rs
-struct A {
-	a,
-	b,
-	c,
+fn add(a: str, b: str) -> str {
+    return a + b;
 }
-
-var a = A(1,2,3) // initialization
-
-fn reduce (a) {a.a + a.b + a.c}
-
-a.reduce() // uniform function call syntax again
 ```
 
-## String formatting
-```rs
-var hello = "HELLO";
-print "{hello.to_lower()}"; // hello
+If an overload set contains only one function, it is chosen implicitly, meaning it can be assigned to a variable
+
 ```
+fn get_platform() -> str { return "android"; }
 
-## Compiler directives
-```rs
-#[enable(set)]
-```
+var f = get_platform;
 
-# Grammar
-## Program
-```text
-program → declaration* EOF ;
-```
-## Declarations
-```text
-declaration → structDecl
-	| funDecl
-	| varDecl
-	| statement ;
-
-structDecl → "struct" IDENTIFIER "{" (IDENTIFIER ",")* "}";
-
-funcDecl → "fn" IDENTIFIER function
-
-parameters → IDENTIFIER ( "," IDENTIFIER  )* ;
-
-idDecl → "var" IDENTIFIER ( "=" expression )? ";" | "const" IDENTIFIER "=" expression ";" ;
-```
-
-## Statements
-```text
-statement → exprStmt
-	| forStmt
-	| ifStmt
-	| printStmt
-	| returnStmt
-	| whileStmt
-	| block ;
-
-exprStmt → expression ";" ;
-
-forStmt → "for" "(" ( varDecl | exprStmt | ";" ) expression? ";" expression? ")" statement ;
-
-ifStmt → "if" "(" expression ")" statement ( "else" statement )? ;
-
-printStmt → "print" expression ";" ;
-
-returnStmt → "return" expression? ";" ;
-
-whileStmt → "while" "(" expression ")" statement ;
-
-block → "{" declaration* "}" ;
+assert(f() == "android");
 ```
 
 ## Expressions
+
+### Binary operations
+
+in order of precedence (increasing), the binary operators in the language are the following:
+
+- `or`
+- `and`
+- `<` `>` `<=` `>=`
+- `==` `!=`
+- `+` `-`
+- `*` `/`
+
+by default, the language defines the following operators, defined in terms of the native rust types backing them.
+
+| operator | left hand side type | right hand side type | result type | description            |
+|----------|---------------------|----------------------|-------------|------------------------|
+| +        | `num`               | `num`                | `num`       | `f64` addition         |
+| -        | `num`               | `num`                | `num`       | `f64` subtraction      |
+| *        | `num`               | `num`                | `num`       | `f64` multiplication   |
+| /        | `num`               | `num`                | `num`       | `f64` division         |
+| <        | `num`               | `num`                | `num`       | `f64` less             |
+| <=       | `num`               | `num`                | `num`       | `f64` less or equal    |
+| \>       | `num`               | `num`                | `num`       | `f64` greater          |
+| \>=      | `num`               | `num`                | `num`       | `f64` greater or equal |
+| ==       | `num`               | `num`                | `num`       | `f64` equal            |
+| !=       | `num`               | `num`                | `num`       | `f64` not equal        |
+| +        | `str`               | `str`                | `str`       | `String` concatenation |
+| <=       | `num`               | `num`                | `num`       | `f64` less or equal    |
+| \>       | `num`               | `num`                | `num`       | `f64` greater          |
+| \>=      | `num`               | `num`                | `num`       | `f64` greater or equal |
+| ==       | `num`               | `num`                | `num`       | `f64` equal            |
+| !=       | `num`               | `num`                | `num`       | `f64` not equal        |
+
+### Unary operators
+
+### Function calls
+
+### Member access
+
+### Assignment
+
+Assignments change the value of a variable, global, local or a capture for a lambda
+
 ```
-expression → closure | assignment;
+<l-value> = <value>
+```
 
-closure → "fn" function;
+the left side needs to be an l-value, meaning a variable identifier or a struct member.
 
-assignment → ( call "." )? IDENTIFIER "=" assignment
+name resolution for the left hand side is done according to the rules specified in [Name Resolution]()
+
+### Lambdas
+
+Lambdas are functions that can capture their environment. The syntax is the following.
+
+```
+fn (<parameters>) -> <return type> {
+    <instructions>
+};
+```
+
+parameters are specified as `name: type`.
+
+The return type is optional (in which case the body can only return the nothing type, but it is not required), but if
+specified, the function
+needs to return the specified type in all cases
+
+```
+// invalid as the return is gated by the if
+fn () -> num {
+    if (1 > 2) {
+        return 0; 
+    }
+};
+
+// valid as it returns in all cases
+fn () -> num {
+    if (1 > 2) {
+        return 1;
+    } else {
+        return 2;
+    }
+};
+```
+
+## Variables
+
+variables are declared using the `var` keyword followed by the name, and an optional type
+
+```
+var <name> = init_expr;
+var <name> : <type> = init_expr;
+```
+
+## Modules
+
+### Declaration
+
+a module is declared using the `module` keyword at the start of the file
+
+```
+module <module_name>;
+```
+
+the declaration can only appear as the first statement. Later programs can import a previously loaded module using
+the `import` keyword which bring in scope all module declarations (variables, functions and types).
+
+values changed
+
+### Loading modules
+
+When a module is loaded global instructions, are executed and global variables are initialized. Importing a module does
+not execute any code
+
+### Temporary Modules
+
+If a program is missing the module declaration it is called temporary and none of its declarations are exported. There
+is also no way to import a temporary module.
+
+## Grammar
+
+### Program
+
+```text
+program → declaration* EOF ;
+```
+
+### Types
+
+```text
+
+type → IDENTIFIER
+    | fn "(" ( type ("," type)*)? ")" "->" type
+```
+
+### Declarations
+
+```text
+declaration → struct_decl
+	| fn_decl
+	| var_decl
+	| statement;
+
+struct_decl → "struct" IDENTIFIER "{" IDENTIFIER ":" type ("," IDENTIFIER ":" type)* (",")? "}" ;
+
+fn_decl → "fn" IDENTIFIER "(" parameters? ")" -> IDENTIFIER (block | ";") ;
+
+parameters → IDENTIFIER ":" IDENTIFIER ( "," IDENTIFIER ":" type)* ;
+
+var_decl → "var" IDENTIFIER (":" type)? "=" expression  ";" ;
+```
+
+### Statements
+
+```text
+statement → expr_stmt
+	| for_stmt
+	| if_stmt
+	| print_stmt
+	| return_stmt
+	| while_stmt
+	| block
+	| macro_stmt 
+	;
+
+expr_stmt → expression ";" ;
+
+for_stmt → "for" "(" IDENTIFIER in IDENTIFIER ")" statement ;
+
+if_stmt → "if" "(" expression ")" statement ( "else" statement )? ;
+
+return_stmt → "return" expression? ";" ;
+
+while_stmt → "while" "(" expression ")" statement ;
+
+block → "{" declaration* "}" ;
+
+macro_stmt → "#" "[" IDENTIFIER "]" declaration ;
+```
+
+### Expressions
+
+```text
+expression → lambda | assignment;
+
+lambda → "fn" "(" parameters? ")" -> type block;
+
+assignment → (IDENTIFIER | member_get) "=" expression
 	| logic_or ;
 
 logic_or → logic_and ( "or" logic_and )* ;
@@ -130,11 +299,17 @@ comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 
 term → factor ( ( "-" | "+" ) factor )* ;
 
-factor → unary ( ( "/" | "*" ) unary
+factor → unary (( "/" | "*" ) unary)*;
 
 unary → ( "!" | "-" ) unary | call ;
 
-call → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
+fn_call → primary "(" arguments? ")" ;
+
+member_get → primary "." IDENTIFIER ;  
+
+dot_call → primary "." IDENTIFIER "(" arguments? ")" ;
+
+arguments → expression ( "," expression )* ;
 
 primary → "true"
 	| "false"
@@ -142,11 +317,13 @@ primary → "true"
 	| STRING
 	| IDENTIFIER
 	| "(" expression ")"
-```
+	| constructor
+	| map
+	| array
+	
+constructor → IDENTIFIER "{" arguments "}"
 
-## Others
-```text
-function → "(" parameters? ")" block;
-arguments → expression ( "," expression )* ;
-```
+map → "{" (expression ":" expression ("," expression ":" expression))? "}"
 
+array → "["  (expression ("," expression)*)? "]"
+```
