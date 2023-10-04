@@ -196,10 +196,7 @@ impl<'a> SemanticChecker<'a> {
     if condition_type.is_error() {
       false
     } else if condition_type != Type::Bool {
-      self.emit_error(ty_err::incorrect_conditional_type(
-        sr,
-        condition_type.print_pretty(),
-      ));
+      self.emit_error(ty_err::incorrect_conditional_type(sr, &condition_type));
       false
     } else {
       true

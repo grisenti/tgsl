@@ -33,8 +33,8 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     if specified_type != Type::Nothing && var_type != specified_type {
       self.emit_error(ty_err::type_specifier_expression_mismatch(
         stmt_sr,
-        var_type.print_pretty(),
-        specified_type.print_pretty(),
+        &var_type,
+        &specified_type,
       ));
       return ReturnKind::None;
     }
@@ -190,8 +190,8 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
       {
         self.emit_error(ty_err::incorrect_return_type(
           stmt_handle.get_source_range(ast),
-          return_type.print_pretty(),
-          required_return_type.print_pretty(),
+          &return_type,
+          &required_return_type,
         ));
       }
       unsafe { self.code().push_op(OpCode::Return) };

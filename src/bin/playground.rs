@@ -6,6 +6,10 @@ fn add((a, b): (f64, f64)) -> f64 {
   a + b
 }
 
+fn concat((a, b): (String, String)) -> String {
+  a + &b
+}
+
 fn test() -> Result<(), String> {
   let source = fs::read_to_string("program.pr").unwrap();
   let mut vm = VM::new();

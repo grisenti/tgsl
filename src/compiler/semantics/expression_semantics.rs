@@ -68,8 +68,8 @@ fn check_arguments(
       errors.push(ty_err::incorrect_function_argument_type(
         call_sr,
         index + 1,
-        argument.print_pretty(),
-        param.print_pretty(),
+        argument,
+        param,
       ));
     }
   }
@@ -123,8 +123,8 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       let var_type = var_type.clone(); // we already borrowed self with get_variable
       self.emit_error(ty_err::assignment_of_incompatible_types(
         expr_handle.get_source_range(ast),
-        rhs_type.print_pretty(),
-        var_type.print_pretty(),
+        &rhs_type,
+        &var_type,
       ));
       Type::Error
     } else {
@@ -155,8 +155,8 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
         self.emit_error(ty_err::incorrect_binary_operator(
           expr_handle.get_source_range(ast),
           binary.operator,
-          lhs.print_pretty(),
-          rhs.print_pretty(),
+          &lhs,
+          &rhs,
         ));
       }
       return Type::Error;
@@ -175,8 +175,8 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       self.emit_error(ty_err::incorrect_binary_operator(
         expr_handle.get_source_range(ast),
         binary.operator,
-        lhs.print_pretty(),
-        rhs.print_pretty(),
+        &lhs,
+        &rhs,
       ));
       Type::Error
     }
@@ -195,7 +195,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       self.emit_error(ty_err::incorrect_unary_operator(
         expr_handle.get_source_range(ast),
         unary.operator,
-        rhs.print_pretty(),
+        &rhs,
       ));
       Type::Error
     }
@@ -554,10 +554,7 @@ impl SemanticChecker<'_> {
         todo!("error: struct was not defined yet")
       }
     } else {
-      self.emit_error(ty_err::cannot_access_member_of_non_struct_type(
-        sr,
-        type_.print_pretty(),
-      ));
+      self.emit_error(ty_err::cannot_access_member_of_non_struct_type(sr, &type_));
       None
     }
   }

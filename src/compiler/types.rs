@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -9,7 +10,7 @@ pub struct FunctionSignature {
 pub fn parameter_types_to_string(parameters: &[Type]) -> String {
   parameters
     .iter()
-    .map(|val| val.print_pretty())
+    .map(|val| format!("{val}"))
     .collect::<Vec<_>>()
     .join(" ,")
 }
@@ -30,13 +31,15 @@ impl FunctionSignature {
   pub fn get_parameters(&self) -> &[Type] {
     &self.signature[0..self.signature.len() - 1]
   }
+}
 
-  pub fn print_pretty(&self) -> String {
-    let return_type = self.get_return_type().print_pretty();
-    format!(
+impl Display for FunctionSignature {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
       "fn ({}) -> {}",
       parameter_types_to_string(self.get_parameters()),
-      return_type
+      self.get_return_type()
     )
   }
 }
@@ -67,12 +70,14 @@ impl Type {
   pub fn is_error(&self) -> bool {
     *self == Type::Error
   }
+}
 
-  pub fn print_pretty(&self) -> String {
+impl Display for Type {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
-      Type::Function(signature) => signature.print_pretty(),
-      Type::Struct { module_name, name } => format!("{module_name}::{name}"),
-      other => format!("{:?}", other),
+      Type::Function(signature) => write!(f, "{signature}"),
+      Type::Struct { module_name, name } => write!(f, "{module_name}::{name}"),
+      other => write!(f, "{}", format!("{other:?}").to_lowercase()),
     }
   }
 }

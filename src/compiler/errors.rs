@@ -68,8 +68,9 @@ pub mod lex_err {
 }
 
 pub mod parser_err {
-  use super::{CompilerError, SourceRangeProvider};
   use crate::compiler::lexer::Token;
+
+  use super::{CompilerError, SourceRangeProvider};
 
   def_err!(
     expected_identifier,
@@ -162,15 +163,17 @@ pub mod parser_err {
 }
 
 pub mod ty_err {
-  use super::{CompilerError, SourceRangeProvider};
   use crate::compiler::lexer::Token;
+  use crate::compiler::types::Type;
+
+  use super::{CompilerError, SourceRangeProvider};
 
   def_err!(
     type_specifier_expression_mismatch,
     "TY001",
     "specified type ({}) is different from the type of the initialization expression ({})",
-    specified: String,
-    expression: String
+    specified: &Type,
+    expression: &Type
   );
 
   def_err!(
@@ -178,7 +181,7 @@ pub mod ty_err {
     "TY002",
     "cannot apply unary operator '{}' to operand {}",
     operator: Token,
-    rhs_type: String
+    rhs_type: &Type
   );
 
   def_err!(
@@ -186,19 +189,19 @@ pub mod ty_err {
     "TY003",
     "cannot apply operator {} to operands {} and {}",
     operator: Token,
-    lhs_type: String,
-    rhs_type: String
+    lhs_type: &Type,
+    rhs_type: &Type
   );
 
   def_err!(
     assignment_of_incompatible_types,
     "TY004",
     "cannot assign value of type {} to identifier of type {}",
-    value_type: String,
-    var_type: String
+    value_type: &Type,
+    var_type: &Type
   );
 
-  def_err!(cannot_call_type, "TY005", "cannot call type {}", t: String);
+  def_err!(cannot_call_type, "TY005", "cannot call type {}", t:&Type);
 
   def_err!(
     incorrect_function_argument_number,
@@ -213,8 +216,8 @@ pub mod ty_err {
     "TY006",
     "mismatched types in function call. Argument {} (of type {}) should be of type {}",
     argument_number: usize,
-    provided_type: String,
-    required_type: String
+    provided_type: &Type,
+    required_type: &Type
   );
 
   def_err!(
@@ -228,21 +231,21 @@ pub mod ty_err {
   def_err!(cannot_access_member_of_non_struct_type,
     "TY008",
     "cannot access member of non struct type {}",
-    lhs_type: String
+    lhs_type:&Type
   );
 
   def_err!(no_member_and_no_function_found,
     "TY009",
     "{} is neither a function member for the struct nor a valid function could be found that has type {} as a first parameter",
     rhs_name: &str,
-    lhs_type: String
+    lhs_type: &Type
   );
 
   def_err!(could_not_find_function_for_dot_call,
     "TY010",
     "could not find function '{}' that takes type '{}' as a first parameter",
     function_name: &str,
-    lhs_type: String
+    lhs_type: &Type
   );
 
   def_err!(
@@ -260,15 +263,15 @@ pub mod ty_err {
   def_err!(incorrect_return_type,
     "TY013",
     "expression in return statement (of type {}) does not match the required type ({})",
-    expression_type: String,
-    required_type: String
+    expression_type: &Type,
+    required_type: &Type
   );
 
   def_err!(
     incorrect_conditional_type,
     "TY014",
     "cannot use value of type {} in a condition",
-    conditional_type: String
+    conditional_type: &Type
   );
 
   def_err!(no_available_oveload, "TY015", "no available overload");
