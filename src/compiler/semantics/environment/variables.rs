@@ -11,7 +11,7 @@ impl<'a> Environment<'a> {
       .locals
       .iter()
       .rev()
-      .take(self.names_in_current_scope as usize)
+      .take(self.local_names as usize)
       .any(|local| local.name == local_name)
   }
 
@@ -22,13 +22,13 @@ impl<'a> Environment<'a> {
   ) -> LocalVarDeclarationResult<LocalAddress> {
     assert!(!self.in_global_scope());
 
-    if self.last_local_id == u8::MAX {
+    if self.local_names == u8::MAX {
       return Err(LocalVarDeclarationError::TooManyLocalNames);
     }
     if self.is_local_in_current_scope(name) {
       return Err(LocalVarDeclarationError::AlreadyDefined);
     }
-    let id = self.last_local_id;
+    let id = self.local_names;
     let local = Local {
       name,
       id,
@@ -36,7 +36,7 @@ impl<'a> Environment<'a> {
       function_depth: self.functions_declaration_stack.len() as u8,
       type_: var_type,
     };
-    self.last_local_id += 1;
+    self.local_names += 1;
     self.names_in_current_scope += 1;
     self.locals.push(local);
     Ok(id)
@@ -47,7 +47,7 @@ impl<'a> Environment<'a> {
       .locals
       .iter()
       .rev()
-      .take(self.names_in_current_scope as usize)
+      .take(self.local_names as usize)
       .find(|local| local.name == name)
       .map(|local| (local.id, local.type_.clone()))
   }
