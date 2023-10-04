@@ -159,8 +159,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
 
     self
       .env
-      .global_functions
-      .declare_extern(
+      .declare_extern_function(
         extern_function.name,
         FunctionSignature::new(parameter_types, return_type).into(),
       )
@@ -278,7 +277,7 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
 
 impl<'a> SemanticChecker<'a> {
   fn declare_function(&mut self, name: &str, signature: FunctionSignature, stmt_sr: SourceRange) {
-    match self.env.global_functions.declare_native(name, signature) {
+    match self.env.declare_native_function(name, signature) {
       Ok(relative_address) => {
         assert!(relative_address as usize <= self.checked_functions.len());
         if relative_address as usize == self.checked_functions.len() {
@@ -303,7 +302,7 @@ impl<'a> SemanticChecker<'a> {
       .env
       .push_function(function_name, signature.get_return_type().clone());
     self.checked_functions.push(FunctionCode::default());
-    match self.env.global_functions.define_native(name, signature) {
+    match self.env.define_native_function(name, signature) {
       Ok(relative_address) => relative_address,
       Err(_) => panic!(),
     }

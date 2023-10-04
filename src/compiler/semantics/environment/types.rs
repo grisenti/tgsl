@@ -3,7 +3,7 @@ use crate::compiler::structs::{StructInsertError, StructInsertResult};
 use crate::compiler::types::Type;
 
 impl<'a> Environment<'a> {
-  fn check_name_availability(&mut self, name: &str) -> Result<(), StructInsertError> {
+  fn check_var_name_availability(&mut self, name: &str) -> Result<(), StructInsertError> {
     if self.global_variables.is_global_variable(name) {
       Err(StructInsertError::NameIsAlreadyAVariable)
     } else if self.global_functions.is_overload_set(name) {
@@ -14,7 +14,7 @@ impl<'a> Environment<'a> {
   }
 
   pub fn declare_struct(&mut self, name: &str) -> StructInsertResult {
-    self.check_name_availability(name)?;
+    self.check_var_name_availability(name)?;
     self.global_structs.declare(name)
   }
 
@@ -24,7 +24,7 @@ impl<'a> Environment<'a> {
     member_names: Vec<String>,
     member_types: Vec<Type>,
   ) -> StructInsertResult {
-    self.check_name_availability(name)?;
+    self.check_var_name_availability(name)?;
     self.global_structs.define(name, member_names, member_types)
   }
 

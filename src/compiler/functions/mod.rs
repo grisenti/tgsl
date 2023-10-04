@@ -19,6 +19,8 @@ pub type RelativeFunctionAddress = u32;
 
 #[derive(Debug, Clone, Copy)]
 pub enum FunctionInsertError {
+  NameAlreadyAType,
+  NameAlreadyAVariable,
   MultipleDeclarations,
   MultipleDefinitions,
   RedefinedImport,

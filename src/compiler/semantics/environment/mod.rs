@@ -5,6 +5,7 @@ use crate::compiler::structs::GlobalStructs;
 use crate::compiler::types::Type;
 use crate::compiler::variables::{CaptureAddress, GlobalVariables, LocalAddress};
 
+pub mod functions;
 pub mod imports;
 pub mod types;
 pub mod variables;
