@@ -4,4 +4,4 @@ fn transform(a: str, op: fn(str) -> str) -> str {
 	return op(a);
 }
 
-assert(transform("hello", fn (a: str) -> str {return a + " world!";}) == "hello world!");
+assert(transform("hello", |a: str| -> str {return a + " world!";}) == "hello world!");

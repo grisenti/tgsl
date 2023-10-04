@@ -2,8 +2,8 @@ import assert;
 
 fn f() -> fn() -> fn() -> num {
   var y = 1;
-  return fn () -> fn () -> num {
-	return fn () -> num {
+  return || -> fn () -> num {
+	return || -> num {
 		y = y + 1;
 		return y;
 	};

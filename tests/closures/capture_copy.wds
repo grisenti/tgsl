@@ -6,7 +6,7 @@ struct A {
 
 fn f1() -> fn() -> num {
   var x = 1;
-  var g = fn () -> num {
+  var g = || -> num {
 		return x;
   };
   x = x + 1;
@@ -15,7 +15,7 @@ fn f1() -> fn() -> num {
 
 fn f2() -> fn() -> num {
   var x = A{1};
-  var g = fn () -> num {
+  var g = || -> num {
 		return x.a;
   };
   x.a = x.a + 1;

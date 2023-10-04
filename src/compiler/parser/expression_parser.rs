@@ -1,8 +1,8 @@
+use ast::expression::*;
+
 use crate::return_if_err;
 
 use super::*;
-
-use ast::expression::*;
 
 const MAX_BIN_OP_PRECEDENCE: usize = 6;
 
@@ -246,16 +246,41 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn parse_lambda_parameters(&mut self) -> (Vec<TypeHandle>, Vec<&'src str>) {
+    return_if_err!(self, (vec![], vec![]));
+    assert_eq!(self.lookahead, Token::Basic('|'));
+
+    let call_start = self.lex.previous_token_range();
+    self.advance();
+    let mut types = Vec::new();
+    let mut names = Vec::new();
+    while self.lookahead != Token::Basic('|') {
+      names.push(self.match_id());
+      types.push(self.parse_type_specifier());
+      if self.match_next(Token::Basic(',')).is_none() {
+        break;
+      }
+    }
+    let call_end = self.lex.previous_token_range();
+    self.match_token(Token::Basic('|'));
+    if types.len() > 255 {
+      self.emit_error(parser_err::too_many_function_parameters(
+        SourceRange::combine(call_start, call_end),
+      ));
+      (vec![], vec![])
+    } else {
+      (types, names)
+    }
+  }
+
   fn parse_lambda(&mut self) -> ExprHandle {
     return_if_err!(self, ExprHandle::INVALID);
-    assert_eq!(self.lookahead, Token::Fn);
+    assert_eq!(self.lookahead, Token::Basic('|'));
 
     let expr_start = self.lex.previous_token_range();
-    self.advance();
-    let (parameter_types, parameter_names) = self.parse_function_parameters();
+    let (parameter_types, parameter_names) = self.parse_lambda_parameters();
     let return_type = self.parse_function_return_type();
     let (body, expr_end) = self.parse_block_components();
-
     self.ast.add_expression(
       expr::Lambda {
         parameter_types,
@@ -271,7 +296,7 @@ impl<'src> Parser<'src> {
     return_if_err!(self, ExprHandle::INVALID);
 
     match self.lookahead {
-      Token::Fn => self.parse_lambda(),
+      Token::Basic('|') => self.parse_lambda(),
       _ => self.parse_assignment(),
     }
   }
@@ -279,12 +304,10 @@ impl<'src> Parser<'src> {
 
 #[cfg(test)]
 mod test {
-  use crate::compiler::lexer::Token;
-  use json::JsonValue;
+  use json::{array, object, JsonValue};
 
+  use crate::compiler::lexer::Token;
   use crate::compiler::parser::test::TestParser;
-  
-  
 
   fn parse_correct_expression(expr: &'static str) -> JsonValue {
     TestParser::new(expr).parse_correct_expression()
@@ -428,5 +451,25 @@ mod test {
       constructor["arguments"][1]["Literal"]["value"],
       JsonValue::from(Token::String("hello"))
     );
+  }
+
+  #[test]
+  fn parse_lambda_with_no_parameters_and_no_statement() {
+    let lambda = parse_correct_expression("|| {}");
+    let lambda = &lambda["Lambda"];
+    assert_eq!(lambda["return_type"], "nothing");
+    assert!(lambda["parameter_names"].is_empty());
+    assert!(lambda["parameter_types"].is_empty());
+    assert!(lambda["body"].is_empty());
+  }
+
+  #[test]
+  fn parse_lambda_with_parameters_and_body() {
+    let lambda =
+      parse_correct_expression("|param1: num, param2: str| -> X { return param1 + param2; }");
+    let lambda = &lambda["Lambda"];
+    assert_eq!(lambda["return_type"], object! {named: "X"});
+    assert_eq!(lambda["parameter_names"], array!["param1", "param2"]);
+    assert_eq!(lambda["parameter_types"], array!["num", "str"]);
   }
 }
