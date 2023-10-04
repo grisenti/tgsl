@@ -1,25 +1,33 @@
-use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
-use crate::compiler::identifier::VariableIdentifier;
 use std::fmt::Debug;
 
+use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 
 pub struct Label(usize);
 pub struct JumpPoint(usize);
 pub struct Address(usize);
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct FunctionCode {
   function_name: String,
   code: Vec<u8>,
   constants: Vec<ConstantValue>,
 }
 
+impl Default for FunctionCode {
+  fn default() -> Self {
+    Self {
+      function_name: String::new(),
+      code: vec![],
+      constants: vec![ConstantValue::None],
+    }
+  }
+}
+
 impl FunctionCode {
   pub fn new(function_name: String) -> Self {
     Self {
       function_name,
-      code: vec![],
-      constants: vec![],
+      ..Default::default()
     }
   }
 
@@ -112,48 +120,6 @@ impl FunctionCode {
 
   pub fn swap(&mut self, Address(start): Address, Address(mid): Address, Address(end): Address) {
     self.code[start..end].rotate_left(mid - start);
-  }
-
-  pub unsafe fn get_variable(&mut self, id: VariableIdentifier) {
-    match id {
-      VariableIdentifier::Global(gid) => {
-        self.push_constant(ConstantValue::GlobalId(gid));
-        self.push_op(OpCode::GetGlobal);
-      }
-      VariableIdentifier::Local(id) => {
-        self.push_op2(OpCode::GetLocal, id);
-      }
-      VariableIdentifier::Capture(id) => {
-        self.push_op2(OpCode::GetCapture, id);
-      }
-      VariableIdentifier::Invalid => panic!("codegen with invalid ast"),
-    }
-  }
-
-  pub unsafe fn set_variable(&mut self, id: VariableIdentifier) {
-    match id {
-      VariableIdentifier::Global(gid) => {
-        self.push_constant(ConstantValue::GlobalId(gid));
-        self.push_op(OpCode::SetGlobal);
-      }
-      VariableIdentifier::Capture(id) => {
-        self.push_op2(OpCode::SetCapture, id);
-      }
-      VariableIdentifier::Local(id) => {
-        self.push_op2(OpCode::SetLocal, id);
-      }
-      VariableIdentifier::Invalid => self.push_op(OpCode::Last),
-    }
-  }
-
-  pub unsafe fn maybe_create_closure(&mut self, captures: &[VariableIdentifier]) {
-    if !captures.is_empty() {
-      self.push_op2(OpCode::MakeClosure, captures.len() as u8);
-      for c in captures {
-        self.get_variable(*c);
-        self.push_op(OpCode::Capture);
-      }
-    }
   }
 
   pub fn into_parts(self) -> (Vec<u8>, Vec<ConstantValue>) {

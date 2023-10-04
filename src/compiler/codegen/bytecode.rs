@@ -1,7 +1,9 @@
 use core::fmt::Debug;
 
+use crate::compiler::functions::overload_set::FunctionAddress;
 use crate::compiler::operators::BinaryOperator;
-use crate::compiler::{identifier::GlobalVarId, operators::UnaryOperator};
+use crate::compiler::operators::UnaryOperator;
+use crate::compiler::variables::GlobalVarAddress;
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
@@ -107,7 +109,8 @@ impl From<UnaryOperator> for OpCode {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ConstantValue {
   Number(f64),
-  GlobalId(GlobalVarId),
+  RelativeNativeGlobalVar(u32),
+  AbsoluteNativeGlobalVar(u32),
   RelativeNativeFn(u32),
   RelativeExternFn(u32),
   AbsoluteNativeFn(u32),
@@ -116,4 +119,24 @@ pub enum ConstantValue {
   Str(String),
   None,
   Stub,
+}
+
+impl From<FunctionAddress> for ConstantValue {
+  fn from(value: FunctionAddress) -> Self {
+    match value {
+      FunctionAddress::RelativeNative(a) => Self::RelativeNativeFn(a),
+      FunctionAddress::RelativeExtern(a) => Self::RelativeExternFn(a),
+      FunctionAddress::AbsoluteNative(a) => Self::AbsoluteNativeFn(a),
+      FunctionAddress::AbsoluteExtern(a) => Self::AbsoluteExternFn(a),
+    }
+  }
+}
+
+impl From<GlobalVarAddress> for ConstantValue {
+  fn from(value: GlobalVarAddress) -> Self {
+    match value {
+      GlobalVarAddress::AbsoluteNative(a) => Self::AbsoluteNativeGlobalVar(a),
+      GlobalVarAddress::RelativeNative(a) => Self::RelativeNativeGlobalVar(a),
+    }
+  }
 }

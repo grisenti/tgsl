@@ -1,15 +1,15 @@
-use core::panic;
 use std::collections::HashMap;
 
 use crate::compiler::functions::LinkedFunctions;
 use crate::compiler::semantics::ModuleExports;
 use crate::compiler::structs::ExportedGlobalStructs;
+use crate::compiler::variables::LinkedGlobalVariables;
 
-use super::identifier::{GlobalIdentifier, GlobalVarId, ModuleId};
+use super::identifier::{GlobalVarId, ModuleId};
 use super::types::Type;
 
 pub struct Module {
-  pub global_names: HashMap<String, GlobalIdentifier>,
+  pub global_variables: LinkedGlobalVariables,
   pub structs: ExportedGlobalStructs,
   pub functions: LinkedFunctions,
 }
@@ -46,25 +46,7 @@ impl GlobalEnv {
       .module_names
       .insert(module_exports.module_name, ModuleId(module_id));
 
-    self
-      .variable_types
-      .extend(module_exports.global_variables_types.into_iter());
-
-    let mut module_names = HashMap::new();
-    let mut exported_variables = 0;
-    let mut exported_extern_functions = 0;
-    for (name, id) in module_exports.global_names {
-      match id {
-        GlobalIdentifier::Variable(var_id) => {
-          if var_id.is_relative() && var_id.is_public() {
-            let absolute_id = GlobalVarId::absolute(var_id.get_id() + self.global_variables_count);
-            module_names.insert(name, GlobalIdentifier::Variable(absolute_id));
-            exported_variables += 1;
-          }
-        }
-        _ => panic!(),
-      }
-    }
+    let global_variables = module_exports.global_variables.count();
     let native_functions = module_exports.functions.native_count;
     let extern_functions = module_exports.functions.extern_count;
 
@@ -72,12 +54,15 @@ impl GlobalEnv {
       self.last_native_function_address,
       self.last_extern_function_address,
     );
+    let linked_global_variables = module_exports
+      .global_variables
+      .link(self.global_variables_count);
 
-    self.global_variables_count += exported_variables;
+    self.global_variables_count += global_variables;
     self.last_extern_function_address += extern_functions;
     self.last_native_function_address += native_functions;
     self.modules.push(Module {
-      global_names: module_names,
+      global_variables: linked_global_variables,
       structs: module_exports.structs,
       functions: linked_functions,
     });

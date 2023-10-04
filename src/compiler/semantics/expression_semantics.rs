@@ -8,12 +8,11 @@ use crate::compiler::ast::expression::Expr;
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor};
 use crate::compiler::ast::{ExprHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
-use crate::compiler::errors::{ty_err, CompilerError};
-use crate::compiler::functions::overload_set::FunctionAddress;
+use crate::compiler::errors::{sema_err, ty_err, CompilerError};
 use crate::compiler::functions::RelativeFunctionAddress;
-use crate::compiler::identifier::VariableIdentifier;
 use crate::compiler::lexer::{SourceRange, Token};
 use crate::compiler::operators::{BinaryOperator, UnaryOperator};
+use crate::compiler::semantics::environment::Capture;
 use crate::compiler::semantics::SemanticChecker;
 use crate::compiler::structs::StructGetError;
 use crate::compiler::types::{FunctionSignature, Type};
@@ -105,20 +104,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
   }
 
   fn visit_id(&mut self, ast: &'a AST, id: &Id, expr_handle: ExprHandle) -> Type {
-    if let Some(overload_set) = self.env.global_functions.get_overload_set(id.id) {
-      match overload_set.auto_resolve() {
-        Ok(overloaded_function) => {
-          unsafe { self.emit_function_address(overloaded_function.function_address) };
-          return overloaded_function.function_signature.into();
-        }
-        Err(_) => todo!(),
-      }
-    }
-    let (id, type_) = self.get_variable(id.id, expr_handle.get_source_range(ast));
-    unsafe {
-      self.code().get_variable(id);
-    }
-    type_
+    self.generate_var_get(id.id, expr_handle.get_source_range(ast))
   }
 
   fn visit_paren(&mut self, ast: &'a AST, paren: &Paren, _: ExprHandle) -> Type {
@@ -131,20 +117,18 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     assignment: &Assignment,
     expr_handle: ExprHandle,
   ) -> Type {
-    let expr_sr = expr_handle.get_source_range(ast);
     let rhs_type = self.visit_expr(ast, assignment.rhs);
-    let (var_id, var_type) = self.get_variable(assignment.var_name, expr_sr);
+
+    let var_type = self.generate_assignment(ast, assignment.var_name, expr_handle);
     if !var_type.is_error() && !rhs_type.is_error() && var_type != rhs_type {
       let var_type = var_type.clone(); // we already borrowed self with get_variable
       self.emit_error(ty_err::assignment_of_incompatible_types(
-        expr_sr,
+        expr_handle.get_source_range(ast),
         rhs_type.print_pretty(),
         var_type.print_pretty(),
       ));
       Type::Error
     } else {
-      assert!(!matches!(rhs_type, Type::UnresolvedOverload));
-      unsafe { self.code().set_variable(var_id) };
       rhs_type
     }
   }
@@ -236,7 +220,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       self
         .code()
         .push_constant(ConstantValue::RelativeNativeFn(function_id));
-      self.code().maybe_create_closure(&captures);
+      self.create_closure(&captures);
     };
     FunctionSignature::new(parameter_types, return_type).into()
   }
@@ -426,7 +410,73 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
   }
 }
 
-impl<'a> SemanticChecker<'a> {
+impl SemanticChecker<'_> {
+  fn generate_var_get(&mut self, var_name: &str, var_sr: SourceRange) -> Type {
+    if let Some((local_id, var_type)) = self.env.get_local_var(var_name) {
+      unsafe { self.code().push_op2(OpCode::GetLocal, local_id) };
+      var_type.clone()
+    } else if let Some((capture_id, var_type)) = self.env.get_capture_or_capture_var(var_name) {
+      unsafe { self.code().push_op2(OpCode::GetCapture, capture_id) };
+      var_type.clone()
+    } else if let Some((address, var_type)) = self.env.get_global_var(var_name) {
+      unsafe {
+        self.code().push_constant(address.into());
+        self.code().push_op(OpCode::GetGlobal);
+      };
+      var_type.clone()
+    } else if let Some(overload) = self.env.global_functions.get_overload_set(var_name) {
+      match overload.auto_resolve() {
+        Ok(resolved_overload) => {
+          unsafe {
+            self
+              .code()
+              .push_constant(resolved_overload.function_address.into())
+          };
+          resolved_overload.function_signature.clone().into()
+        }
+        Err(_) => {
+          todo!()
+        }
+      }
+    } else if self.env.is_type(var_name) {
+      todo!("error: cannot access value of a type")
+    } else {
+      self.errors.push(sema_err::name_not_found(var_sr, var_name));
+      Type::Error
+    }
+  }
+
+  fn generate_assignment(&mut self, ast: &AST, var_name: &str, expr_handle: ExprHandle) -> Type {
+    if let Some((local_id, var_type)) = self.env.get_local_var(var_name) {
+      unsafe { self.code().push_op2(OpCode::SetLocal, local_id) };
+      var_type
+    } else if let Some((capture_id, var_type)) = self.env.get_capture_or_capture_var(var_name) {
+      unsafe { self.code().push_op2(OpCode::SetCapture, capture_id) };
+      var_type
+    } else if let Some((address, var_type)) = self.env.get_global_var(var_name) {
+      unsafe {
+        self.code().push_constant(address.into());
+        self.code().push_op(OpCode::SetGlobal);
+      };
+      var_type.clone()
+    } else if self
+      .env
+      .global_functions
+      .get_overload_set(var_name)
+      .is_some()
+    {
+      todo!("error: left hand side of assignment is a function");
+    } else if self.env.is_type(var_name) {
+      todo!("error: left hand side of assignment is a type")
+    } else {
+      self.errors.push(sema_err::name_not_found(
+        expr_handle.get_source_range(ast),
+        var_name,
+      ));
+      Type::Error
+    }
+  }
+
   fn start_lambda(&mut self, return_type: Type) {
     let path = self
       .env
@@ -437,7 +487,7 @@ impl<'a> SemanticChecker<'a> {
     self.env.push_function(name, return_type);
   }
 
-  fn end_lambda(&mut self) -> (RelativeFunctionAddress, Vec<VariableIdentifier>) {
+  fn end_lambda(&mut self) -> (RelativeFunctionAddress, Vec<Capture>) {
     self.finalize_function_code();
     let function = self.env.pop_function();
     let function_id = self.env.global_functions.create_lambda();
@@ -446,33 +496,9 @@ impl<'a> SemanticChecker<'a> {
     (function_id, function.captures)
   }
 
-  fn get_variable(&mut self, name: &str, sr: SourceRange) -> (VariableIdentifier, Type) {
-    match self.env.get_variable(name) {
-      Some((id, type_)) => return (id, type_),
-      _ => panic!(),
-    }
-  }
-
   unsafe fn call_end(&mut self, arguments: usize, return_type: Type) -> Type {
     self.code().push_op2(OpCode::Call, arguments as u8);
     return_type.clone()
-  }
-
-  unsafe fn emit_function_address(&mut self, function_address: FunctionAddress) {
-    match function_address {
-      FunctionAddress::RelativeNative(address) => self
-        .code()
-        .push_constant(ConstantValue::RelativeNativeFn(address)),
-      FunctionAddress::RelativeExtern(address) => self
-        .code()
-        .push_constant(ConstantValue::RelativeExternFn(address)),
-      FunctionAddress::AbsoluteNative(address) => self
-        .code()
-        .push_constant(ConstantValue::AbsoluteNativeFn(address)),
-      FunctionAddress::AbsoluteExtern(address) => self
-        .code()
-        .push_constant(ConstantValue::AbsoluteExternFn(address)),
-    }
   }
 
   fn call_function(
@@ -490,7 +516,9 @@ impl<'a> SemanticChecker<'a> {
             .get_return_type()
             .clone();
           unsafe {
-            self.emit_function_address(resolved_overload.function_address);
+            self
+              .code()
+              .push_constant(resolved_overload.function_address.into());
             self.call_end(arguments.len(), return_type)
           }
         }
@@ -499,9 +527,7 @@ impl<'a> SemanticChecker<'a> {
         }
       }
     } else {
-      let (id, var_type) = self.get_variable(function_name, call_sr);
-      unsafe { self.code().get_variable(id) };
-      let var_type = var_type.clone();
+      let var_type = self.generate_var_get(function_name, call_sr);
       self.call_value(&var_type, arguments, call_sr)
     }
   }
@@ -521,6 +547,23 @@ impl<'a> SemanticChecker<'a> {
       unsafe { self.call_end(arguments.len(), signature.get_return_type().clone()) }
     } else {
       todo!("error: not a function")
+    }
+  }
+
+  unsafe fn create_closure(&mut self, captures: &[Capture]) {
+    if !captures.is_empty() {
+      self
+        .code()
+        .push_op2(OpCode::MakeClosure, captures.len() as u8);
+      for c in captures {
+        match c {
+          Capture::Local(local_address) => self.code().push_op2(OpCode::GetLocal, *local_address),
+          Capture::Capture(capture_address) => {
+            self.code().push_op2(OpCode::GetCapture, *capture_address)
+          }
+        }
+        self.code().push_op(OpCode::Capture);
+      }
     }
   }
 }

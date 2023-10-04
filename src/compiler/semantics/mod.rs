@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::compiler::ast::parsed_type::ParsedFunctionType;
@@ -10,11 +9,11 @@ use crate::compiler::codegen::ModuleCode;
 use crate::compiler::errors::{sema_err, ty_err, CompilerError};
 use crate::compiler::functions::ExportedFunctions;
 use crate::compiler::global_env::GlobalEnv;
-use crate::compiler::identifier::{GlobalIdentifier, VariableIdentifier};
 use crate::compiler::lexer::SourceRange;
 use crate::compiler::semantics::environment::{DeclarationError, DeclarationResult, Environment};
 use crate::compiler::structs::ExportedGlobalStructs;
 use crate::compiler::types::{FunctionSignature, Type};
+use crate::compiler::variables::ExportedGlobalVariables;
 use crate::compiler::ExternFunction;
 
 mod environment;
@@ -48,8 +47,7 @@ fn combine_returns(current: ReturnKind, new: ReturnKind) -> ReturnKind {
 
 pub struct ModuleExports {
   pub module_name: String,
-  pub global_names: HashMap<String, GlobalIdentifier>,
-  pub global_variables_types: Vec<Type>,
+  pub global_variables: ExportedGlobalVariables,
   pub structs: ExportedGlobalStructs,
   pub functions: ExportedFunctions,
 }
@@ -92,13 +90,13 @@ impl<'a> SemanticChecker<'a> {
     );
     if checker.errors.is_empty() {
       unsafe { checker.global_code.push_op(OpCode::Return) };
-      let globals_count = checker.env.global_names.len() as u32;
       let (exported_functions, extern_functions) = checker.env.global_functions.export();
+      let exported_global_variables = checker.env.global_variables.export();
+      let global_variable_count = exported_global_variables.count();
       let exports = checker.module_name.map(|name| ModuleExports {
         module_name: name.to_string(),
-        global_names: checker.env.global_names,
-        global_variables_types: checker.env.module_global_variables_types,
         structs: checker.env.global_structs.export().unwrap(),
+        global_variables: exported_global_variables,
         functions: exported_functions,
       });
       Ok(CompiledModule {
@@ -107,7 +105,7 @@ impl<'a> SemanticChecker<'a> {
           global_code: checker.global_code,
           functions: checker.checked_functions,
         },
-        globals_count,
+        globals_count: global_variable_count,
         extern_functions,
       })
     } else {
@@ -137,13 +135,6 @@ impl<'a> SemanticChecker<'a> {
         None
       }
     }
-  }
-
-  fn new_variable(&mut self, name: &'a str, type_: Type, sr: SourceRange) -> VariableIdentifier {
-    let decl = self.env.define_variable(name, type_);
-    self
-      .check_declaration(name, decl, sr)
-      .unwrap_or(VariableIdentifier::Invalid)
   }
 
   fn finalize_function_code(&mut self) {
@@ -189,9 +180,15 @@ impl<'a> SemanticChecker<'a> {
     expr_list.iter().map(|e| self.visit_expr(ast, *e)).collect()
   }
 
+  fn declare_local_var(&mut self, name: &'a str, var_type: Type, stmt_sr: SourceRange) {
+    if let Err(err) = self.env.declare_local_var(name, var_type) {
+      todo!()
+    }
+  }
+
   fn declare_function_parameters(&mut self, names: &[&'a str], types: &[Type], sr: SourceRange) {
     for (name, type_) in names.iter().zip(types) {
-      self.new_variable(name, type_.clone(), sr);
+      self.declare_local_var(name, type_.clone(), sr);
     }
   }
 

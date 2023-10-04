@@ -1,5 +1,3 @@
-use crate::compiler::identifier::GlobalVarId;
-
 #[derive(Default)]
 pub struct AddressTable {
   global_variables: u32,
@@ -8,12 +6,8 @@ pub struct AddressTable {
 }
 
 impl AddressTable {
-  pub fn resolve_variable(&self, global_id: GlobalVarId) -> u32 {
-    if global_id.is_relative() {
-      global_id.get_id() + self.global_variables
-    } else {
-      global_id.get_id()
-    }
+  pub fn resolve_variable(&self, global_id: u32) -> u32 {
+    global_id + self.global_variables
   }
 
   pub fn resolve_extern_function(&self, extern_id: u32) -> u32 {

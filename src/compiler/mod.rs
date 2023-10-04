@@ -18,6 +18,7 @@ mod parser;
 mod semantics;
 mod structs;
 pub mod types;
+mod variables;
 
 pub struct CompiledModule {
   pub globals_count: u16,

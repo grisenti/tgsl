@@ -6,7 +6,7 @@ use crate::compiler::ast::statement::stmt::{
 };
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{StmtHandle, AST};
-use crate::compiler::codegen::bytecode::OpCode;
+use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::errors::{import_err, sema_err, ty_err};
 use crate::compiler::functions::RelativeFunctionAddress;
@@ -24,11 +24,12 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     stmt_handle: StmtHandle,
   ) -> ReturnKind {
     let var_type = self.visit_expr(ast, var_decl.init_expr);
-    let specified_type = self.visit_parsed_type(ast, var_decl.specified_type);
-    let stmt_sr = stmt_handle.get_source_range(ast);
     if var_type.is_error() {
       return ReturnKind::None;
     }
+    let specified_type = self.visit_parsed_type(ast, var_decl.specified_type);
+    let stmt_sr = stmt_handle.get_source_range(ast);
+
     if specified_type != Type::Nothing && var_type != specified_type {
       self.emit_error(ty_err::type_specifier_expression_mismatch(
         stmt_sr,
@@ -37,16 +38,14 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
       ));
       return ReturnKind::None;
     }
-    if Type::UnresolvedOverload == var_type {
+
+    if var_type == Type::UnresolvedOverload {
       self.emit_error(ty_err::cannot_initialize_with_overloaded_function(stmt_sr));
-      self.new_variable(var_decl.name, Type::Error, stmt_sr);
+      self.declare_initialized_variable(var_decl.name, Type::Error, stmt_sr);
       return ReturnKind::None;
     }
-    let id = self.new_variable(var_decl.name, var_type, stmt_sr);
-    if self.env.in_global_scope() {
-      unsafe { self.code().set_variable(id) };
-      unsafe { self.code().push_op(OpCode::Pop) };
-    }
+
+    self.declare_initialized_variable(var_decl.name, var_type, stmt_sr);
     ReturnKind::None
   }
 
@@ -330,5 +329,27 @@ impl<'a> SemanticChecker<'a> {
       StructInsertError::Imported => todo!(),
       StructInsertError::TooManyStructs => todo!(),
     }
+  }
+
+  fn declare_initialized_variable(&mut self, name: &'a str, var_type: Type, stmt_sr: SourceRange) {
+    if self.env.in_global_scope() {
+      match self.env.declare_global_var(name, var_type) {
+        Ok(global_id) => {
+          unsafe {
+            self
+              .code()
+              .push_constant(ConstantValue::RelativeNativeGlobalVar(global_id));
+            self.code().push_op(OpCode::SetGlobal);
+            self.code().push_op(OpCode::Pop);
+          };
+        }
+        Err(err) => {
+          todo!()
+        }
+      }
+    } else {
+      // we don't have to set it, we just need to put it on the stack and not pop it
+      self.declare_local_var(name, var_type, stmt_sr);
+    };
   }
 }

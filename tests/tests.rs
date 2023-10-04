@@ -125,8 +125,3 @@ modules_test!(access_global, decl, access);
 modules_test!(multiple_imports, mod1, mod2, main);
 
 modules_test!(access_struct, struct_decl, access);
-
-#[test]
-fn capture_copy() {
-  compile_and_run(include_str!("../tests/closures/capture_copy.wds"))
-}

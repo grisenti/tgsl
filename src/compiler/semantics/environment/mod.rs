@@ -1,18 +1,13 @@
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-
 use crate::compiler::codegen::function_code::FunctionCode;
-use crate::compiler::functions::overload_set::OverloadSet;
 use crate::compiler::functions::GlobalFunctions;
 use crate::compiler::structs::GlobalStructs;
 use crate::compiler::types::Type;
-use crate::compiler::{
-  global_env::GlobalEnv,
-  identifier::{GlobalIdentifier, GlobalVarId, VariableIdentifier},
-};
+use crate::compiler::variables::GlobalVariables;
+use crate::compiler::{global_env::GlobalEnv, identifier::VariableIdentifier};
 
 pub mod imports;
 pub mod types;
+pub mod variables;
 
 #[derive(Debug, Clone)]
 struct Local<'src> {
@@ -25,20 +20,53 @@ struct Local<'src> {
   type_: Type,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct CaptureId {
-  id: VariableIdentifier,
-  local_id: u8,
+pub type LocalAddress = u8;
+pub type CaptureAddress = u8;
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Capture {
+  Local(LocalAddress),
+  Capture(CaptureAddress),
 }
 
 struct Function {
-  captures: Vec<CaptureId>,
+  captures: Vec<Capture>,
   return_type: Type,
   code: FunctionCode,
 }
 
+impl Function {
+  fn get_capture(&self, capture: Capture) -> Option<CaptureAddress> {
+    self
+      .captures
+      .iter()
+      .position(|captured_variable| *captured_variable == capture)
+      .map(|index| index as u8)
+  }
+
+  fn get_or_capture_above_capture(&mut self, above_capture: CaptureAddress) -> CaptureAddress {
+    self
+      .get_capture(Capture::Capture(above_capture))
+      .unwrap_or_else(|| {
+        let capture_id = self.captures.len() as u8;
+        self.captures.push(Capture::Capture(above_capture));
+        capture_id
+      })
+  }
+
+  fn get_or_capture_above_local(&mut self, above_local: LocalAddress) -> CaptureAddress {
+    self
+      .get_capture(Capture::Local(above_local))
+      .unwrap_or_else(|| {
+        let capture_id = self.captures.len() as u8;
+        self.captures.push(Capture::Local(above_local));
+        capture_id
+      })
+  }
+}
+
 pub struct FinalizedFunction {
-  pub captures: Vec<VariableIdentifier>,
+  pub captures: Vec<Capture>,
   pub code: FunctionCode,
 }
 
@@ -67,97 +95,14 @@ pub struct Environment<'src> {
   functions_declaration_stack: Vec<Function>,
   declared_functions: u32,
 
-  pub global_names: HashMap<String, GlobalIdentifier>,
+  pub global_variables: GlobalVariables,
   pub global_structs: GlobalStructs<'src>,
   pub global_functions: GlobalFunctions,
-  pub module_global_variables_types: Vec<Type>,
-  pub overloads: Vec<OverloadSet>,
 }
 
 impl<'src> Environment<'src> {
   pub fn in_global_scope(&self) -> bool {
     self.scope_depth == 0
-  }
-
-  fn find_local(&self, local_name: &str) -> Option<usize> {
-    self
-      .locals
-      .iter()
-      .rposition(|Local { name, .. }| *name == local_name)
-  }
-
-  fn is_local_in_current_scope(&self, local_name: &str) -> bool {
-    self
-      .locals
-      .iter()
-      .rev()
-      .take(self.names_in_current_scope as usize)
-      .any(|local| local.name == local_name)
-  }
-
-  fn capture(&mut self, local_index: usize) -> (VariableIdentifier, &Type) {
-    let local = &self.locals[local_index];
-    let start_depth = self.functions_declaration_stack.len() as u8;
-    let target_depth = local.function_depth;
-
-    assert!(start_depth >= target_depth);
-
-    let mut capture_id = VariableIdentifier::Local(local.id);
-    let functions = self
-      .functions_declaration_stack
-      .iter_mut()
-      .rev()
-      .take((start_depth - target_depth) as usize)
-      .rev();
-    for func in functions {
-      // TODO: very slow, think of something different
-      if let Some(capture_index) = func.captures.iter().position(|c| c.local_id == local.id) {
-        capture_id = VariableIdentifier::Capture(capture_index as u8);
-      } else {
-        let tmp = capture_id;
-        capture_id = VariableIdentifier::Capture(func.captures.len() as u8);
-        func.captures.push(CaptureId {
-          id: tmp,
-          local_id: local.id,
-        });
-      }
-    }
-    (capture_id, &local.type_)
-  }
-
-  fn get_global(&mut self, name: &str) -> Option<(VariableIdentifier, Type)> {
-    if let Some(&global_variable) = self.global_names.get(name) {
-      if let GlobalIdentifier::Variable(var_id) = global_variable {
-        let type_ = if var_id.is_relative() {
-          &self.module_global_variables_types[var_id.get_id() as usize]
-        } else {
-          self.global_env.get_variable_type(var_id)
-        };
-        Some((var_id.into(), type_.clone()))
-      } else {
-        panic!()
-      }
-    } else {
-      None
-    }
-  }
-
-  fn declare_global(&mut self, name: &str, global_id: GlobalIdentifier) -> DeclarationResult<()> {
-    if let Entry::Vacant(e) = self.global_names.entry(name.to_string()) {
-      e.insert(global_id);
-      Ok(())
-    } else {
-      Err(DeclarationError::AlreadyDefined)
-    }
-  }
-
-  pub fn get_variable(&mut self, name: &str) -> Option<(VariableIdentifier, Type)> {
-    if let Some(local) = self.find_local(name) {
-      let (local_id, type_) = self.capture(local);
-      Some((local_id.into(), type_.clone()))
-    } else {
-      self.get_global(name)
-    }
   }
 
   fn define_local_variable(
@@ -194,23 +139,6 @@ impl<'src> Environment<'src> {
       .functions_declaration_stack
       .last_mut()
       .map(|func| &mut func.code)
-  }
-
-  pub fn define_variable(
-    &mut self,
-    name: &'src str,
-    var_type: Type,
-  ) -> DeclarationResult<VariableIdentifier> {
-    if self.is_local_in_current_scope(name) {
-      Err(DeclarationError::AlreadyDefined)
-    } else if self.in_global_scope() {
-      let id = GlobalVarId::relative(self.module_global_variables_types.len() as u32).into_public();
-      self.declare_global(name, id.into())?;
-      self.module_global_variables_types.push(var_type);
-      Ok(VariableIdentifier::Global(id))
-    } else {
-      self.define_local_variable(name, var_type)
-    }
   }
 
   pub fn pop_scope(&mut self) -> u8 {
@@ -252,7 +180,7 @@ impl<'src> Environment<'src> {
     self.pop_scope();
     if let Some(last_local) = self.locals.last() {
       self.last_local_id = last_local.id + 1;
-      self.names_in_current_scope = last_local.scope_local_id;
+      self.names_in_current_scope = last_local.scope_local_id + 1;
     } else {
       self.last_local_id = 0;
       self.names_in_current_scope = 0;
@@ -261,7 +189,7 @@ impl<'src> Environment<'src> {
       .functions_declaration_stack
       .pop()
       .expect("no functions to pop");
-    let captures = function.captures.iter().map(|c| c.id).collect();
+    let captures = function.captures.iter().copied().collect();
     FinalizedFunction {
       captures,
       code: function.code,
@@ -283,11 +211,9 @@ impl<'src> Environment<'src> {
       functions_declaration_stack: Vec::new(),
       declared_functions: 0,
 
-      global_names: HashMap::new(),
+      global_variables: Default::default(),
       global_structs: Default::default(),
       global_functions: Default::default(),
-      module_global_variables_types: Vec::new(),
-      overloads: Vec::new(),
     }
   }
 }

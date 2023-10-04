@@ -106,12 +106,18 @@ fn convert_constant(value: ConstantValue, address_table: &AddressTable) -> Tagge
       value: Value { number },
     }
     .into(),
-    ConstantValue::GlobalId(id) => {
-      let id = address_table.resolve_variable(id);
-      TaggedValue {
-        kind: ValueType::GlobalId,
-        value: Value { id: id as usize },
-      }
+    ConstantValue::RelativeNativeGlobalVar(address) => TaggedValue {
+      kind: ValueType::GlobalId,
+      value: Value {
+        id: address_table.resolve_variable(address) as usize,
+      },
+    }
+    .into(),
+    ConstantValue::AbsoluteNativeGlobalVar(address) => TaggedValue {
+      kind: ValueType::GlobalId,
+      value: Value {
+        id: address as usize,
+      },
     }
     .into(),
     ConstantValue::RelativeNativeFn(address) => TaggedValue {
