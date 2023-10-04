@@ -11,7 +11,7 @@ impl<'a> Environment<'a> {
       .locals
       .iter()
       .rev()
-      .take(self.local_names as usize)
+      .take(self.names_in_current_scope as usize)
       .any(|local| local.name == local_name)
   }
 
