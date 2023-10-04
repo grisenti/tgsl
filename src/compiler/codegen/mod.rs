@@ -1,8 +1,6 @@
+use std::fmt::Debug;
 
 use crate::compiler::codegen::function_code::FunctionCode;
-
-
-use std::fmt::Debug;
 
 pub mod bytecode;
 pub mod function_code;
@@ -19,14 +17,9 @@ impl Debug for ModuleCode {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let mut result = "".to_string();
     for func in &self.functions {
-      result += &format!(
-        "++ fn {} ++\n{:?}-- fn {} --\n",
-        func.get_name(),
-        func,
-        func.get_name()
-      );
+      result += &format!("{}:\n{:?}", func.get_name(), func);
     }
-    result += &format!("{:?}", self.global_code);
+    result += &format!("<global>:\n{:?}", self.global_code);
     write!(f, "{result}")
   }
 }

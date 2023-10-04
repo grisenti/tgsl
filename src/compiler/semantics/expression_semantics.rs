@@ -15,7 +15,7 @@ use crate::compiler::operators::{BinaryOperator, UnaryOperator};
 use crate::compiler::semantics::environment::Capture;
 use crate::compiler::semantics::SemanticChecker;
 use crate::compiler::structs::StructGetError;
-use crate::compiler::types::{FunctionSignature, Type};
+use crate::compiler::types::{parameter_types_to_string, FunctionSignature, Type};
 
 #[rustfmt::skip]
 const BINARY_OPERATORS: &[(Token, Type, Type, Type, BinaryOperator)] = &[
@@ -212,7 +212,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     let return_type = self.visit_parsed_type(ast, lambda.return_type);
     let expr_sr = expr_handle.get_source_range(ast);
 
-    self.start_lambda(return_type.clone());
+    self.start_lambda(&parameter_types, return_type.clone());
     self.declare_function_parameters(&lambda.parameter_names, &parameter_types, expr_sr);
     self.visit_function_body(&lambda.body, expr_sr);
     let (function_id, captures) = self.end_lambda();
@@ -477,13 +477,8 @@ impl SemanticChecker<'_> {
     }
   }
 
-  fn start_lambda(&mut self, return_type: Type) {
-    let path = self
-      .env
-      .get_current_function_code()
-      .map(|f| f.get_name())
-      .unwrap_or("");
-    let name = format!("{path}::<lambda>");
+  fn start_lambda(&mut self, parameter_types: &[Type], return_type: Type) {
+    let name = format!("<lambda>({})", parameter_types_to_string(parameter_types));
     self.env.push_function(name, return_type);
   }
 

@@ -6,6 +6,14 @@ pub struct FunctionSignature {
   signature: Rc<[Type]>,
 }
 
+pub fn parameter_types_to_string(parameters: &[Type]) -> String {
+  parameters
+    .iter()
+    .map(|val| val.print_pretty())
+    .collect::<Vec<_>>()
+    .join(" ,")
+}
+
 impl FunctionSignature {
   pub fn new(parameters: Vec<Type>, return_type: Type) -> Self {
     let mut signature = parameters;
@@ -24,14 +32,12 @@ impl FunctionSignature {
   }
 
   pub fn print_pretty(&self) -> String {
-    let parameters = self
-      .get_parameters()
-      .iter()
-      .map(|val| val.print_pretty())
-      .collect::<Vec<_>>()
-      .join(" ,");
     let return_type = self.get_return_type().print_pretty();
-    format!("fn ({}) -> {}", parameters, return_type)
+    format!(
+      "fn ({}) -> {}",
+      parameter_types_to_string(self.get_parameters()),
+      return_type
+    )
   }
 }
 

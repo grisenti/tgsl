@@ -14,7 +14,7 @@ use crate::compiler::lexer::SourceRange;
 use crate::compiler::semantics::environment::imports::ImportError;
 use crate::compiler::semantics::{combine_returns, ReturnKind, SemanticChecker};
 use crate::compiler::structs::StructInsertError;
-use crate::compiler::types::{FunctionSignature, Type};
+use crate::compiler::types::{parameter_types_to_string, FunctionSignature, Type};
 
 impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
   fn visit_var_decl(
@@ -296,9 +296,13 @@ impl<'a> SemanticChecker<'a> {
     signature: FunctionSignature,
     stmt_sr: SourceRange,
   ) -> RelativeFunctionAddress {
+    let function_name = format!(
+      "{name}({})",
+      parameter_types_to_string(signature.get_parameters())
+    );
     self
       .env
-      .push_function(name.to_string(), signature.get_return_type().clone());
+      .push_function(function_name, signature.get_return_type().clone());
     self.checked_functions.push(FunctionCode::default());
     match self.env.global_functions.define_native(name, signature) {
       Ok(relative_address) => relative_address,

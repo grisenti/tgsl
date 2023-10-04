@@ -27,6 +27,7 @@ pub enum Capture {
 }
 
 struct Function {
+  name: String,
   captures: Vec<Capture>,
   return_type: Type,
   code: FunctionCode,
@@ -142,10 +143,17 @@ impl<'src> Environment<'src> {
     self.names_in_current_scope = 0;
     self.local_names = 0;
     self.push_scope();
+    let prefix = self.generate_location_prefix();
+    let debug_name = if prefix.is_empty() {
+      name.clone()
+    } else {
+      format!("{prefix}::{}", &name)
+    };
     self.functions_declaration_stack.push(Function {
+      name,
       captures: Vec::new(),
       return_type,
-      code: FunctionCode::new(name),
+      code: FunctionCode::new(debug_name),
     })
   }
 
@@ -173,6 +181,15 @@ impl<'src> Environment<'src> {
 
   pub fn ensure_module_name_available(&self, name: &str) -> bool {
     self.global_env.is_module_name_available(name)
+  }
+
+  pub fn generate_location_prefix(&self) -> String {
+    self
+      .functions_declaration_stack
+      .iter()
+      .map(|f| -> &str { &f.name })
+      .collect::<Vec<_>>()
+      .join("::")
   }
 
   pub fn new(global_env: &'src GlobalEnv) -> Self {

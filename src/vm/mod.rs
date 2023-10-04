@@ -31,7 +31,7 @@ fn process_extern_functions(
 
   let mut functions = Vec::with_capacity(extern_functions.len());
   for extern_func in extern_functions {
-    if let Some(func) = declared_extern_functions.iter().find(|(f)| {
+    if let Some(func) = declared_extern_functions.iter().find(|f| {
       f.name.as_ref() == extern_func.get_name()
         && f.signature.get_parameters() == extern_func.get_parameters()
     }) {
