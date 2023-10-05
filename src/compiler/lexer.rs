@@ -142,9 +142,8 @@ impl<'src> Lexer<'src> {
   }
 
   fn skip_line_comment(&mut self) {
-    if let Some((offset, ch)) = self.current.find(|(_, c)| *c == '\n') {
-      self.lookahead = ch;
-      self.total_offset = offset;
+    while !self.is_at_end() && self.lookahead != '\n' {
+      self.advance()
     }
   }
 
@@ -364,6 +363,12 @@ mod test {
   fn skip_comments() {
     let mut lex = Lexer::new("//comment\nid");
     assert_eq!(lex.next_token(), Ok(Token::Id("id")));
+  }
+
+  #[test]
+  fn skip_comment_without_trailing_newline() {
+    let mut lex = Lexer::new("//comment");
+    assert_eq!(lex.next_token(), Ok(Token::EndOfFile));
   }
 
   #[test]
