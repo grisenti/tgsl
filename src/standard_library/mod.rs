@@ -11,7 +11,7 @@ fn print(value: TaggedValue) {
 
 pub fn load_standard_library(vm: &mut VM) {
   vm.load_module(
-    include_str!("../../standard-library/io.wds"),
+    include_str!("../../standard-library/io.tgsl"),
     vec![
       ExternFunctionInfo::create("print", print),
       ExternFunctionInfo::create("println", println),

@@ -1,5 +1,5 @@
-use language::vm::extern_function::ExternFunctionInfo;
-use language::vm::VM;
+use tgsl::vm::extern_function::ExternFunctionInfo;
+use tgsl::vm::VM;
 
 macro_rules! test_files {
   ($module:ident, $($test:ident),+) => {
@@ -10,7 +10,7 @@ macro_rules! test_files {
 	  #[allow(non_snake_case)]
 	  fn $test() {
 		compile_and_run(include_str!(
-		  concat!("../tests/", stringify!($module), "/", stringify!($test), ".wds")
+		  concat!("../tests/", stringify!($module), "/", stringify!($test), ".tgsl")
 		));
 	  }
 		)+
@@ -25,7 +25,7 @@ fn assert(value: bool) {
 fn compile_and_run(test_file: &str) {
   let mut vm = VM::new();
   vm.load_module(
-    include_str!("../tests/test_utils.wds"),
+    include_str!("../tests/test_utils.tgsl"),
     vec![ExternFunctionInfo::create("assert", assert)],
   )
   .expect("error in utils file");
@@ -94,15 +94,15 @@ test_files!(variables,
 );
 
 mod modules {
-  use language::vm::extern_function::ExternFunctionInfo;
-  use language::vm::VM;
+  use tgsl::vm::extern_function::ExternFunctionInfo;
+  use tgsl::vm::VM;
 
   use crate::assert;
 
   fn compile_and_run_multiple(test_files: &[&str]) {
     let mut vm = VM::new();
     vm.load_module(
-      include_str!("../tests/test_utils.wds"),
+      include_str!("../tests/test_utils.tgsl"),
       vec![ExternFunctionInfo::create("assert", assert)],
     )
     .expect("error in utils file");
@@ -120,7 +120,7 @@ mod modules {
     #[allow(non_snake_case)]
     fn $test_name() {
       compile_and_run_multiple(
-        &[$(include_str!(concat!("../tests/modules/", stringify!($test_name), "/", stringify!($test_file), ".wds"))),+]
+        &[$(include_str!(concat!("../tests/modules/", stringify!($test_name), "/", stringify!($test_file), ".tgsl"))),+]
       );
     }
 
