@@ -110,10 +110,8 @@ impl GlobalFunctions {
     name: &str,
     signature: FunctionSignature,
   ) -> FunctionInsertResult {
-    let address = self.last_native_function;
-    let res = self.declare(address, FunctionKind::Undefined, name, signature);
-    self.last_native_function += 1;
-    res
+    let address = self.new_function_address();
+    self.declare(address, FunctionKind::Undefined, name, signature)
   }
 
   pub fn declare_extern(
@@ -121,10 +119,8 @@ impl GlobalFunctions {
     name: &str,
     signature: FunctionSignature,
   ) -> FunctionInsertResult {
-    let address = self.last_extern_function;
-    let res = self.declare(address, FunctionKind::RelativeExtern, name, signature);
-    self.last_extern_function += 1;
-    res
+    let address = self.new_function_address();
+    self.declare(address, FunctionKind::RelativeExtern, name, signature)
   }
 
   pub fn define_native(
@@ -171,7 +167,7 @@ impl GlobalFunctions {
     }
   }
 
-  pub fn create_lambda(&mut self) -> RelativeFunctionAddress {
+  pub fn new_function_address(&mut self) -> RelativeFunctionAddress {
     let address = self.last_native_function;
     self.last_native_function += 1;
     address

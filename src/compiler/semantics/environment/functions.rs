@@ -43,7 +43,7 @@ impl Environment<'_> {
   }
 
   pub fn generate_lambda_address(&mut self) -> RelativeFunctionAddress {
-    self.global_functions.create_lambda()
+    self.global_functions.new_function_address()
   }
 
   pub fn global_functions(&self) -> &GlobalFunctions {
