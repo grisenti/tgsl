@@ -54,9 +54,10 @@ pub struct RunTime {
 impl RunTime {
   fn run(&mut self, global_env: &Function) {
     let function = std::ptr::addr_of!(*global_env);
+    let bp = self.stack.as_mut_ptr();
     let mut frame = CallFrame {
-      bp: self.stack.as_mut_ptr(),
-      sp: self.stack.as_mut_ptr(),
+      bp,
+      sp: bp,
       pc: global_env.code.code.as_ptr(),
       function,
       captures: ptr::null_mut(),
