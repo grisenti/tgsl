@@ -34,8 +34,8 @@ impl GlobalEnv {
     );
 
     let global_variables = module_exports.global_variables.count();
-    let native_functions = module_exports.functions.native_count;
-    let extern_functions = module_exports.functions.extern_count;
+    let native_functions = module_exports.functions.native_count();
+    let extern_functions = module_exports.functions.extern_count();
 
     let linked_functions = module_exports.functions.link(
       self.last_native_function_address,

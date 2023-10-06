@@ -38,8 +38,8 @@ pub struct GlobalFunctions {
 
 pub struct ExportedFunctions {
   function_names: HashMap<Rc<str>, OverloadSet>,
-  pub native_count: u32,
-  pub extern_count: u32,
+  native_count: u32,
+  extern_count: u32,
 }
 
 impl ExportedFunctions {
@@ -54,6 +54,14 @@ impl ExportedFunctions {
     LinkedFunctions {
       function_names: self.function_names,
     }
+  }
+
+  pub fn native_count(&self) -> u32 {
+    self.native_count
+  }
+
+  pub fn extern_count(&self) -> u32 {
+    self.extern_count
   }
 }
 
