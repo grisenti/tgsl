@@ -1,4 +1,6 @@
-use crate::compiler::functions::{FunctionInsertError, FunctionInsertResult};
+use crate::compiler::functions::{
+  FunctionInsertError, FunctionInsertResult, GlobalFunctions, RelativeFunctionAddress,
+};
 use crate::compiler::semantics::environment::Environment;
 use crate::compiler::types::FunctionSignature;
 
@@ -38,5 +40,13 @@ impl Environment<'_> {
   ) -> FunctionInsertResult {
     self.check_fn_name_availability(name)?;
     self.global_functions.define_native(name, signature)
+  }
+
+  pub fn generate_lambda_address(&mut self) -> RelativeFunctionAddress {
+    self.global_functions.create_lambda()
+  }
+
+  pub fn global_functions(&self) -> &GlobalFunctions {
+    &self.global_functions
   }
 }

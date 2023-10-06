@@ -304,7 +304,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     let end = self.code().get_next_instruction_address();
 
     if let Type::Struct { name, .. } = &lhs_type {
-      match self.env.global_structs.get(&name) {
+      match self.env.global_structs().get(&name) {
         Ok(struct_) => {
           if let Some(member_index) = struct_.get_member_index(dot_call.function_name) {
             let (_, member_type) = struct_.member_info(member_index);
@@ -345,7 +345,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
   ) -> Type {
     let expr_sr = expr_handle.get_source_range(ast);
     let arguments = self.visit_expr_list(ast, &constructor.arguments);
-    match self.env.global_structs.get(constructor.type_name) {
+    match self.env.global_structs().get(constructor.type_name) {
       Ok(struct_) => {
         let type_ = Type::Struct {
           name: struct_.clone_name(),
@@ -395,7 +395,7 @@ impl SemanticChecker<'_> {
         self.code().push_op(OpCode::GetGlobal);
       };
       var_type.clone()
-    } else if let Some(overload) = self.env.global_functions.get_overload_set(var_name) {
+    } else if let Some(overload) = self.env.global_functions().get_overload_set(var_name) {
       match overload.auto_resolve() {
         Ok(resolved_overload) => {
           unsafe {
@@ -432,7 +432,7 @@ impl SemanticChecker<'_> {
       var_type.clone()
     } else if self
       .env
-      .global_functions
+      .global_functions()
       .get_overload_set(var_name)
       .is_some()
     {
@@ -456,7 +456,7 @@ impl SemanticChecker<'_> {
   fn end_lambda(&mut self) -> (RelativeFunctionAddress, Vec<Capture>) {
     self.finalize_function_code();
     let function = self.env.pop_function();
-    let function_id = self.env.global_functions.create_lambda();
+    let function_id = self.env.generate_lambda_address();
     assert_eq!(function_id as usize, self.checked_functions.len());
     self.checked_functions.push(function.code);
     (function_id, function.captures)
@@ -474,7 +474,7 @@ impl SemanticChecker<'_> {
     call_sr: SourceRange,
   ) -> Type {
     // TODO: improve errors for overload sets with only one element (use `check_arguments`)
-    if let Some(overload_set) = self.env.global_functions.get_overload_set(function_name) {
+    if let Some(overload_set) = self.env.global_functions().get_overload_set(function_name) {
       match overload_set.find(&arguments) {
         Ok(resolved_overload) => {
           let return_type = resolved_overload
@@ -540,7 +540,7 @@ impl SemanticChecker<'_> {
     sr: SourceRange,
   ) -> Option<(&Type, MemberIndex)> {
     if let Type::Struct { name, .. } = type_ {
-      if let Ok(struct_) = self.env.global_structs.get(name) {
+      if let Ok(struct_) = self.env.global_structs().get(name) {
         if let Some(index) = struct_.get_member_index(member_name) {
           let (_, member_type) = struct_.member_info(index);
           Some((member_type, index))

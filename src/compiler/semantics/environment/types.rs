@@ -1,5 +1,5 @@
 use crate::compiler::semantics::environment::Environment;
-use crate::compiler::structs::{StructInsertError, StructInsertResult};
+use crate::compiler::structs::{GlobalStructs, StructInsertError, StructInsertResult};
 use crate::compiler::types::Type;
 
 impl<'a> Environment<'a> {
@@ -26,6 +26,10 @@ impl<'a> Environment<'a> {
   ) -> StructInsertResult {
     self.check_var_name_availability(name)?;
     self.global_structs.define(name, member_names, member_types)
+  }
+
+  pub fn global_structs(&self) -> &GlobalStructs {
+    &self.global_structs
   }
 
   pub fn is_type(&self, name: &str) -> bool {

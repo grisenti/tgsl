@@ -90,14 +90,13 @@ impl<'a> SemanticChecker<'a> {
     );
     if checker.errors.is_empty() {
       unsafe { checker.global_code.push_op(OpCode::Return) };
-      let (exported_functions, extern_functions) = checker.env.global_functions.export();
-      let exported_global_variables = checker.env.global_variables.export();
-      let global_variable_count = exported_global_variables.count();
+      let exported_env = checker.env.export();
+      let global_variable_count = exported_env.global_variables.count();
       let exports = checker.module_name.map(|name| ModuleExports {
         module_name: name.to_string(),
-        structs: checker.env.global_structs.export().unwrap(),
-        global_variables: exported_global_variables,
-        functions: exported_functions,
+        structs: exported_env.global_structs,
+        global_variables: exported_env.global_variables,
+        functions: exported_env.global_functions,
       });
       Ok(CompiledModule {
         exports,
@@ -106,7 +105,7 @@ impl<'a> SemanticChecker<'a> {
           functions: checker.checked_functions,
         },
         globals_count: global_variable_count,
-        extern_functions,
+        extern_functions: exported_env.extern_functions,
       })
     } else {
       Err(checker.errors)

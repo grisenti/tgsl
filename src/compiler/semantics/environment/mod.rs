@@ -1,9 +1,11 @@
 use crate::compiler::codegen::function_code::FunctionCode;
-use crate::compiler::functions::GlobalFunctions;
+use crate::compiler::functions::{ExportedFunctions, ExternFunction, GlobalFunctions};
 use crate::compiler::global_env::GlobalEnv;
-use crate::compiler::structs::GlobalStructs;
+use crate::compiler::structs::{ExportedGlobalStructs, GlobalStructs};
 use crate::compiler::types::Type;
-use crate::compiler::variables::{CaptureAddress, GlobalVariables, LocalAddress};
+use crate::compiler::variables::{
+  CaptureAddress, ExportedGlobalVariables, GlobalVariables, LocalAddress,
+};
 
 pub mod functions;
 pub mod imports;
@@ -84,6 +86,13 @@ pub enum NameError {
 
 pub type NameResult<T> = Result<T, NameError>;
 
+pub struct ExportedEnv {
+  pub global_variables: ExportedGlobalVariables,
+  pub global_structs: ExportedGlobalStructs,
+  pub global_functions: ExportedFunctions,
+  pub extern_functions: Vec<ExternFunction>,
+}
+
 pub struct Environment<'src> {
   global_env: &'src GlobalEnv,
 
@@ -94,9 +103,9 @@ pub struct Environment<'src> {
   functions_declaration_stack: Vec<Function>,
   declared_functions: u32,
 
-  pub global_variables: GlobalVariables,
-  pub global_structs: GlobalStructs<'src>,
-  pub global_functions: GlobalFunctions,
+  global_variables: GlobalVariables,
+  global_structs: GlobalStructs<'src>,
+  global_functions: GlobalFunctions,
 }
 
 impl<'src> Environment<'src> {
@@ -191,6 +200,16 @@ impl<'src> Environment<'src> {
       .map(|f| -> &str { &f.name })
       .collect::<Vec<_>>()
       .join("::")
+  }
+
+  pub fn export(self) -> ExportedEnv {
+    let (global_functions, extern_functions) = self.global_functions.export();
+    ExportedEnv {
+      global_variables: self.global_variables.export(),
+      global_structs: self.global_structs.export().unwrap(),
+      global_functions,
+      extern_functions,
+    }
   }
 
   pub fn new(global_env: &'src GlobalEnv) -> Self {
