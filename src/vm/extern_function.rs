@@ -1,3 +1,5 @@
+use std::mem::ManuallyDrop;
+
 use crate::compiler::types::Type;
 use crate::vm::value::{TaggedValue, Value, ValueType};
 
@@ -123,6 +125,30 @@ impl ToValue for f64 {
 impl ToType for f64 {
   fn to_type() -> Type {
     Type::Num
+  }
+}
+
+impl FromValue for &mut ManuallyDrop<String> {
+  unsafe fn from_value(value: TaggedValue) -> Self {
+    &mut (*value.value.object).value.string
+  }
+}
+
+impl ToType for &mut ManuallyDrop<String> {
+  fn to_type() -> Type {
+    Type::Str
+  }
+}
+
+impl FromValue for &str {
+  unsafe fn from_value(value: TaggedValue) -> Self {
+    &(*value.value.object).value.string
+  }
+}
+
+impl ToType for &str {
+  fn to_type() -> Type {
+    Type::Str
   }
 }
 
