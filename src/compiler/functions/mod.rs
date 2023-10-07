@@ -119,8 +119,10 @@ impl GlobalFunctions {
     name: &str,
     signature: FunctionSignature,
   ) -> FunctionInsertResult {
-    let address = self.new_function_address();
-    self.declare(address, FunctionKind::RelativeExtern, name, signature)
+    let address = self.last_extern_function;
+    let ret = self.declare(address, FunctionKind::RelativeExtern, name, signature);
+    self.last_extern_function += 1;
+    ret
   }
 
   pub fn define_native(
