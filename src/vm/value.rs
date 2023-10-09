@@ -31,6 +31,23 @@ pub struct Object {
   pub marked: bool,
 }
 
+impl Object {
+  pub unsafe fn as_string(&mut self) -> &mut ManuallyDrop<String> {
+    debug_assert_eq!(self.kind, ObjectType::String);
+    &mut self.value.string
+  }
+
+  pub unsafe fn as_closure(&mut self) -> &mut ManuallyDrop<Closure> {
+    debug_assert_eq!(self.kind, ObjectType::Closure);
+    &mut self.value.closure
+  }
+
+  pub unsafe fn as_aggregate(&mut self) -> &mut ManuallyDrop<Aggregate> {
+    debug_assert_eq!(self.kind, ObjectType::Aggregate);
+    &mut self.value.aggregate
+  }
+}
+
 impl ToString for Object {
   fn to_string(&self) -> String {
     unsafe {
@@ -96,6 +113,24 @@ impl TaggedValue {
       kind: ValueType::None,
       value: Value { none: () },
     }
+  }
+
+  pub unsafe fn as_object<'gc>(self) -> &'gc mut Object {
+    debug_assert_eq!(self.kind, ValueType::Object);
+    &mut (*self.value.object)
+  }
+
+  pub unsafe fn as_id(self) -> usize {
+    debug_assert!(matches!(
+      self.kind,
+      ValueType::ExternFunctionId | ValueType::FunctionId | ValueType::GlobalId,
+    ));
+    self.value.id
+  }
+
+  pub unsafe fn as_bool(self) -> bool {
+    debug_assert_eq!(self.kind, ValueType::Bool);
+    self.value.boolean
   }
 }
 

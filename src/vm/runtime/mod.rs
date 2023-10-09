@@ -30,8 +30,8 @@ macro_rules! binary_operation {
 
 macro_rules! binary_string_comp {
   ($f:ident, $op:tt) => {
-    let rhs = unsafe {&(*$f.pop().value.object).value.string};
-    let lhs = unsafe {&(*$f.pop().value.object).value.string};
+    let rhs = unsafe {$f.pop().as_object().as_string()};
+    let lhs = unsafe {$f.pop().as_object().as_string()};
     // popped two values and pushed only one, the size of the stack is 1 less
     unsafe {$f.push_no_overflow(TaggedValue{ kind: ValueType::Bool, value: Value { boolean: *lhs $op *rhs}})};
   };
@@ -80,7 +80,7 @@ impl RunTime {
       match op {
         OpCode::Constant => {
           let c = frame.read_constant();
-          frame.push(c);
+          frame.push(c)?;
         }
         OpCode::ConstantStr => {
           let const_str = frame.read_string_constant();
@@ -92,14 +92,14 @@ impl RunTime {
           debug_assert!(func.kind == ValueType::FunctionId);
           let captures = frame.read_byte();
           let closure = TaggedValue::object(self.gc.alloc_closure(
-            ptr::addr_of!(self.functions[unsafe { func.value.id }]),
+            ptr::addr_of!(self.functions[unsafe { func.as_id() }]),
             captures as usize,
           ));
           // we popped `func`, so the final stack size is the same
           unsafe { frame.push_no_overflow(closure) };
         }
         OpCode::GetGlobal => {
-          let id = unsafe { frame.pop().value.id };
+          let id = unsafe { frame.pop().as_id() };
           let value = &self.globals[id];
           debug_assert!(value.kind != ValueType::None, "undefined global variable");
           // we popped `id`, so the final stack size is the same
@@ -107,9 +107,9 @@ impl RunTime {
         }
         OpCode::SetGlobal => {
           debug_assert!(frame.top().kind == ValueType::GlobalId);
-          let id = unsafe { frame.pop().value.id };
+          let id = unsafe { frame.pop().as_id() };
           let val = frame.top();
-          self.globals[id as usize] = val;
+          self.globals[id] = val;
         }
         OpCode::SetLocal => {
           let id = frame.read_byte();
@@ -123,9 +123,7 @@ impl RunTime {
         OpCode::Capture => {
           let val = frame.pop();
           unsafe {
-            (*(*frame.top().value.object).value.closure)
-              .captures
-              .push(val)
+            frame.top().as_object().as_closure().captures.push(val);
           }
         }
         OpCode::GetCapture => {
@@ -173,8 +171,8 @@ impl RunTime {
           unary_operation!(frame, number, ValueType::Number, -);
         }
         OpCode::AddStr => {
-          let rhs = unsafe { &(*frame.pop().value.object).value.string };
-          let lhs = unsafe { &(*frame.pop().value.object).value.string };
+          let rhs = unsafe { frame.pop().as_object().as_string() };
+          let lhs = unsafe { frame.pop().as_object().as_string() };
           let string = TaggedValue::object(
             self
               .gc
@@ -214,7 +212,7 @@ impl RunTime {
           let arguments = frame.read_byte() as usize;
           let function_value = frame.pop();
           debug_assert!(function_value.kind == ValueType::FunctionId);
-          let function_id = unsafe { function_value.value.id };
+          let function_id = unsafe { function_value.as_id() };
           let function = ptr::addr_of!(self.functions[function_id]);
           let bp = unsafe { frame.sp.sub(arguments) };
           let pc = unsafe { (*function).code.code.as_ptr() };
@@ -239,7 +237,7 @@ impl RunTime {
           let function_value = frame.pop();
           debug_assert!(function_value.kind == ValueType::ExternFunctionId);
           let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
-          let id = unsafe { function_value.value.id };
+          let id = unsafe { function_value.as_id() };
           frame.pop_n(arguments);
           frame.push(self.extern_functions[id](args))?;
         }
@@ -248,20 +246,16 @@ impl RunTime {
           let function_value = frame.pop();
           let (function, captures) = match function_value.kind {
             ValueType::FunctionId => (
-              ptr::addr_of!(self.functions[unsafe { function_value.value.id }]),
+              ptr::addr_of!(self.functions[unsafe { function_value.as_id() }]),
               ptr::null_mut(),
             ),
-            ValueType::Object => (
-              unsafe { (*function_value.value.object).value.closure.function },
-              unsafe {
-                (*(*function_value.value.object).value.closure)
-                  .captures
-                  .as_mut_ptr()
-              },
-            ),
+            ValueType::Object => {
+              let closure = unsafe { function_value.as_object().as_closure() };
+              (closure.function, closure.captures.as_mut_ptr())
+            }
             ValueType::ExternFunctionId => {
               let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
-              let id = unsafe { function_value.value.id };
+              let id = unsafe { function_value.as_id() };
               frame.pop_n(arguments);
               frame.push(self.extern_functions[id](args))?;
               continue;
@@ -298,7 +292,7 @@ impl RunTime {
           frame.push(TaggedValue::object(self.gc.alloc_aggregate(members)))?;
         }
         OpCode::GetMember => {
-          let aggregate = unsafe { &mut (*frame.pop().value.object).value.aggregate };
+          let aggregate = unsafe { frame.pop().as_object().as_aggregate() };
           let id = frame.read_byte();
           let val = aggregate.members[id as usize];
           // we popped `aggregate`, maintaining the stack size
@@ -307,23 +301,22 @@ impl RunTime {
         OpCode::SetMember => {
           let id = frame.read_byte();
           let val = frame.pop();
-          let aggregate = unsafe { &mut (*frame.pop().value.object).value.aggregate };
+          let aggregate = unsafe { frame.pop().as_object().as_aggregate() };
           aggregate.members[id as usize] = val;
-
-          frame.push(val);
+          frame.push(val)?;
         }
         OpCode::Pop => {
           frame.pop();
         }
         OpCode::JumpIfFalsePop => {
-          let condition = unsafe { frame.pop().value.boolean };
+          let condition = unsafe { frame.pop().as_bool() };
           let target = u16::from_ne_bytes([frame.read_byte(), frame.read_byte()]) as usize;
           if !condition {
             unsafe { frame.pc = frame.pc.add(target) }
           }
         }
         OpCode::JumpIfFalseNoPop => {
-          let condition = unsafe { frame.top().value.boolean };
+          let condition = unsafe { frame.top().as_bool() };
           let target = u16::from_ne_bytes([frame.read_byte(), frame.read_byte()]) as usize;
           if !condition {
             unsafe { frame.pc = frame.pc.add(target) }
