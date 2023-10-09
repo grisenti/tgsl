@@ -210,7 +210,40 @@ impl RunTime {
         OpCode::NotBool => {
           unary_operation!(frame, boolean, ValueType::Bool, !);
         }
-        OpCode::Call => {
+        OpCode::CallNative => {
+          let arguments = frame.read_byte() as usize;
+          let function_value = frame.pop();
+          debug_assert!(function_value.kind == ValueType::FunctionId);
+          let function_id = unsafe { function_value.value.id };
+          let function = ptr::addr_of!(self.functions[function_id]);
+          let bp = unsafe { frame.sp.sub(arguments) };
+          let pc = unsafe { (*function).code.code.as_ptr() };
+          let sp = frame.sp;
+          frame.sp = unsafe { frame.sp.sub(arguments) };
+          self.call_stack[self.function_call] = frame;
+          self.function_call += 1;
+          if self.function_call >= MAX_CALLS {
+            eprintln!("STACK OVERFLOW!");
+            return Err(StackOverflow);
+          }
+          frame = CallFrame {
+            bp,
+            sp,
+            pc,
+            function,
+            captures: ptr::null_mut(),
+          };
+        }
+        OpCode::CallExtern => {
+          let arguments = frame.read_byte() as usize;
+          let function_value = frame.pop();
+          debug_assert!(function_value.kind == ValueType::ExternFunctionId);
+          let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
+          let id = unsafe { function_value.value.id };
+          frame.pop_n(arguments);
+          frame.push(self.extern_functions[id](args))?;
+        }
+        OpCode::CallValue => {
           let arguments = frame.read_byte() as usize;
           let function_value = frame.pop();
           let (function, captures) = match function_value.kind {
@@ -228,7 +261,7 @@ impl RunTime {
             ),
             ValueType::ExternFunctionId => {
               let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
-              let id = unsafe { function_value.value.id as usize };
+              let id = unsafe { function_value.value.id };
               frame.pop_n(arguments);
               frame.push(self.extern_functions[id](args))?;
               continue;

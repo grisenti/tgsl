@@ -35,7 +35,7 @@ impl FunctionCode {
     &self.function_name
   }
 
-  pub unsafe fn push_constant(&mut self, val: ConstantValue) {
+  pub unsafe fn push_constant(&mut self, val: ConstantValue) -> &mut Self {
     debug_assert_ne!(val, ConstantValue::None, "use push_constant_none");
 
     let constant_offset = self.constants.len() as u8;
@@ -47,6 +47,7 @@ impl FunctionCode {
     self.constants.push(val);
     self.code.push(constant_type as u8);
     self.code.push(constant_offset);
+    self
   }
 
   pub unsafe fn push_constant_none(&mut self) {
@@ -142,9 +143,9 @@ impl Debug for FunctionCode {
             self.constants[self.code[index] as usize]
           );
         }
-        OpCode::Call => {
+        OpCode::CallNative | OpCode::CallExtern | OpCode::CallValue => {
           index += 1;
-          result += &format!("Call: {}\n", self.code[index]);
+          result += &format!("{code:?}: {}\n", self.code[index]);
         }
         OpCode::JumpIfFalsePop | OpCode::Jump | OpCode::JumpIfFalseNoPop => {
           index += 2;

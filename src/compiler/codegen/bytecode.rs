@@ -50,7 +50,9 @@ pub enum OpCode {
   DiffBool,
 
   // functions
-  Call,
+  CallNative,
+  CallExtern,
+  CallValue,
 
   // structs
   Construct,

@@ -9,6 +9,7 @@ use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor};
 use crate::compiler::ast::{ExprHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::errors::{sema_err, ty_err, CompilerError};
+use crate::compiler::functions::overload_set::{FunctionAddress, ResolvedOverload};
 use crate::compiler::functions::RelativeFunctionAddress;
 use crate::compiler::lexer::{SourceRange, Token};
 use crate::compiler::semantics::environment::Capture;
@@ -94,7 +95,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
         unsafe {
           self
             .code()
-            .push_constant(ConstantValue::Bool(literal.value == Token::True))
+            .push_constant(ConstantValue::Bool(literal.value == Token::True));
         }
         Type::Bool
       }
@@ -321,7 +322,9 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
                 self
                   .code()
                   .push_op2(OpCode::GetMember, member_index.get_index() as u8);
-                self.code().push_op2(OpCode::Call, arguments.len() as u8);
+                self
+                  .code()
+                  .push_op2(OpCode::CallValue, arguments.len() as u8);
               }
               return return_type;
             } // its not a function
@@ -462,9 +465,31 @@ impl SemanticChecker<'_> {
     (function_id, function.captures)
   }
 
-  unsafe fn call_end(&mut self, arguments: usize, return_type: Type) -> Type {
-    self.code().push_op2(OpCode::Call, arguments as u8);
-    return_type.clone()
+  unsafe fn call_resolved_overload(&mut self, resolved_overload: ResolvedOverload) -> Type {
+    let return_type = resolved_overload
+      .function_signature
+      .get_return_type()
+      .clone();
+    let arguments = resolved_overload.function_signature.get_parameters().len() as u8;
+    match resolved_overload.function_address {
+      FunctionAddress::RelativeNative(address) => self
+        .code()
+        .push_constant(ConstantValue::RelativeNativeFn(address))
+        .push_op2(OpCode::CallNative, arguments),
+      FunctionAddress::RelativeExtern(address) => self
+        .code()
+        .push_constant(ConstantValue::RelativeExternFn(address))
+        .push_op2(OpCode::CallExtern, arguments),
+      FunctionAddress::AbsoluteNative(address) => self
+        .code()
+        .push_constant(ConstantValue::AbsoluteNativeFn(address))
+        .push_op2(OpCode::CallNative, arguments),
+      FunctionAddress::AbsoluteExtern(address) => self
+        .code()
+        .push_constant(ConstantValue::AbsoluteExternFn(address))
+        .push_op2(OpCode::CallExtern, arguments),
+    }
+    return_type
   }
 
   fn call_function(
@@ -476,18 +501,7 @@ impl SemanticChecker<'_> {
     // TODO: improve errors for overload sets with only one element (use `check_arguments`)
     if let Some(overload_set) = self.env.global_functions().get_overload_set(function_name) {
       match overload_set.find(&arguments) {
-        Ok(resolved_overload) => {
-          let return_type = resolved_overload
-            .function_signature
-            .get_return_type()
-            .clone();
-          unsafe {
-            self
-              .code()
-              .push_constant(resolved_overload.function_address.into());
-            self.call_end(arguments.len(), return_type)
-          }
-        }
+        Ok(resolved_overload) => unsafe { self.call_resolved_overload(resolved_overload) },
         Err(_) => {
           todo!()
         }
@@ -510,7 +524,12 @@ impl SemanticChecker<'_> {
         arguments,
         call_sr,
       );
-      unsafe { self.call_end(arguments.len(), signature.get_return_type().clone()) }
+      unsafe {
+        self
+          .code()
+          .push_op2(OpCode::CallValue, arguments.len() as u8)
+      };
+      signature.get_return_type().clone()
     } else {
       todo!("error: not a function")
     }
