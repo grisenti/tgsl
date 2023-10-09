@@ -4,6 +4,7 @@ use std::ptr;
 use crate::compiler::codegen::bytecode::OpCode;
 use crate::vm::chunk::GlobalChunk;
 use crate::vm::extern_function::ExternFunction;
+use crate::vm::runtime::RuntimeError::StackOverflow;
 use crate::vm::value::{Value, ValueType};
 
 use super::{chunk::Function, value::TaggedValue};
@@ -22,7 +23,8 @@ macro_rules! binary_operation {
   ($s:ident, $operand:ident, $result:ident, $kind:expr, $op:tt) => {
     let rhs = unsafe {$s.pop().value.$operand};
     let lhs = unsafe {$s.pop().value.$operand};
-	  $s.push(TaggedValue{ kind: $kind, value: Value{ $result: lhs $op rhs }});
+    // popped two values and pushed only one, the size of the stack is 1 less
+    unsafe {$s.push_no_overflow(TaggedValue{ kind: $kind, value: Value{ $result: lhs $op rhs }})};
   };
 }
 
@@ -30,15 +32,21 @@ macro_rules! binary_string_comp {
   ($f:ident, $op:tt) => {
     let rhs = unsafe {&(*$f.pop().value.object).value.string};
     let lhs = unsafe {&(*$f.pop().value.object).value.string};
-    $f.push(TaggedValue{ kind: ValueType::Bool, value: Value { boolean: *lhs $op *rhs}});
+    // popped two values and pushed only one, the size of the stack is 1 less
+    unsafe {$f.push_no_overflow(TaggedValue{ kind: ValueType::Bool, value: Value { boolean: *lhs $op *rhs}})};
   };
 }
 
 macro_rules! unary_operation {
   ($s:ident, $t:ident, $kind:expr, $op:tt) => {
 	  let rhs = unsafe {$s.pop().value.$t};
-	  $s.push(TaggedValue{ kind: $kind, value: Value{ $t: $op rhs }});
+    // popped and pushed a value, the size of the stack does not change
+	  unsafe {$s.push_no_overflow(TaggedValue{ kind: $kind, value: Value{ $t: $op rhs }})};
 	};
+}
+
+pub enum RuntimeError {
+  StackOverflow,
 }
 
 pub struct RunTime {
@@ -52,7 +60,7 @@ pub struct RunTime {
 }
 
 impl RunTime {
-  fn run(&mut self, global_env: &Function) {
+  fn run(&mut self, global_env: &Function) -> Result<(), RuntimeError> {
     let function = std::ptr::addr_of!(*global_env);
     let bp = self.stack.as_mut_ptr();
     let mut frame = CallFrame {
@@ -68,9 +76,6 @@ impl RunTime {
         self.gc.mark(self.globals.iter());
         unsafe { self.gc.sweep() };
       }
-      if frame.overflowed_stack() {
-        eprintln!("STACK OVERFLOW");
-      }
       let op = frame.read_instruction();
       match op {
         OpCode::Constant => {
@@ -80,24 +85,25 @@ impl RunTime {
         OpCode::ConstantStr => {
           let const_str = frame.read_string_constant();
           let allocated_string = self.gc.alloc_string(const_str.clone());
-          frame.push(TaggedValue::object(allocated_string))
+          frame.push(TaggedValue::object(allocated_string))?;
         }
         OpCode::MakeClosure => {
           let func = frame.pop();
           debug_assert!(func.kind == ValueType::FunctionId);
           let captures = frame.read_byte();
-          frame.push(TaggedValue::object(self.gc.alloc_closure(
+          let closure = TaggedValue::object(self.gc.alloc_closure(
             ptr::addr_of!(self.functions[unsafe { func.value.id }]),
             captures as usize,
-          )))
+          ));
+          // we popped `func`, so the final stack size is the same
+          unsafe { frame.push_no_overflow(closure) };
         }
         OpCode::GetGlobal => {
           let id = unsafe { frame.pop().value.id };
           let value = &self.globals[id];
-          if value.kind == ValueType::None {
-            panic!("trying to access undefined global variable");
-          }
-          frame.push(*value);
+          debug_assert!(value.kind != ValueType::None, "undefined global variable");
+          // we popped `id`, so the final stack size is the same
+          unsafe { frame.push_no_overflow(*value) };
         }
         OpCode::SetGlobal => {
           debug_assert!(frame.top().kind == ValueType::GlobalId);
@@ -112,7 +118,7 @@ impl RunTime {
         }
         OpCode::GetLocal => {
           let id = frame.read_byte();
-          frame.push(frame.get_stack_value(id));
+          frame.push(frame.get_stack_value(id))?;
         }
         OpCode::Capture => {
           let val = frame.pop();
@@ -126,7 +132,7 @@ impl RunTime {
           debug_assert!(!frame.captures.is_null());
           let id = frame.read_byte();
           let val = unsafe { *frame.captures.offset(id as isize) };
-          frame.push(val);
+          frame.push(val)?;
         }
         OpCode::SetCapture => {
           let id = frame.read_byte();
@@ -169,11 +175,13 @@ impl RunTime {
         OpCode::AddStr => {
           let rhs = unsafe { &(*frame.pop().value.object).value.string };
           let lhs = unsafe { &(*frame.pop().value.object).value.string };
-          frame.push(TaggedValue::object(
+          let string = TaggedValue::object(
             self
               .gc
               .alloc_string(ManuallyDrop::into_inner(lhs.clone()) + rhs),
-          ));
+          );
+          // popped two values and pushed only one, the size of the stack is 1 less
+          unsafe { frame.push_no_overflow(string) };
         }
         OpCode::LeStr => {
           binary_string_comp!(frame, <);
@@ -222,7 +230,7 @@ impl RunTime {
               let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
               let id = unsafe { function_value.value.id as usize };
               frame.pop_n(arguments);
-              frame.push(self.extern_functions[id](args));
+              frame.push(self.extern_functions[id](args))?;
               continue;
             }
             _ => unreachable!("trying to call invalid function {:?}", function_value.kind),
@@ -235,7 +243,7 @@ impl RunTime {
           self.function_call += 1;
           if self.function_call >= MAX_CALLS {
             eprintln!("STACK OVERFLOW!");
-            return;
+            return Err(StackOverflow);
           }
           frame = CallFrame {
             bp,
@@ -253,19 +261,22 @@ impl RunTime {
           }
           // FIXME: remove this reverse
           members.reverse();
-          frame.push(TaggedValue::object(self.gc.alloc_aggregate(members)));
+          // n_member could be 0, leading to a stack that's bigger than what we had before this operation
+          frame.push(TaggedValue::object(self.gc.alloc_aggregate(members)))?;
         }
         OpCode::GetMember => {
           let aggregate = unsafe { &mut (*frame.pop().value.object).value.aggregate };
           let id = frame.read_byte();
           let val = aggregate.members[id as usize];
-          frame.push(val);
+          // we popped `aggregate`, maintaining the stack size
+          unsafe { frame.push_no_overflow(val) };
         }
         OpCode::SetMember => {
           let id = frame.read_byte();
           let val = frame.pop();
           let aggregate = unsafe { &mut (*frame.pop().value.object).value.aggregate };
           aggregate.members[id as usize] = val;
+
           frame.push(val);
         }
         OpCode::Pop => {
@@ -295,7 +306,7 @@ impl RunTime {
         }
         OpCode::Return => {
           if self.function_call == 0 {
-            return;
+            return Ok(());
           } else {
             let ret = frame.pop();
             self.function_call -= 1;
@@ -308,13 +319,17 @@ impl RunTime {
     }
   }
 
-  pub unsafe fn interpret(&mut self, global_chunk: GlobalChunk, globals_count: u32) {
+  pub unsafe fn interpret(
+    &mut self,
+    global_chunk: GlobalChunk,
+    globals_count: u32,
+  ) -> Result<(), RuntimeError> {
     self.globals.resize(
       self.globals.len() + globals_count as usize,
       TaggedValue::none(),
     );
     self.functions.extend(global_chunk.functions);
-    self.run(&global_chunk.global_code);
+    self.run(&global_chunk.global_code)
   }
 }
 

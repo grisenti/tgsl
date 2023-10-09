@@ -1,4 +1,6 @@
 use crate::compiler::codegen::bytecode::OpCode;
+use crate::vm::runtime::RuntimeError;
+use crate::vm::runtime::RuntimeError::StackOverflow;
 use crate::vm::{chunk::Function, runtime::MAX_LOCALS, value::TaggedValue};
 
 #[derive(Clone, Copy)]
@@ -46,10 +48,18 @@ impl CallFrame {
     unsafe { self.sp = self.sp.sub(n) }
   }
 
-  pub fn push(&mut self, val: TaggedValue) {
-    unsafe {
-      std::ptr::write(self.sp, val);
-      self.sp = self.sp.add(1);
+  pub unsafe fn push_no_overflow(&mut self, val: TaggedValue) {
+    debug_assert!(!self.overflowed_stack());
+    std::ptr::write(self.sp, val);
+    self.sp = self.sp.add(1);
+  }
+
+  pub fn push(&mut self, val: TaggedValue) -> Result<(), RuntimeError> {
+    if self.overflowed_stack() {
+      Err(StackOverflow)
+    } else {
+      unsafe { self.push_no_overflow(val) };
+      Ok(())
     }
   }
 

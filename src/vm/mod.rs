@@ -78,10 +78,13 @@ impl VM {
       extern_functions,
     )?;
     unsafe {
-      self.run_time.interpret(
-        GlobalChunk::new(compiled_module.code, &self.address_table),
-        globals_count as u32,
-      )
+      self
+        .run_time
+        .interpret(
+          GlobalChunk::new(compiled_module.code, &self.address_table),
+          globals_count as u32,
+        )
+        .map_err(|_| "stack overflow")?
     };
     self.address_table.update_table(
       globals_count as u32,
