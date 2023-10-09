@@ -21,6 +21,11 @@ pub const EMPTY_CALL_FRAME: CallFrame = CallFrame {
 };
 
 impl CallFrame {
+  #[allow(unused)]
+  fn stack_size(&self) -> usize {
+    (self.sp as usize) - (self.bp as usize)
+  }
+
   pub fn read_byte(&mut self) -> u8 {
     debug_assert!(!self.pc.is_null());
     let val = unsafe { *self.pc };
@@ -29,7 +34,7 @@ impl CallFrame {
   }
 
   pub fn overflowed_stack(&self) -> bool {
-    debug_assert!((self.bp as usize) <= (self.sp as usize));
+    debug_assert!(self.bp <= self.sp);
     self.sp as usize - self.bp as usize > MAX_LOCALS
   }
 
@@ -40,11 +45,13 @@ impl CallFrame {
   }
 
   pub fn pop(&mut self) -> TaggedValue {
+    debug_assert!(self.bp < self.sp);
     unsafe { self.sp = self.sp.sub(1) }
     unsafe { *self.sp }
   }
 
   pub fn pop_n(&mut self, n: usize) {
+    debug_assert!(n <= self.stack_size());
     unsafe { self.sp = self.sp.sub(n) }
   }
 
@@ -64,6 +71,7 @@ impl CallFrame {
   }
 
   pub fn top(&self) -> TaggedValue {
+    debug_assert!(self.bp < self.sp);
     unsafe { *self.sp.sub(1) }
   }
 
@@ -78,10 +86,12 @@ impl CallFrame {
   }
 
   pub fn get_stack_value(&self, offset: u8) -> TaggedValue {
+    debug_assert!((self.bp as usize + offset as usize) <= (self.sp as usize));
     unsafe { *self.bp.add(offset as usize) }
   }
 
   pub fn set_stack_value(&mut self, offset: u8, val: TaggedValue) {
+    debug_assert!((self.bp as usize + offset as usize) <= (self.sp as usize));
     unsafe { *self.bp.add(offset as usize) = val }
   }
 }
