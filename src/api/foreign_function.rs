@@ -69,10 +69,10 @@ impl<P1: NativeValue, P2: NativeValue> ForeignParameters<2> for (P1, P2) {
     debug_assert_eq!(values.len(), 2);
     (
       P1::from_value(Value {
-        vm_value: values[1],
+        vm_value: values[0],
       }),
       P2::from_value(Value {
-        vm_value: values[0],
+        vm_value: values[1],
       }),
     )
   }
