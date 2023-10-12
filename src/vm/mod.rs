@@ -1,24 +1,45 @@
 use chunk::*;
 
-use crate::vm::extern_function::{ExternFunction, ExternFunctionInfo};
-use crate::{
-  compiler::{errors::ErrorPrinter, functions, Compiler},
-  standard_library::load_standard_library,
-};
+use crate::compiler::CompiledModule;
+use crate::compiler::{errors::ErrorPrinter, functions, Compiler};
+use crate::extern_function::{ExternFunction, ExternFunctionInfo};
 
 use self::{address_table::AddressTable, runtime::RunTime};
 
 mod address_table;
 mod chunk;
 
-pub mod extern_function;
 pub mod runtime;
 pub mod value;
 
+#[derive(Default)]
 pub struct VM {
   compiler: Compiler,
   address_table: AddressTable,
   run_time: RunTime,
+}
+
+use crate::compiler::types as comp_types;
+use crate::value as api_types;
+
+fn compare_types(provided_type: &api_types::Type, required_type: &comp_types::Type) -> bool {
+  match provided_type {
+    api_types::Type::Num => *required_type == comp_types::Type::Num,
+    api_types::Type::Str => *required_type == comp_types::Type::Str,
+    api_types::Type::Bool => *required_type == comp_types::Type::Bool,
+    api_types::Type::Unit => *required_type == comp_types::Type::Nothing,
+    _ => unimplemented!(),
+  }
+}
+
+fn compare_parameters(
+  provided_fn_params: &[api_types::Type],
+  required_fn_params: &[comp_types::Type],
+) -> bool {
+  provided_fn_params
+    .iter()
+    .zip(required_fn_params.iter())
+    .all(|(p, r)| compare_types(p, r))
 }
 
 fn process_extern_functions(
@@ -33,9 +54,12 @@ fn process_extern_functions(
   for extern_func in extern_functions {
     if let Some(func) = declared_extern_functions.iter().find(|f| {
       f.name.as_ref() == extern_func.get_name()
-        && f.signature.get_parameters() == extern_func.get_parameters()
+        && compare_parameters(extern_func.get_parameters(), f.signature.get_parameters())
     }) {
-      if func.signature.get_return_type() != extern_func.get_return_type() {
+      if !compare_types(
+        extern_func.get_return_type(),
+        func.signature.get_return_type(),
+      ) {
         return Err(format!(
           "inconsistent return types for function '{}'",
           extern_func.get_name()
@@ -63,13 +87,9 @@ fn process_extern_functions(
 impl VM {
   pub fn load_module(
     &mut self,
-    source: &str,
+    compiled_module: CompiledModule,
     extern_functions: Vec<ExternFunctionInfo>,
   ) -> Result<(), String> {
-    let compiled_module = match self.compiler.compile(source) {
-      Err(errs) => return Err(ErrorPrinter::to_string(&errs, source)),
-      Ok(module) => module,
-    };
     let globals_count = compiled_module.globals_count;
     let functions_count = compiled_module.code.functions.len();
     process_extern_functions(
@@ -96,17 +116,5 @@ impl VM {
 
   pub fn new() -> Self {
     Default::default()
-  }
-}
-
-impl Default for VM {
-  fn default() -> Self {
-    let mut vm = Self {
-      compiler: Compiler::new(),
-      address_table: AddressTable::default(),
-      run_time: RunTime::default(),
-    };
-    load_standard_library(&mut vm);
-    vm
   }
 }

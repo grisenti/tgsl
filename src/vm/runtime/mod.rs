@@ -2,8 +2,8 @@ use std::mem::ManuallyDrop;
 use std::ptr;
 
 use crate::compiler::codegen::bytecode::OpCode;
+use crate::extern_function::ExternFunction;
 use crate::vm::chunk::GlobalChunk;
-use crate::vm::extern_function::ExternFunction;
 use crate::vm::runtime::RuntimeError::StackOverflow;
 use crate::vm::value::{Value, ValueType};
 

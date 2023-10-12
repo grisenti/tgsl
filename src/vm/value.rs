@@ -132,6 +132,11 @@ impl TaggedValue {
     debug_assert_eq!(self.kind, ValueType::Bool);
     self.value.boolean
   }
+
+  pub unsafe fn as_f64(self) -> f64 {
+    debug_assert_eq!(self.kind, ValueType::Number);
+    self.value.number
+  }
 }
 
 impl ToString for TaggedValue {

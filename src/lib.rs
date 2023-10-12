@@ -1,4 +1,7 @@
-pub mod compiler;
+pub mod api;
+mod compiler;
 mod id_hasher;
-pub mod standard_library;
-pub mod vm;
+mod standard_library;
+mod vm;
+
+pub use api::*;
