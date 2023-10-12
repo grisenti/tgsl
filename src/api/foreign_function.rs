@@ -1,3 +1,4 @@
+use crate::api::gc::Gc;
 use crate::value::{ForeignValue, NativeValue, Type, Value};
 use crate::vm::value::TaggedValue;
 
@@ -7,7 +8,7 @@ pub trait ForeignParameters<const N: usize> {
   fn parameter_types() -> [Type; N];
 }
 
-pub type ForeignFunction = Box<dyn Fn(&[TaggedValue]) -> TaggedValue>;
+pub type ForeignFunction = Box<dyn Fn(Gc, &[TaggedValue]) -> TaggedValue>;
 
 pub struct ForeignFunctionInfo {
   name: &'static str,
@@ -27,7 +28,9 @@ impl ForeignFunctionInfo {
       name,
       parameter_types: Box::new(P::parameter_types()),
       return_type: R::to_type(),
-      function: Box::new(move |values| unsafe { func(P::from_stack(values)).to_value().vm_value }),
+      function: Box::new(move |gc, values| unsafe {
+        func(P::from_stack(values)).to_value(gc).vm_value
+      }),
     }
   }
 

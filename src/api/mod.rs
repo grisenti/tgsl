@@ -5,6 +5,7 @@ use crate::standard_library::load_standard_library;
 use crate::vm::VM;
 
 pub mod foreign_function;
+pub mod gc;
 pub mod value;
 
 pub struct Tgsl {

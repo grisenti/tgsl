@@ -1,3 +1,4 @@
+use crate::api::gc::Gc;
 use crate::vm::value as vm_value;
 use crate::vm::value::TaggedValue;
 
@@ -17,7 +18,7 @@ pub trait FromValue {
 }
 
 pub trait ToValue {
-  unsafe fn to_value(self) -> Value;
+  unsafe fn to_value(self, gc: Gc) -> Value;
 }
 
 pub trait ToType {
@@ -43,7 +44,7 @@ impl ToType for () {
 }
 
 impl ToValue for () {
-  unsafe fn to_value(self) -> Value {
+  unsafe fn to_value(self, _: Gc) -> Value {
     Value {
       vm_value: TaggedValue::none(),
     }
@@ -63,7 +64,7 @@ impl ToType for bool {
 }
 
 impl ToValue for bool {
-  unsafe fn to_value(self) -> Value {
+  unsafe fn to_value(self, _: Gc) -> Value {
     Value {
       vm_value: TaggedValue {
         value: vm_value::Value { boolean: self },
@@ -80,7 +81,7 @@ impl FromValue for f64 {
 }
 
 impl ToValue for f64 {
-  unsafe fn to_value(self) -> Value {
+  unsafe fn to_value(self, _: Gc) -> Value {
     Value {
       vm_value: TaggedValue {
         value: vm_value::Value { number: self },
@@ -99,6 +100,18 @@ impl ToType for f64 {
 impl FromValue for &mut String {
   unsafe fn from_value(value: Value) -> Self {
     value.vm_value.as_object().as_string()
+  }
+}
+
+impl ToValue for String {
+  unsafe fn to_value(self, mut gc: Gc) -> Value {
+    gc.allocate_string(self)
+  }
+}
+
+impl ToType for String {
+  fn to_type() -> Type {
+    Type::Str
   }
 }
 

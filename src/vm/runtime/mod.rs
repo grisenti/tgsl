@@ -1,6 +1,7 @@
 use std::mem::ManuallyDrop;
 use std::ptr;
 
+use crate::api;
 use crate::compiler::codegen::bytecode::OpCode;
 use crate::foreign_function::ForeignFunction;
 use crate::vm::chunk::GlobalChunk;
@@ -239,7 +240,7 @@ impl RunTime {
           let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
           let id = unsafe { function_value.as_id() };
           frame.pop_n(arguments);
-          frame.push(self.foreign_functions[id](args))?;
+          frame.push(self.foreign_functions[id](api::gc::Gc(&mut self.gc), args))?;
         }
         OpCode::CallValue => {
           let arguments = frame.read_byte() as usize;
@@ -257,7 +258,7 @@ impl RunTime {
               let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
               let id = unsafe { function_value.as_id() };
               frame.pop_n(arguments);
-              frame.push(self.foreign_functions[id](args))?;
+              frame.push(self.foreign_functions[id](api::gc::Gc(&mut self.gc), args))?;
               continue;
             }
             _ => unreachable!("trying to call invalid function {:?}", function_value.kind),
