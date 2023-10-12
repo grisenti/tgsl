@@ -1,13 +1,5 @@
-use crate::value::{FromValue, ToType, ToValue, Type, Value};
+use crate::value::{ForeignValue, NativeValue, Type, Value};
 use crate::vm::value::TaggedValue;
-
-pub trait Parameter: FromValue + ToType {}
-
-impl<T> Parameter for T where T: FromValue + ToType {}
-
-pub trait Return: ToValue + ToType {}
-
-impl<T> Return for T where T: ToValue + ToType {}
 
 pub trait ForeignParameters<const N: usize> {
   unsafe fn from_stack(values: &[TaggedValue]) -> Self;
@@ -28,7 +20,7 @@ impl ForeignFunctionInfo {
   pub fn create<P, R, F, const N: usize>(name: &'static str, func: F) -> Self
   where
     P: ForeignParameters<N>,
-    R: Return,
+    R: ForeignValue,
     F: Fn(P) -> R + 'static,
   {
     Self {
@@ -56,7 +48,7 @@ impl ForeignFunctionInfo {
   }
 }
 
-impl<P: Parameter> ForeignParameters<1> for P {
+impl<P: NativeValue> ForeignParameters<1> for P {
   unsafe fn from_stack(values: &[TaggedValue]) -> Self {
     debug_assert_eq!(values.len(), 1);
     P::from_value(Value {
@@ -69,7 +61,7 @@ impl<P: Parameter> ForeignParameters<1> for P {
   }
 }
 
-impl<P1: Parameter, P2: Parameter> ForeignParameters<2> for (P1, P2) {
+impl<P1: NativeValue, P2: NativeValue> ForeignParameters<2> for (P1, P2) {
   unsafe fn from_stack(values: &[TaggedValue]) -> Self {
     debug_assert_eq!(values.len(), 2);
     (
