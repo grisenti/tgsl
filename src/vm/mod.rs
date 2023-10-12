@@ -1,8 +1,10 @@
 use chunk::*;
 
+use crate::compiler::functions;
+use crate::compiler::types as comp_types;
 use crate::compiler::CompiledModule;
-use crate::compiler::{errors::ErrorPrinter, functions, Compiler};
 use crate::extern_function::{ExternFunction, ExternFunctionInfo};
+use crate::value as api_types;
 
 use self::{address_table::AddressTable, runtime::RunTime};
 
@@ -14,13 +16,9 @@ pub mod value;
 
 #[derive(Default)]
 pub struct VM {
-  compiler: Compiler,
   address_table: AddressTable,
   run_time: RunTime,
 }
-
-use crate::compiler::types as comp_types;
-use crate::value as api_types;
 
 fn compare_types(provided_type: &api_types::Type, required_type: &comp_types::Type) -> bool {
   match provided_type {
