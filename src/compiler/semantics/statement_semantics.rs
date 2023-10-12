@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::compiler::ast::statement::stmt::{
-  Block, ExternFunction, FunctionDeclaration, FunctionDefinition, IfBranch, Import, ModuleDecl,
+  Block, ForeignFunction, FunctionDeclaration, FunctionDefinition, IfBranch, Import, ModuleDecl,
   Return, StmtExpr, StructDeclaration, StructDefinition, VarDecl, While,
 };
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
@@ -148,22 +148,22 @@ impl<'a> StmtVisitor<'a, 'a, ReturnKind> for SemanticChecker<'a> {
     ReturnKind::None
   }
 
-  fn visit_extern_function(
+  fn visit_foreign_function(
     &mut self,
     ast: &'a AST,
-    extern_function: &ExternFunction,
+    foreign_function: &ForeignFunction,
     _: StmtHandle,
   ) -> ReturnKind {
-    let parameter_types = self.convert_type_list(&extern_function.parameter_types);
-    let return_type = self.visit_parsed_type(ast, extern_function.return_type);
+    let parameter_types = self.convert_type_list(&foreign_function.parameter_types);
+    let return_type = self.visit_parsed_type(ast, foreign_function.return_type);
 
     self
       .env
-      .declare_extern_function(
-        extern_function.name,
+      .declare_foreign_function(
+        foreign_function.name,
         FunctionSignature::new(parameter_types, return_type).into(),
       )
-      .expect("error declaring extern function");
+      .expect("error declaring foreign function");
 
     ReturnKind::None
   }

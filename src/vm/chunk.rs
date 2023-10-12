@@ -127,10 +127,10 @@ fn convert_constant(value: ConstantValue, address_table: &AddressTable) -> Tagge
       },
     }
     .into(),
-    ConstantValue::RelativeExternFn(address) => TaggedValue {
-      kind: ValueType::ExternFunctionId,
+    ConstantValue::RelativeForeignFn(address) => TaggedValue {
+      kind: ValueType::ForeignFunctionId,
       value: Value {
-        id: address_table.resolve_extern_function(address) as usize,
+        id: address_table.resolve_foreign_function(address) as usize,
       },
     }
     .into(),
@@ -141,8 +141,8 @@ fn convert_constant(value: ConstantValue, address_table: &AddressTable) -> Tagge
       },
     }
     .into(),
-    ConstantValue::AbsoluteExternFn(address) => TaggedValue {
-      kind: ValueType::ExternFunctionId,
+    ConstantValue::AbsoluteForeignFn(address) => TaggedValue {
+      kind: ValueType::ForeignFunctionId,
       value: Value {
         id: address as usize,
       },

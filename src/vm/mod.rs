@@ -3,7 +3,7 @@ use chunk::*;
 use crate::compiler::functions;
 use crate::compiler::types as comp_types;
 use crate::compiler::CompiledModule;
-use crate::extern_function::{ExternFunction, ExternFunctionInfo};
+use crate::foreign_function::{ForeignFunction, ForeignFunctionInfo};
 use crate::value as api_types;
 
 use self::{address_table::AddressTable, runtime::RunTime};
@@ -40,44 +40,44 @@ fn compare_parameters(
     .all(|(p, r)| compare_types(p, r))
 }
 
-fn process_extern_functions(
-  runtime_extern_functions: &mut Vec<ExternFunction>,
-  declared_extern_functions: &[functions::ExternFunction],
-  extern_functions: Vec<ExternFunctionInfo>,
+fn process_foreign_functions(
+  runtime_foreign_functions: &mut Vec<ForeignFunction>,
+  declared_foreign_functions: &[functions::ForeignFunction],
+  foreign_functions: Vec<ForeignFunctionInfo>,
 ) -> Result<(), String> {
   // ensure all declared functions are provided
   // ensure all provided functions exist
 
-  let mut functions = Vec::with_capacity(extern_functions.len());
-  for extern_func in extern_functions {
-    if let Some(func) = declared_extern_functions.iter().find(|f| {
-      f.name.as_ref() == extern_func.get_name()
-        && compare_parameters(extern_func.get_parameters(), f.signature.get_parameters())
+  let mut functions = Vec::with_capacity(foreign_functions.len());
+  for foreign_func in foreign_functions {
+    if let Some(func) = declared_foreign_functions.iter().find(|f| {
+      f.name.as_ref() == foreign_func.get_name()
+        && compare_parameters(foreign_func.get_parameters(), f.signature.get_parameters())
     }) {
       if !compare_types(
-        extern_func.get_return_type(),
+        foreign_func.get_return_type(),
         func.signature.get_return_type(),
       ) {
         return Err(format!(
           "inconsistent return types for function '{}'",
-          extern_func.get_name()
+          foreign_func.get_name()
         ));
       }
-      functions.push((func.relative_address, extern_func.get_extern_function()))
+      functions.push((func.relative_address, foreign_func.get_foreign_function()))
     } else {
       return Err(format!(
-        "no extern function named {} in module",
-        extern_func.get_name()
+        "no foreign function named {} in module",
+        foreign_func.get_name()
       ));
     }
   }
-  assert!(functions.len() <= declared_extern_functions.len());
-  if functions.len() < declared_extern_functions.len() {
-    return Err("missing extern function".to_string());
+  assert!(functions.len() <= declared_foreign_functions.len());
+  if functions.len() < declared_foreign_functions.len() {
+    return Err("missing foreign function".to_string());
   }
   functions.sort_by_key(|(key, _)| *key);
   for (_, func) in functions {
-    runtime_extern_functions.push(func);
+    runtime_foreign_functions.push(func);
   }
   Ok(())
 }
@@ -86,14 +86,14 @@ impl VM {
   pub fn load_module(
     &mut self,
     compiled_module: CompiledModule,
-    extern_functions: Vec<ExternFunctionInfo>,
+    foreign_functions: Vec<ForeignFunctionInfo>,
   ) -> Result<(), String> {
     let globals_count = compiled_module.globals_count;
     let functions_count = compiled_module.code.functions.len();
-    process_extern_functions(
-      &mut self.run_time.extern_functions,
-      &compiled_module.extern_functions,
-      extern_functions,
+    process_foreign_functions(
+      &mut self.run_time.foreign_functions,
+      &compiled_module.foreign_functions,
+      foreign_functions,
     )?;
     unsafe {
       self
@@ -106,7 +106,7 @@ impl VM {
     };
     self.address_table.update_table(
       globals_count as u32,
-      compiled_module.extern_functions.len() as u32,
+      compiled_module.foreign_functions.len() as u32,
       functions_count as u32,
     );
     Ok(())

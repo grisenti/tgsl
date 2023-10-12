@@ -1,5 +1,6 @@
-pub mod stmt {
+use stmt::*;
 
+pub mod stmt {
   use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle};
 
   use super::Stmt;
@@ -72,7 +73,7 @@ pub mod stmt {
   );
 
   src_stmt_node!(
-    ExternFunction,
+    ForeignFunction,
     name: &'src str,
     parameter_names: Vec<&'src str>,
     parameter_types: Vec<TypeHandle>,
@@ -95,8 +96,6 @@ pub mod stmt {
   src_stmt_node!(ModuleDecl, name: &'src str);
 }
 
-use stmt::*;
-
 #[derive(Debug, Clone)]
 pub enum Stmt<'src> {
   VarDecl(VarDecl<'src>),
@@ -106,7 +105,7 @@ pub enum Stmt<'src> {
   While(While),
   FunctionDefinition(FunctionDefinition<'src>),
   FunctionDeclaration(FunctionDeclaration<'src>),
-  ExternFunction(ExternFunction<'src>),
+  ForeignFunction(ForeignFunction<'src>),
   Break,
   Return(Return),
   StructDeclaration(StructDeclaration<'src>),

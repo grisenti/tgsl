@@ -24,13 +24,13 @@ impl Environment<'_> {
     self.global_functions.declare_native(name, signature)
   }
 
-  pub fn declare_extern_function(
+  pub fn declare_foreign_function(
     &mut self,
     name: &str,
     signature: FunctionSignature,
   ) -> FunctionInsertResult {
     self.check_fn_name_availability(name)?;
-    self.global_functions.declare_extern(name, signature)
+    self.global_functions.declare_foreign(name, signature)
   }
 
   pub fn define_native_function(

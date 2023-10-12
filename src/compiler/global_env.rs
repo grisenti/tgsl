@@ -18,7 +18,7 @@ pub struct GlobalEnv {
   variable_types: Vec<Type>,
   modules: HashMap<String, Module>,
   global_variables_count: u32,
-  last_extern_function_address: u32,
+  last_foreign_function_address: u32,
   last_native_function_address: u32,
 }
 
@@ -35,18 +35,18 @@ impl GlobalEnv {
 
     let global_variables = module_exports.global_variables.count();
     let native_functions = module_exports.functions.native_count();
-    let extern_functions = module_exports.functions.extern_count();
+    let foreign_functions = module_exports.functions.foreign_count();
 
     let linked_functions = module_exports.functions.link(
       self.last_native_function_address,
-      self.last_extern_function_address,
+      self.last_foreign_function_address,
     );
     let linked_global_variables = module_exports
       .global_variables
       .link(self.global_variables_count);
 
     self.global_variables_count += global_variables;
-    self.last_extern_function_address += extern_functions;
+    self.last_foreign_function_address += foreign_functions;
     self.last_native_function_address += native_functions;
     self.modules.insert(
       module_exports.module_name,

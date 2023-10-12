@@ -1,3 +1,4 @@
+use crate::vm::value as vm_value;
 use crate::vm::value::TaggedValue;
 
 pub struct Value {
@@ -23,15 +24,13 @@ pub trait ToType {
   fn to_type() -> Type;
 }
 
-pub trait ExternValue: ToValue + ToType {}
+pub trait ForeignValue: ToValue + ToType {}
 
-impl<T> ExternValue for T where T: ToValue + ToType {}
+impl<T> ForeignValue for T where T: ToValue + ToType {}
 
 pub trait NativeValue: FromValue + ToType {}
 
 impl<T> NativeValue for T where T: FromValue + ToType {}
-
-use crate::vm::value as vm_value;
 
 impl FromValue for () {
   unsafe fn from_value(_: Value) -> Self {}

@@ -476,18 +476,18 @@ impl SemanticChecker<'_> {
         .code()
         .push_constant(ConstantValue::RelativeNativeFn(address))
         .push_op2(OpCode::CallNative, arguments),
-      FunctionAddress::RelativeExtern(address) => self
+      FunctionAddress::RelativeForeign(address) => self
         .code()
-        .push_constant(ConstantValue::RelativeExternFn(address))
-        .push_op2(OpCode::CallExtern, arguments),
+        .push_constant(ConstantValue::RelativeForeignFn(address))
+        .push_op2(OpCode::CallForeign, arguments),
       FunctionAddress::AbsoluteNative(address) => self
         .code()
         .push_constant(ConstantValue::AbsoluteNativeFn(address))
         .push_op2(OpCode::CallNative, arguments),
-      FunctionAddress::AbsoluteExtern(address) => self
+      FunctionAddress::AbsoluteForeign(address) => self
         .code()
-        .push_constant(ConstantValue::AbsoluteExternFn(address))
-        .push_op2(OpCode::CallExtern, arguments),
+        .push_constant(ConstantValue::AbsoluteForeignFn(address))
+        .push_op2(OpCode::CallForeign, arguments),
     }
     return_type
   }

@@ -1,4 +1,4 @@
 module std_io;
 
-extern fn println(out: str);
-extern fn print(out: str);
+foreign fn println(out: str);
+foreign fn print(out: str);

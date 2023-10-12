@@ -14,7 +14,7 @@ use crate::compiler::semantics::environment::{DeclarationError, DeclarationResul
 use crate::compiler::structs::ExportedGlobalStructs;
 use crate::compiler::types::{FunctionSignature, Type};
 use crate::compiler::variables::ExportedGlobalVariables;
-use crate::compiler::ExternFunction;
+use crate::compiler::ForeignFunction;
 
 mod environment;
 mod expression_semantics;
@@ -54,7 +54,7 @@ pub struct ModuleExports {
 
 pub struct CompiledModule {
   pub exports: Option<ModuleExports>,
-  pub extern_functions: Vec<ExternFunction>,
+  pub foreign_functions: Vec<ForeignFunction>,
   pub globals_count: u32,
   pub module_code: ModuleCode,
 }
@@ -105,7 +105,7 @@ impl<'a> SemanticChecker<'a> {
           functions: checker.checked_functions,
         },
         globals_count: global_variable_count,
-        extern_functions: exported_env.extern_functions,
+        foreign_functions: exported_env.foreign_functions,
       })
     } else {
       Err(checker.errors)

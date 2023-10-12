@@ -1,6 +1,6 @@
 use crate::compiler::ast::json::ASTJSONPrinter;
 use crate::compiler::codegen::ModuleCode;
-use crate::compiler::functions::ExternFunction;
+use crate::compiler::functions::ForeignFunction;
 use crate::compiler::global_env::GlobalEnv;
 use crate::compiler::semantics::SemanticChecker;
 
@@ -20,7 +20,7 @@ mod variables;
 
 pub struct CompiledModule {
   pub globals_count: u16,
-  pub extern_functions: Vec<ExternFunction>,
+  pub foreign_functions: Vec<ForeignFunction>,
   pub code: ModuleCode,
 }
 
@@ -41,7 +41,7 @@ impl Compiler {
     }
     Ok(CompiledModule {
       code: module.module_code,
-      extern_functions: module.extern_functions,
+      foreign_functions: module.foreign_functions,
       globals_count,
     })
   }

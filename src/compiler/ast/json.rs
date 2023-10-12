@@ -263,18 +263,18 @@ impl StmtVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
     }
   }
 
-  fn visit_extern_function(
+  fn visit_foreign_function(
     &mut self,
     ast: &AST,
-    extern_function: &stmt::ExternFunction,
+    foreign_function: &stmt::ForeignFunction,
     _: StmtHandle,
   ) -> JsonValue {
     object! {
-      "ExternalFunction": {
-        "name": extern_function.name,
-        "parameter_names": extern_function.parameter_names.clone(),
-        "parameter_types": parsed_type_list_to_json(&extern_function.parameter_types, ast),
-        "return_type": self.visit_parsed_type(ast, extern_function.return_type)
+      "ForeignalFunction": {
+        "name": foreign_function.name,
+        "parameter_names": foreign_function.parameter_names.clone(),
+        "parameter_types": parsed_type_list_to_json(&foreign_function.parameter_types, ast),
+        "return_type": self.visit_parsed_type(ast, foreign_function.return_type)
       }
     }
   }

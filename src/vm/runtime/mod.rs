@@ -2,7 +2,7 @@ use std::mem::ManuallyDrop;
 use std::ptr;
 
 use crate::compiler::codegen::bytecode::OpCode;
-use crate::extern_function::ExternFunction;
+use crate::foreign_function::ForeignFunction;
 use crate::vm::chunk::GlobalChunk;
 use crate::vm::runtime::RuntimeError::StackOverflow;
 use crate::vm::value::{Value, ValueType};
@@ -56,7 +56,7 @@ pub struct RunTime {
   function_call: usize,
   globals: Vec<TaggedValue>,
   functions: Vec<Function>,
-  pub extern_functions: Vec<ExternFunction>,
+  pub foreign_functions: Vec<ForeignFunction>,
 }
 
 impl RunTime {
@@ -232,14 +232,14 @@ impl RunTime {
             captures: ptr::null_mut(),
           };
         }
-        OpCode::CallExtern => {
+        OpCode::CallForeign => {
           let arguments = frame.read_byte() as usize;
           let function_value = frame.pop();
-          debug_assert!(function_value.kind == ValueType::ExternFunctionId);
+          debug_assert!(function_value.kind == ValueType::ForeignFunctionId);
           let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
           let id = unsafe { function_value.as_id() };
           frame.pop_n(arguments);
-          frame.push(self.extern_functions[id](args))?;
+          frame.push(self.foreign_functions[id](args))?;
         }
         OpCode::CallValue => {
           let arguments = frame.read_byte() as usize;
@@ -253,11 +253,11 @@ impl RunTime {
               let closure = unsafe { function_value.as_object().as_closure() };
               (closure.function, closure.captures.as_mut_ptr())
             }
-            ValueType::ExternFunctionId => {
+            ValueType::ForeignFunctionId => {
               let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
               let id = unsafe { function_value.as_id() };
               frame.pop_n(arguments);
-              frame.push(self.extern_functions[id](args))?;
+              frame.push(self.foreign_functions[id](args))?;
               continue;
             }
             _ => unreachable!("trying to call invalid function {:?}", function_value.kind),
@@ -364,7 +364,7 @@ impl Default for RunTime {
     Self {
       stack: [TaggedValue::none(); MAX_STACK],
       call_stack: [EMPTY_CALL_FRAME; MAX_CALLS],
-      extern_functions: Default::default(),
+      foreign_functions: Default::default(),
       function_call: 0,
       gc: Default::default(),
       globals: Default::default(),

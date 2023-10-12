@@ -10,9 +10,9 @@ pub enum FindError {
 #[derive(Debug, Clone, Copy)]
 pub enum FunctionAddress {
   RelativeNative(u32),
-  RelativeExtern(u32),
+  RelativeForeign(u32),
   AbsoluteNative(u32),
-  AbsoluteExtern(u32),
+  AbsoluteForeign(u32),
 }
 
 pub type FindResult<T> = Result<T, FindError>;
@@ -21,11 +21,11 @@ impl FunctionAddress {
   fn from_address_and_kind(address: u32, kind: FunctionKind) -> FindResult<FunctionAddress> {
     match kind {
       FunctionKind::ImportedNative => Ok(FunctionAddress::AbsoluteNative(address)),
-      FunctionKind::ImportedExtern => Ok(FunctionAddress::AbsoluteExtern(address)),
+      FunctionKind::ImportedForeign => Ok(FunctionAddress::AbsoluteForeign(address)),
       FunctionKind::RelativeNative | FunctionKind::Undefined => {
         Ok(FunctionAddress::RelativeNative(address))
       }
-      FunctionKind::RelativeExtern => Ok(FunctionAddress::RelativeExtern(address)),
+      FunctionKind::RelativeForeign => Ok(FunctionAddress::RelativeForeign(address)),
       FunctionKind::ErrorMultipleDefinitions => Err(FindError::MultipleDefinitions),
       FunctionKind::ErrorRedefinedImport => Err(FindError::RedefinedImport),
     }
@@ -35,9 +35,9 @@ impl FunctionAddress {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FunctionKind {
   ImportedNative,
-  ImportedExtern,
+  ImportedForeign,
   RelativeNative,
-  RelativeExtern,
+  RelativeForeign,
   Undefined, // implicitly native and relative
   ErrorMultipleDefinitions,
   ErrorRedefinedImport,
@@ -63,7 +63,7 @@ pub struct ExportedOverloadSet {
 impl ExportedOverloadSet {
   pub fn link(mut self, last_function_address: u32) -> LinkedOverloadSet {
     for f in &mut self.functions {
-      assert!(f.kind == FunctionKind::ImportedNative || f.kind == FunctionKind::ImportedExtern);
+      assert!(f.kind == FunctionKind::ImportedNative || f.kind == FunctionKind::ImportedForeign);
       f.address += last_function_address;
     }
     LinkedOverloadSet {
@@ -116,24 +116,24 @@ impl OverloadSet {
   }
 
   pub(super) fn export(&mut self) -> bool {
-    self
-      .functions
-      .retain(|f| f.kind != FunctionKind::ImportedNative && f.kind != FunctionKind::ImportedExtern);
+    self.functions.retain(|f| {
+      f.kind != FunctionKind::ImportedNative && f.kind != FunctionKind::ImportedForeign
+    });
     !self.functions.is_empty()
   }
 
-  pub(super) fn relative_extern_iter(&self) -> impl Iterator<Item = Function> + '_ {
+  pub(super) fn relative_foreign_iter(&self) -> impl Iterator<Item = Function> + '_ {
     self
       .functions
       .iter()
-      .filter(|f| f.kind == FunctionKind::RelativeExtern)
+      .filter(|f| f.kind == FunctionKind::RelativeForeign)
       .cloned()
   }
 
   pub(super) fn link(
     &mut self,
     last_native_function_address: u32,
-    last_extern_function_address: u32,
+    last_foreign_function_address: u32,
   ) {
     for f in &mut self.functions {
       match f.kind {
@@ -141,9 +141,9 @@ impl OverloadSet {
           f.address += last_native_function_address;
           f.kind = FunctionKind::ImportedNative
         }
-        FunctionKind::RelativeExtern => {
-          f.address += last_extern_function_address;
-          f.kind = FunctionKind::ImportedExtern
+        FunctionKind::RelativeForeign => {
+          f.address += last_foreign_function_address;
+          f.kind = FunctionKind::ImportedForeign
         }
         other => panic!("cannot link function of type {other:?}"),
       }

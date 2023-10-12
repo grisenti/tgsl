@@ -51,7 +51,7 @@ pub enum OpCode {
 
   // functions
   CallNative,
-  CallExtern,
+  CallForeign,
   CallValue,
 
   // structs
@@ -75,9 +75,9 @@ pub enum ConstantValue {
   RelativeNativeGlobalVar(u32),
   AbsoluteNativeGlobalVar(u32),
   RelativeNativeFn(u32),
-  RelativeExternFn(u32),
+  RelativeForeignFn(u32),
   AbsoluteNativeFn(u32),
-  AbsoluteExternFn(u32),
+  AbsoluteForeignFn(u32),
   Bool(bool),
   Str(String),
   None,
@@ -88,9 +88,9 @@ impl From<FunctionAddress> for ConstantValue {
   fn from(value: FunctionAddress) -> Self {
     match value {
       FunctionAddress::RelativeNative(a) => Self::RelativeNativeFn(a),
-      FunctionAddress::RelativeExtern(a) => Self::RelativeExternFn(a),
+      FunctionAddress::RelativeForeign(a) => Self::RelativeForeignFn(a),
       FunctionAddress::AbsoluteNative(a) => Self::AbsoluteNativeFn(a),
-      FunctionAddress::AbsoluteExtern(a) => Self::AbsoluteExternFn(a),
+      FunctionAddress::AbsoluteForeign(a) => Self::AbsoluteForeignFn(a),
     }
   }
 }

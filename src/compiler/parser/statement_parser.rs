@@ -256,8 +256,8 @@ impl<'src> Parser<'src> {
     )
   }
 
-  fn parse_extern_function(&mut self) -> StmtHandle {
-    assert_eq!(self.lookahead, Token::Extern);
+  fn parse_foreign_function(&mut self) -> StmtHandle {
+    assert_eq!(self.lookahead, Token::Foreign);
     let stmt_start = self.lex.previous_token_range();
 
     self.advance();
@@ -268,7 +268,7 @@ impl<'src> Parser<'src> {
     let stmt_end = self.lex.previous_token_range();
     self.match_token(Token::Basic(';'));
     self.ast.add_statement(
-      stmt::ExternFunction {
+      stmt::ForeignFunction {
         name,
         parameter_names,
         parameter_types,
@@ -310,7 +310,7 @@ impl<'src> Parser<'src> {
       Token::Var => self.parse_var_decl(),
       Token::Fn => self.parse_function_decl(),
       Token::Struct => self.parse_struct_decl(),
-      Token::Extern => self.parse_extern_function(),
+      Token::Foreign => self.parse_foreign_function(),
       Token::Import => self.parse_import(),
       Token::Module => self.module_err(),
       _ => self.parse_statement(),

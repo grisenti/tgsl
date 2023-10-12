@@ -114,10 +114,10 @@ pub trait StmtVisitor<'ast, 'src, T> {
     function_declaration: &'ast stmt::FunctionDeclaration<'src>,
     stmt_handle: StmtHandle,
   ) -> T;
-  fn visit_extern_function(
+  fn visit_foreign_function(
     &mut self,
     ast: &'ast AST,
-    extern_function: &'ast stmt::ExternFunction<'src>,
+    foreign_function: &'ast stmt::ForeignFunction<'src>,
     stmt_handle: StmtHandle,
   ) -> T;
   fn visit_break(&mut self, ast: &'ast AST, stmt_handle: StmtHandle) -> T;
@@ -161,7 +161,7 @@ pub trait StmtVisitor<'ast, 'src, T> {
       Stmt::While(value) => self.visit_while(ast, value, stmt),
       Stmt::FunctionDefinition(value) => self.visit_function_definition(ast, value, stmt),
       Stmt::FunctionDeclaration(value) => self.visit_function_declaration(ast, value, stmt),
-      Stmt::ExternFunction(value) => self.visit_extern_function(ast, value, stmt),
+      Stmt::ForeignFunction(value) => self.visit_foreign_function(ast, value, stmt),
       Stmt::Break => self.visit_break(ast, stmt),
       Stmt::Return(value) => self.visit_return(ast, value, stmt),
       Stmt::StructDeclaration(value) => self.visit_struct_declaration(ast, value, stmt),

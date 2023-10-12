@@ -9,7 +9,7 @@ use crate::compiler::types::FunctionSignature;
 
 pub mod overload_set;
 
-pub struct ExternFunction {
+pub struct ForeignFunction {
   pub name: Rc<str>,
   pub signature: FunctionSignature,
   pub relative_address: RelativeFunctionAddress,
@@ -33,23 +33,23 @@ pub type FunctionInsertResult = Result<RelativeFunctionAddress, FunctionInsertEr
 pub struct GlobalFunctions {
   function_names: HashMap<Rc<str>, OverloadSet>,
   last_native_function: u32,
-  last_extern_function: u32,
+  last_foreign_function: u32,
 }
 
 pub struct ExportedFunctions {
   function_names: HashMap<Rc<str>, OverloadSet>,
   native_count: u32,
-  extern_count: u32,
+  foreign_count: u32,
 }
 
 impl ExportedFunctions {
   pub fn link(
     mut self,
     last_native_function_address: u32,
-    last_extern_function_address: u32,
+    last_foreign_function_address: u32,
   ) -> LinkedFunctions {
     for (_, overload_set) in &mut self.function_names {
-      overload_set.link(last_native_function_address, last_extern_function_address)
+      overload_set.link(last_native_function_address, last_foreign_function_address)
     }
     LinkedFunctions {
       function_names: self.function_names,
@@ -60,8 +60,8 @@ impl ExportedFunctions {
     self.native_count
   }
 
-  pub fn extern_count(&self) -> u32 {
-    self.extern_count
+  pub fn foreign_count(&self) -> u32 {
+    self.foreign_count
   }
 }
 
@@ -114,14 +114,14 @@ impl GlobalFunctions {
     self.declare(address, FunctionKind::Undefined, name, signature)
   }
 
-  pub fn declare_extern(
+  pub fn declare_foreign(
     &mut self,
     name: &str,
     signature: FunctionSignature,
   ) -> FunctionInsertResult {
-    let address = self.last_extern_function;
-    let ret = self.declare(address, FunctionKind::RelativeExtern, name, signature);
-    self.last_extern_function += 1;
+    let address = self.last_foreign_function;
+    let ret = self.declare(address, FunctionKind::RelativeForeign, name, signature);
+    self.last_foreign_function += 1;
     ret
   }
 
@@ -183,16 +183,20 @@ impl GlobalFunctions {
     self.function_names.contains_key(name)
   }
 
-  pub fn export(mut self) -> (ExportedFunctions, Vec<ExternFunction>) {
-    let mut extern_functions = Vec::with_capacity(self.last_extern_function as usize);
+  pub fn export(mut self) -> (ExportedFunctions, Vec<ForeignFunction>) {
+    let mut foreign_functions = Vec::with_capacity(self.last_foreign_function as usize);
 
     self.function_names.retain(|name, overload_set| {
       if overload_set.export() {
-        extern_functions.extend(overload_set.relative_extern_iter().map(|f| ExternFunction {
-          name: name.clone(),
-          relative_address: f.address,
-          signature: f.signature,
-        }));
+        foreign_functions.extend(
+          overload_set
+            .relative_foreign_iter()
+            .map(|f| ForeignFunction {
+              name: name.clone(),
+              relative_address: f.address,
+              signature: f.signature,
+            }),
+        );
         true
       } else {
         false
@@ -202,9 +206,9 @@ impl GlobalFunctions {
       ExportedFunctions {
         function_names: self.function_names,
         native_count: self.last_native_function,
-        extern_count: self.last_extern_function,
+        foreign_count: self.last_foreign_function,
       },
-      extern_functions,
+      foreign_functions,
     )
   }
 

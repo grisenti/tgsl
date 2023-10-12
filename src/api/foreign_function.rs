@@ -9,25 +9,25 @@ pub trait Return: ToValue + ToType {}
 
 impl<T> Return for T where T: ToValue + ToType {}
 
-pub trait ExternParameters<const N: usize> {
+pub trait ForeignParameters<const N: usize> {
   unsafe fn from_stack(values: &[TaggedValue]) -> Self;
 
   fn parameter_types() -> [Type; N];
 }
 
-pub type ExternFunction = Box<dyn Fn(&[TaggedValue]) -> TaggedValue>;
+pub type ForeignFunction = Box<dyn Fn(&[TaggedValue]) -> TaggedValue>;
 
-pub struct ExternFunctionInfo {
+pub struct ForeignFunctionInfo {
   name: &'static str,
   parameter_types: Box<[Type]>,
   return_type: Type,
-  function: ExternFunction,
+  function: ForeignFunction,
 }
 
-impl ExternFunctionInfo {
+impl ForeignFunctionInfo {
   pub fn create<P, R, F, const N: usize>(name: &'static str, func: F) -> Self
   where
-    P: ExternParameters<N>,
+    P: ForeignParameters<N>,
     R: Return,
     F: Fn(P) -> R + 'static,
   {
@@ -51,12 +51,12 @@ impl ExternFunctionInfo {
     &self.return_type
   }
 
-  pub fn get_extern_function(self) -> ExternFunction {
+  pub fn get_foreign_function(self) -> ForeignFunction {
     self.function
   }
 }
 
-impl<P: Parameter> ExternParameters<1> for P {
+impl<P: Parameter> ForeignParameters<1> for P {
   unsafe fn from_stack(values: &[TaggedValue]) -> Self {
     debug_assert_eq!(values.len(), 1);
     P::from_value(Value {
@@ -69,7 +69,7 @@ impl<P: Parameter> ExternParameters<1> for P {
   }
 }
 
-impl<P1: Parameter, P2: Parameter> ExternParameters<2> for (P1, P2) {
+impl<P1: Parameter, P2: Parameter> ForeignParameters<2> for (P1, P2) {
   unsafe fn from_stack(values: &[TaggedValue]) -> Self {
     debug_assert_eq!(values.len(), 2);
     (

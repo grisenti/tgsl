@@ -79,7 +79,7 @@ pub enum ValueType {
   GlobalId,
   Function,
   FunctionId,
-  ExternFunctionId,
+  ForeignFunctionId,
   Object,
 
   None,
@@ -123,7 +123,7 @@ impl TaggedValue {
   pub unsafe fn as_id(self) -> usize {
     debug_assert!(matches!(
       self.kind,
-      ValueType::ExternFunctionId | ValueType::FunctionId | ValueType::GlobalId,
+      ValueType::ForeignFunctionId | ValueType::FunctionId | ValueType::GlobalId,
     ));
     self.value.id
   }
@@ -147,7 +147,7 @@ impl ToString for TaggedValue {
       ValueType::GlobalId => unsafe { format!("<global {}>", self.value.id) },
       ValueType::Function => "<function>".to_string(),
       ValueType::None => "<none>".to_string(),
-      ValueType::ExternFunctionId => unsafe { format!("<extern {}>", self.value.id) },
+      ValueType::ForeignFunctionId => unsafe { format!("<foreign {}>", self.value.id) },
       ValueType::Object => unsafe { (*self.value.object).to_string() },
       ValueType::FunctionId => unsafe { format!("<function {}>", self.value.id) },
     }

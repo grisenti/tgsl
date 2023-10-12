@@ -1,5 +1,5 @@
 use crate::compiler::codegen::function_code::FunctionCode;
-use crate::compiler::functions::{ExportedFunctions, ExternFunction, GlobalFunctions};
+use crate::compiler::functions::{ExportedFunctions, ForeignFunction, GlobalFunctions};
 use crate::compiler::global_env::GlobalEnv;
 use crate::compiler::structs::{ExportedGlobalStructs, GlobalStructs};
 use crate::compiler::types::Type;
@@ -90,7 +90,7 @@ pub struct ExportedEnv {
   pub global_variables: ExportedGlobalVariables,
   pub global_structs: ExportedGlobalStructs,
   pub global_functions: ExportedFunctions,
-  pub extern_functions: Vec<ExternFunction>,
+  pub foreign_functions: Vec<ForeignFunction>,
 }
 
 pub struct Environment<'src> {
@@ -203,12 +203,12 @@ impl<'src> Environment<'src> {
   }
 
   pub fn export(self) -> ExportedEnv {
-    let (global_functions, extern_functions) = self.global_functions.export();
+    let (global_functions, foreign_functions) = self.global_functions.export();
     ExportedEnv {
       global_variables: self.global_variables.export(),
       global_structs: self.global_structs.export().unwrap(),
       global_functions,
-      extern_functions,
+      foreign_functions,
     }
   }
 

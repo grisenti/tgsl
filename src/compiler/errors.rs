@@ -144,9 +144,9 @@ pub mod parser_err {
   );
 
   def_err!(
-    extern_function_in_local_scope,
+    foreign_function_in_local_scope,
     "P013",
-    "extern functions can only be declared in the global scope"
+    "foreign functions can only be declared in the global scope"
   );
 
   def_err!(

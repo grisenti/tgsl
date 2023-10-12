@@ -1,10 +1,10 @@
 use crate::compiler::errors::ErrorPrinter;
 use crate::compiler::Compiler;
-use crate::extern_function::ExternFunctionInfo;
+use crate::foreign_function::ForeignFunctionInfo;
 use crate::standard_library::load_standard_library;
 use crate::vm::VM;
 
-pub mod extern_function;
+pub mod foreign_function;
 pub mod value;
 
 pub struct Tgsl {
@@ -16,10 +16,10 @@ impl Tgsl {
   pub fn load_module<'src>(
     &mut self,
     source: &str,
-    extern_functions: Vec<ExternFunctionInfo>,
+    foreign_functions: Vec<ForeignFunctionInfo>,
   ) -> Result<(), String> {
     match self.compiler.compile(source) {
-      Ok(compiled_module) => self.vm.load_module(compiled_module, extern_functions),
+      Ok(compiled_module) => self.vm.load_module(compiled_module, foreign_functions),
       Err(errors) => Err(ErrorPrinter::to_string(&errors, source)),
     }
   }

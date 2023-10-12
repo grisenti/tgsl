@@ -143,7 +143,7 @@ impl Debug for FunctionCode {
             self.constants[self.code[index] as usize]
           );
         }
-        OpCode::CallNative | OpCode::CallExtern | OpCode::CallValue => {
+        OpCode::CallNative | OpCode::CallForeign | OpCode::CallValue => {
           index += 1;
           result += &format!("{code:?}: {}\n", self.code[index]);
         }

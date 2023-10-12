@@ -33,7 +33,7 @@ pub enum Token<'src> {
   For,
   Break,
   Struct,
-  Extern,
+  Foreign,
   Import,
   Module,
 
@@ -74,7 +74,7 @@ fn indentifier_token(input: &str) -> Token {
     "while" => Token::While,
     "for" => Token::For,
     "break" => Token::Break,
-    "extern" => Token::Extern,
+    "foreign" => Token::Foreign,
     "import" => Token::Import,
     "module" => Token::Module,
     _ => Token::Id(input),
