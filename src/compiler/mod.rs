@@ -24,6 +24,7 @@ pub struct CompiledModule {
   pub code: ModuleCode,
 }
 
+#[derive(Default)]
 pub struct Compiler {
   global_env: GlobalEnv,
 }
