@@ -34,6 +34,19 @@ impl ForeignFunctionInfo {
     }
   }
 
+  pub fn create_no_arguments<R, F>(name: &'static str, func: F) -> Self
+  where
+    R: ForeignValue,
+    F: Fn() -> R + 'static,
+  {
+    Self {
+      name,
+      parameter_types: Box::new([]),
+      return_type: R::to_type(),
+      function: Box::new(move |gc, _| unsafe { func().to_value(gc).vm_value }),
+    }
+  }
+
   pub fn get_name(&self) -> &str {
     self.name
   }
