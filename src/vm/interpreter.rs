@@ -75,17 +75,7 @@ pub fn interpret(
         let allocated_string = gc.alloc_string(const_str.clone());
         frame.push(TaggedValue::object(allocated_string))?;
       }
-      OpCode::MakeClosure => {
-        let func = frame.pop();
-        debug_assert!(func.kind == ValueType::FunctionId);
-        let captures = frame.read_byte();
-        let closure = TaggedValue::object(gc.alloc_closure(
-          ptr::addr_of!(functions[unsafe { func.as_id() }]),
-          captures as usize,
-        ));
-        // we popped `func`, so the final stack size is the same
-        unsafe { frame.push_no_overflow(closure) };
-      }
+      OpCode::MakeClosure => make_closure(&mut frame, functions, gc),
       OpCode::GetGlobal => {
         let id = unsafe { frame.pop().as_id() };
         let value = &globals[id];
@@ -193,89 +183,17 @@ pub fn interpret(
       OpCode::NotBool => {
         unary_operation!(frame, boolean, ValueType::Bool, !);
       }
-      OpCode::CallNative => {
-        let arguments = frame.read_byte() as usize;
-        let function_value = frame.pop();
-        debug_assert!(function_value.kind == ValueType::FunctionId);
-        let function_id = unsafe { function_value.as_id() };
-        let function = ptr::addr_of!(functions[function_id]);
-        let bp = unsafe { frame.sp.sub(arguments) };
-        let pc = unsafe { (*function).code.code.as_ptr() };
-        let sp = frame.sp;
-        frame.sp = unsafe { frame.sp.sub(arguments) };
-        call_stack[function_call] = frame;
-        function_call += 1;
-        if function_call >= MAX_CALLS {
-          eprintln!("STACK OVERFLOW!");
-          return Err(RuntimeError::StackOverflow);
-        }
-        frame = CallFrame {
-          bp,
-          sp,
-          pc,
-          function,
-          captures: ptr::null_mut(),
-        };
-      }
-      OpCode::CallForeign => {
-        let arguments = frame.read_byte() as usize;
-        let function_value = frame.pop();
-        debug_assert!(function_value.kind == ValueType::ForeignFunctionId);
-        let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
-        let id = unsafe { function_value.as_id() };
-        frame.pop_n(arguments);
-        frame.push(foreign_functions[id](api::gc::Gc(gc), args))?;
-      }
-      OpCode::CallValue => {
-        let arguments = frame.read_byte() as usize;
-        let function_value = frame.pop();
-        let (function, captures) = match function_value.kind {
-          ValueType::FunctionId => (
-            ptr::addr_of!(functions[unsafe { function_value.as_id() }]),
-            ptr::null_mut(),
-          ),
-          ValueType::Object => {
-            let closure = unsafe { function_value.as_object().as_closure() };
-            (closure.function, closure.captures.as_mut_ptr())
-          }
-          ValueType::ForeignFunctionId => {
-            let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
-            let id = unsafe { function_value.as_id() };
-            frame.pop_n(arguments);
-            frame.push(foreign_functions[id](api::gc::Gc(gc), args))?;
-            continue;
-          }
-          _ => unreachable!("trying to call invalid function {:?}", function_value.kind),
-        };
-        let bp = unsafe { frame.sp.sub(arguments) };
-        let pc = unsafe { (*function).code.code.as_ptr() };
-        let sp = frame.sp;
-        frame.sp = unsafe { frame.sp.sub(arguments) };
-        call_stack[function_call] = frame;
-        function_call += 1;
-        if function_call >= MAX_CALLS {
-          eprintln!("STACK OVERFLOW!");
-          return Err(RuntimeError::StackOverflow);
-        }
-        frame = CallFrame {
-          bp,
-          sp,
-          pc,
-          function,
-          captures,
-        };
-      }
-      OpCode::Construct => {
-        let n_members = frame.read_byte() as usize;
-        let mut members = Vec::with_capacity(n_members);
-        for _ in 0..n_members {
-          members.push(frame.pop());
-        }
-        // FIXME: remove this reverse
-        members.reverse();
-        // n_member could be 0, leading to a stack that's bigger than what we had before this operation
-        frame.push(TaggedValue::object(gc.alloc_aggregate(members)))?;
-      }
+      OpCode::CallNative => call_native(&mut frame, call_stack, functions, &mut function_call)?,
+      OpCode::CallForeign => call_foreign(&mut frame, foreign_functions, gc)?,
+      OpCode::CallValue => call_value(
+        &mut frame,
+        call_stack,
+        functions,
+        foreign_functions,
+        &mut function_call,
+        gc,
+      )?,
+      OpCode::Construct => construct(&mut frame, gc)?,
       OpCode::GetMember => {
         let aggregate = unsafe { frame.pop().as_object().as_aggregate() };
         let id = frame.read_byte();
@@ -328,4 +246,120 @@ pub fn interpret(
       other => todo!("{other:?} not implemented"),
     }
   }
+}
+
+fn call_native(
+  frame: &mut CallFrame,
+  call_stack: &mut [CallFrame],
+  functions: &[Function],
+  function_call: &mut usize,
+) -> Result<(), RuntimeError> {
+  let arguments = frame.read_byte() as usize;
+  let function_value = frame.pop();
+  debug_assert!(function_value.kind == ValueType::FunctionId);
+  let function_id = unsafe { function_value.as_id() };
+  let function = ptr::addr_of!(functions[function_id]);
+  let bp = unsafe { frame.sp.sub(arguments) };
+  let pc = unsafe { (*function).code.code.as_ptr() };
+  let sp = frame.sp;
+  frame.sp = unsafe { frame.sp.sub(arguments) };
+  call_stack[*function_call] = *frame;
+  *function_call += 1;
+  if *function_call >= MAX_CALLS {
+    eprintln!("STACK OVERFLOW!");
+    return Err(RuntimeError::StackOverflow);
+  }
+  *frame = CallFrame {
+    bp,
+    sp,
+    pc,
+    function,
+    captures: ptr::null_mut(),
+  };
+  Ok(())
+}
+
+fn make_closure(frame: &mut CallFrame, functions: &[Function], gc: &mut GC) {
+  let func = frame.pop();
+  debug_assert!(func.kind == ValueType::FunctionId);
+  let captures = frame.read_byte();
+  let closure = TaggedValue::object(gc.alloc_closure(
+    ptr::addr_of!(functions[unsafe { func.as_id() }]),
+    captures as usize,
+  ));
+  // we popped `func`, so the final stack size is the same
+  unsafe { frame.push_no_overflow(closure) };
+}
+
+fn call_foreign(
+  frame: &mut CallFrame,
+  foreign_functions: &[ForeignFunction],
+  gc: &mut GC,
+) -> Result<(), RuntimeError> {
+  let arguments = frame.read_byte() as usize;
+  let function_value = frame.pop();
+  debug_assert!(function_value.kind == ValueType::ForeignFunctionId);
+  let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
+  let id = unsafe { function_value.as_id() };
+  frame.pop_n(arguments);
+  frame.push(foreign_functions[id](api::gc::Gc(gc), args))?;
+  Ok(())
+}
+
+fn call_closure(
+  frame: &mut CallFrame,
+  call_stack: &mut [CallFrame],
+  function_call: &mut usize,
+) -> Result<(), RuntimeError> {
+  let arguments = frame.read_byte() as usize;
+  let function_value = frame.pop();
+  let closure = unsafe { function_value.as_object().as_closure() };
+  let function = closure.function;
+  let captures = closure.captures.as_mut_ptr();
+  let bp = unsafe { frame.sp.sub(arguments) };
+  let pc = unsafe { (*function).code.code.as_ptr() };
+  let sp = frame.sp;
+  frame.sp = unsafe { frame.sp.sub(arguments) };
+  call_stack[*function_call] = *frame;
+  *function_call += 1;
+  if *function_call >= MAX_CALLS {
+    eprintln!("STACK OVERFLOW!");
+    return Err(RuntimeError::StackOverflow);
+  }
+  *frame = CallFrame {
+    bp,
+    sp,
+    pc,
+    function,
+    captures,
+  };
+  Ok(())
+}
+
+fn call_value(
+  frame: &mut CallFrame,
+  call_stack: &mut [CallFrame],
+  functions: &[Function],
+  foreign_functions: &[ForeignFunction],
+  function_call: &mut usize,
+  gc: &mut GC,
+) -> Result<(), RuntimeError> {
+  match frame.top().kind {
+    ValueType::FunctionId => call_native(frame, call_stack, functions, function_call),
+    ValueType::ForeignFunctionId => call_foreign(frame, foreign_functions, gc),
+    ValueType::Object => call_closure(frame, call_stack, function_call),
+    _ => unreachable!(),
+  }
+}
+
+fn construct(frame: &mut CallFrame, gc: &mut GC) -> Result<(), RuntimeError> {
+  let n_members = frame.read_byte() as usize;
+  let mut members = Vec::with_capacity(n_members);
+  for _ in 0..n_members {
+    members.push(frame.pop());
+  }
+  // FIXME: remove this reverse
+  members.reverse();
+  // n_member could be 0, leading to a stack that's bigger than what we had before this operation
+  frame.push(TaggedValue::object(gc.alloc_aggregate(members)))
 }
