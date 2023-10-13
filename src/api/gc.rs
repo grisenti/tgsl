@@ -1,5 +1,5 @@
 use crate::value::Value;
-use crate::vm::runtime::gc;
+use crate::vm::gc;
 use crate::vm::value::TaggedValue;
 
 pub struct Gc<'vm>(pub(crate) &'vm mut gc::GC);

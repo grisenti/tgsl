@@ -5,19 +5,33 @@ use crate::compiler::types as comp_types;
 use crate::compiler::CompiledModule;
 use crate::foreign_function::{ForeignFunction, ForeignFunctionInfo};
 use crate::value as api_types;
+use crate::vm::call_frame::{CallFrame, EMPTY_CALL_FRAME};
+use crate::vm::gc::GC;
+use crate::vm::interpreter::interpret;
+use crate::vm::value::TaggedValue;
 
-use self::{address_table::AddressTable, runtime::RunTime};
+use self::address_table::AddressTable;
 
 mod address_table;
 mod chunk;
 
-pub mod runtime;
+mod call_frame;
+pub mod gc;
+mod interpreter;
 pub mod value;
 
-#[derive(Default)]
+const MAX_CALLS: usize = 64;
+const MAX_LOCALS: usize = u8::MAX as usize;
+const MAX_STACK: usize = MAX_CALLS * MAX_LOCALS;
+
 pub struct VM {
   address_table: AddressTable,
-  run_time: RunTime,
+  stack: [TaggedValue; MAX_STACK],
+  call_stack: [CallFrame; MAX_CALLS],
+  gc: GC,
+  globals: Vec<TaggedValue>,
+  functions: Vec<Function>,
+  foreign_functions: Vec<ForeignFunction>,
 }
 
 fn compare_types(provided_type: &api_types::Type, required_type: &comp_types::Type) -> bool {
@@ -91,19 +105,26 @@ impl VM {
     let globals_count = compiled_module.globals_count;
     let functions_count = compiled_module.code.functions.len();
     process_foreign_functions(
-      &mut self.run_time.foreign_functions,
+      &mut self.foreign_functions,
       &compiled_module.foreign_functions,
       foreign_functions,
     )?;
-    unsafe {
-      self
-        .run_time
-        .interpret(
-          GlobalChunk::new(compiled_module.code, &self.address_table),
-          globals_count as u32,
-        )
-        .map_err(|_| "stack overflow")?
-    };
+    let global_chunk = GlobalChunk::new(compiled_module.code, &self.address_table);
+    self.functions.extend(global_chunk.functions);
+    self.globals.resize(
+      self.globals.len() + globals_count as usize,
+      TaggedValue::none(),
+    );
+    interpret(
+      &global_chunk.global_code,
+      &mut self.stack,
+      &mut self.call_stack,
+      &mut self.gc,
+      &mut self.globals,
+      &self.functions,
+      &self.foreign_functions,
+    )
+    .map_err(|_| "stack overflow")?;
     self.address_table.update_table(
       globals_count as u32,
       compiled_module.foreign_functions.len() as u32,
@@ -111,8 +132,18 @@ impl VM {
     );
     Ok(())
   }
+}
 
-  pub fn new() -> Self {
-    Default::default()
+impl Default for VM {
+  fn default() -> Self {
+    Self {
+      address_table: Default::default(),
+      stack: [TaggedValue::none(); MAX_STACK],
+      call_stack: [EMPTY_CALL_FRAME; MAX_CALLS],
+      gc: Default::default(),
+      globals: Default::default(),
+      functions: Default::default(),
+      foreign_functions: Default::default(),
+    }
   }
 }

@@ -1,7 +1,6 @@
 use crate::compiler::codegen::bytecode::OpCode;
-use crate::vm::runtime::RuntimeError;
-use crate::vm::runtime::RuntimeError::StackOverflow;
-use crate::vm::{chunk::Function, runtime::MAX_LOCALS, value::TaggedValue};
+use crate::vm::interpreter::RuntimeError;
+use crate::vm::{chunk::Function, value::TaggedValue, MAX_LOCALS};
 
 #[derive(Clone, Copy)]
 pub struct CallFrame {
@@ -63,7 +62,7 @@ impl CallFrame {
 
   pub fn push(&mut self, val: TaggedValue) -> Result<(), RuntimeError> {
     if self.overflowed_stack() {
-      Err(StackOverflow)
+      Err(RuntimeError::StackOverflow)
     } else {
       unsafe { self.push_no_overflow(val) };
       Ok(())

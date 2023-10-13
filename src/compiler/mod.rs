@@ -1,4 +1,3 @@
-use crate::compiler::ast::json::ASTJSONPrinter;
 use crate::compiler::codegen::ModuleCode;
 use crate::compiler::functions::ForeignFunction;
 use crate::compiler::global_env::GlobalEnv;
@@ -32,9 +31,9 @@ pub struct Compiler {
 impl Compiler {
   pub fn compile(&mut self, source: &str) -> Result<CompiledModule, Vec<CompilerError>> {
     let ast = Parser::parse_program(source)?;
-    println!("{}", ASTJSONPrinter::print_to_string(&ast));
+    //println!("{}", ASTJSONPrinter::print_to_string(&ast));
     let module = SemanticChecker::check_program(&ast, &self.global_env)?;
-    println!("{:?}", &module.module_code);
+    //println!("{:?}", &module.module_code);
     let globals_count = module.globals_count as u16;
     if let Some(exports) = module.exports {
       self.global_env.export_module(exports);
