@@ -1,5 +1,6 @@
 use crate::api::gc::Gc;
-use crate::value::{ForeignValue, NativeValue, Type, Value};
+use crate::api::types::Type;
+use crate::value::{ForeignValue, NativeValue, Value};
 use crate::vm::value::TaggedValue;
 
 pub trait ForeignParameters<const N: usize> {

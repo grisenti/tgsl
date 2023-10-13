@@ -1,16 +1,10 @@
 use crate::api::gc::Gc;
+use crate::api::types::ToType;
 use crate::vm::value as vm_value;
 use crate::vm::value::TaggedValue;
 
 pub struct Value {
   pub(crate) vm_value: TaggedValue,
-}
-
-pub enum Type {
-  Num,
-  Str,
-  Bool,
-  Unit,
 }
 
 pub trait FromValue {
@@ -19,10 +13,6 @@ pub trait FromValue {
 
 pub trait ToValue {
   unsafe fn to_value(self, gc: Gc) -> Value;
-}
-
-pub trait ToType {
-  fn to_type() -> Type;
 }
 
 pub trait ForeignValue: ToValue + ToType {}
@@ -37,12 +27,6 @@ impl FromValue for () {
   unsafe fn from_value(_: Value) -> Self {}
 }
 
-impl ToType for () {
-  fn to_type() -> Type {
-    Type::Unit
-  }
-}
-
 impl ToValue for () {
   unsafe fn to_value(self, _: Gc) -> Value {
     Value {
@@ -54,12 +38,6 @@ impl ToValue for () {
 impl FromValue for bool {
   unsafe fn from_value(value: Value) -> Self {
     value.vm_value.as_bool()
-  }
-}
-
-impl ToType for bool {
-  fn to_type() -> Type {
-    Type::Bool
   }
 }
 
@@ -91,12 +69,6 @@ impl ToValue for f64 {
   }
 }
 
-impl ToType for f64 {
-  fn to_type() -> Type {
-    Type::Num
-  }
-}
-
 impl FromValue for &mut String {
   unsafe fn from_value(value: Value) -> Self {
     value.vm_value.as_object().as_string()
@@ -109,26 +81,8 @@ impl ToValue for String {
   }
 }
 
-impl ToType for String {
-  fn to_type() -> Type {
-    Type::Str
-  }
-}
-
-impl ToType for &mut String {
-  fn to_type() -> Type {
-    Type::Str
-  }
-}
-
 impl FromValue for &str {
   unsafe fn from_value(value: Value) -> Self {
     value.vm_value.as_object().as_string()
-  }
-}
-
-impl ToType for &str {
-  fn to_type() -> Type {
-    Type::Str
   }
 }

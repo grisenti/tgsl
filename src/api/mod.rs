@@ -6,6 +6,7 @@ use crate::vm::VM;
 
 pub mod foreign_function;
 pub mod gc;
+pub mod types;
 pub mod value;
 
 pub struct Tgsl {
