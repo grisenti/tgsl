@@ -1,7 +1,5 @@
 use ast::statement::*;
 
-use crate::return_if_err;
-
 use super::*;
 
 impl<'src> Parser<'src> {

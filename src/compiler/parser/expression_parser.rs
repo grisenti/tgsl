@@ -1,7 +1,5 @@
 use ast::expression::*;
 
-use crate::return_if_err;
-
 use super::*;
 
 const MAX_BIN_OP_PRECEDENCE: usize = 6;

@@ -1,13 +1,14 @@
-mod expression_parser;
-mod statement_parser;
+use crate::compiler::ast::parsed_type::{ParsedFunctionType, ParsedType};
+use crate::compiler::ast::statement::stmt;
 
 use super::ast::*;
 use super::errors::parser_err;
 use super::errors::CompilerError;
 use super::lexer::*;
 use super::*;
-use crate::compiler::ast::parsed_type::{ParsedFunctionType, ParsedType};
-use crate::compiler::ast::statement::{stmt};
+
+mod expression_parser;
+mod statement_parser;
 
 #[derive(PartialEq, Eq)]
 enum ParserState {
@@ -26,7 +27,6 @@ pub struct Parser<'src> {
 
 type TokenPairOpt<'parsing> = Option<(Token<'parsing>, SourceRange)>;
 
-#[macro_export]
 macro_rules! return_if_err {
   ($s:ident, $val:expr) => {
     if $s.in_panic_state() {
@@ -35,7 +35,8 @@ macro_rules! return_if_err {
   };
 }
 
-#[macro_export]
+pub(self) use return_if_err;
+
 macro_rules! check_error {
   ($s:ident, $result:expr, $invalid_value:expr) => {
     match $result {
@@ -48,6 +49,8 @@ macro_rules! check_error {
     }
   };
 }
+
+pub(self) use check_error;
 
 impl<'src> Parser<'src> {
   fn is_at_end(&self) -> bool {
@@ -289,15 +292,14 @@ impl<'src> Parser<'src> {
 
 #[cfg(test)]
 mod test {
+  use json::JsonValue;
+
   use crate::compiler::ast::json::ASTJSONPrinter;
   use crate::compiler::ast::visitor::{ExprVisitor, StmtVisitor};
   use crate::compiler::ast::AST;
   use crate::compiler::errors::CompilerError;
-  
   use crate::compiler::lexer::{Lexer, Token};
   use crate::compiler::parser::{Parser, ParserState};
-  
-  use json::JsonValue;
 
   pub struct TestParser {
     parser: Parser<'static>,
