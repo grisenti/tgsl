@@ -2,7 +2,8 @@ use chunk::*;
 
 use crate::compiler::functions;
 use crate::compiler::CompiledModule;
-use crate::foreign_function::{ForeignFunction, ForeignFunctionInfo};
+use crate::foreign_function::ForeignFunction;
+use crate::gc::Gc;
 use crate::vm::interpreter::Interpreter;
 use crate::vm::value::TaggedValue;
 
@@ -16,18 +17,20 @@ pub mod gc;
 mod interpreter;
 pub mod value;
 
+pub type ForeignCallable = Box<dyn Fn(Gc, &[TaggedValue]) -> TaggedValue>;
+
 pub struct VM {
   address_table: AddressTable,
   interpreter: Interpreter,
   functions: Vec<Function>,
-  foreign_functions: Vec<ForeignFunction>,
+  foreign_functions: Vec<ForeignCallable>,
   globals: Vec<TaggedValue>,
 }
 
 fn process_foreign_functions(
-  runtime_foreign_functions: &mut Vec<ForeignFunction>,
+  runtime_foreign_functions: &mut Vec<ForeignCallable>,
   declared_foreign_functions: &[functions::ForeignFunction],
-  foreign_functions: Vec<ForeignFunctionInfo>,
+  foreign_functions: Vec<ForeignFunction>,
 ) -> Result<(), String> {
   // ensure all declared functions are provided
   // ensure all provided functions exist
@@ -67,7 +70,7 @@ impl VM {
   pub fn load_module(
     &mut self,
     compiled_module: CompiledModule,
-    foreign_functions: Vec<ForeignFunctionInfo>,
+    foreign_functions: Vec<ForeignFunction>,
   ) -> Result<(), String> {
     let globals_count = compiled_module.globals_count;
     let functions_count = compiled_module.code.functions.len();

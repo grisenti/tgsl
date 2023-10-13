@@ -1,24 +1,27 @@
-use crate::api::gc::Gc;
 use crate::api::types::Type;
 use crate::value::{ForeignValue, NativeValue, Value};
 use crate::vm::value::TaggedValue;
+use crate::vm::ForeignCallable;
 
-pub trait ForeignParameters<const N: usize> {
+trait VmForeignParameters<const N: usize> {
   unsafe fn from_stack(values: &[TaggedValue]) -> Self;
 
   fn parameter_types() -> [Type; N];
 }
 
-pub type ForeignFunction = Box<dyn Fn(Gc, &[TaggedValue]) -> TaggedValue>;
+#[allow(private_bounds)]
+pub trait ForeignParameters<const N: usize>: VmForeignParameters<N> {}
 
-pub struct ForeignFunctionInfo {
+impl<T, const N: usize> ForeignParameters<N> for T where T: VmForeignParameters<N> {}
+
+pub struct ForeignFunction {
   name: &'static str,
   parameter_types: Box<[Type]>,
   return_type: Type,
-  function: ForeignFunction,
+  function: ForeignCallable,
 }
 
-impl ForeignFunctionInfo {
+impl ForeignFunction {
   pub fn create<P, R, F, const N: usize>(name: &'static str, func: F) -> Self
   where
     P: ForeignParameters<N>,
@@ -27,7 +30,7 @@ impl ForeignFunctionInfo {
   {
     Self {
       name,
-      parameter_types: Box::new(P::parameter_types()),
+      parameter_types: Box::new(<P as VmForeignParameters<N>>::parameter_types()),
       return_type: R::to_type(),
       function: Box::new(move |gc, values| unsafe {
         func(P::from_stack(values)).to_value(gc).vm_value
@@ -48,24 +51,24 @@ impl ForeignFunctionInfo {
     }
   }
 
-  pub fn get_name(&self) -> &str {
+  pub(crate) fn get_name(&self) -> &str {
     self.name
   }
 
-  pub fn get_parameters(&self) -> &[Type] {
+  pub(crate) fn get_parameters(&self) -> &[Type] {
     &self.parameter_types
   }
 
-  pub fn get_return_type(&self) -> &Type {
+  pub(crate) fn get_return_type(&self) -> &Type {
     &self.return_type
   }
 
-  pub fn get_foreign_function(self) -> ForeignFunction {
+  pub(crate) fn get_foreign_function(self) -> ForeignCallable {
     self.function
   }
 }
 
-impl<P: NativeValue> ForeignParameters<1> for P {
+impl<P: NativeValue> VmForeignParameters<1> for P {
   unsafe fn from_stack(values: &[TaggedValue]) -> Self {
     debug_assert_eq!(values.len(), 1);
     P::from_value(Value {
@@ -78,7 +81,7 @@ impl<P: NativeValue> ForeignParameters<1> for P {
   }
 }
 
-impl<P1: NativeValue, P2: NativeValue> ForeignParameters<2> for (P1, P2) {
+impl<P1: NativeValue, P2: NativeValue> VmForeignParameters<2> for (P1, P2) {
   unsafe fn from_stack(values: &[TaggedValue]) -> Self {
     debug_assert_eq!(values.len(), 2);
     (

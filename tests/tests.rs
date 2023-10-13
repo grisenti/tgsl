@@ -1,4 +1,4 @@
-use tgsl::foreign_function::ForeignFunctionInfo;
+use tgsl::foreign_function::ForeignFunction;
 use tgsl::Tgsl;
 
 macro_rules! test_files {
@@ -27,7 +27,7 @@ fn compile_and_run(test_file: &str) {
   tgsl
     .load_module(
       include_str!("../tests/test_utils.tgsl"),
-      vec![ForeignFunctionInfo::create("assert", assert)],
+      vec![ForeignFunction::create("assert", assert)],
     )
     .expect("error in utils file");
   if let Err(msg) = tgsl.load_module(test_file, vec![]) {
@@ -95,7 +95,7 @@ test_files!(variables,
 );
 
 mod modules {
-  use tgsl::foreign_function::ForeignFunctionInfo;
+  use tgsl::foreign_function::ForeignFunction;
   use tgsl::Tgsl;
 
   use crate::assert;
@@ -105,7 +105,7 @@ mod modules {
     tgsl
       .load_module(
         include_str!("../tests/test_utils.tgsl"),
-        vec![ForeignFunctionInfo::create("assert", assert)],
+        vec![ForeignFunction::create("assert", assert)],
       )
       .expect("error in utils file");
 

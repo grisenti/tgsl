@@ -3,11 +3,11 @@ use std::ptr;
 
 use crate::api;
 use crate::compiler::codegen::bytecode::OpCode;
-use crate::foreign_function::ForeignFunction;
 use crate::vm::call_frame::{CallFrame, EMPTY_CALL_FRAME};
 use crate::vm::chunk::Function;
 use crate::vm::gc::GC;
 use crate::vm::value::{TaggedValue, Value, ValueType};
+use crate::vm::ForeignCallable;
 
 pub const MAX_CALLS: usize = 64;
 pub const MAX_LOCALS: usize = u8::MAX as usize;
@@ -65,7 +65,7 @@ impl Interpreter {
     function: &Function,
     globals: &mut [TaggedValue],
     functions: &[Function],
-    foreign_functions: &[ForeignFunction],
+    foreign_functions: &[ForeignCallable],
   ) -> Result<(), RuntimeError> {
     let bp = self.stack.as_mut_ptr();
     let mut frame = CallFrame {
@@ -320,7 +320,7 @@ fn make_closure(frame: &mut CallFrame, functions: &[Function], gc: &mut GC) {
 
 fn call_foreign(
   frame: &mut CallFrame,
-  foreign_functions: &[ForeignFunction],
+  foreign_functions: &[ForeignCallable],
   gc: &mut GC,
 ) -> Result<(), RuntimeError> {
   let arguments = frame.read_byte() as usize;
@@ -367,7 +367,7 @@ fn call_value(
   frame: &mut CallFrame,
   call_stack: &mut [CallFrame],
   functions: &[Function],
-  foreign_functions: &[ForeignFunction],
+  foreign_functions: &[ForeignCallable],
   function_call: &mut usize,
   gc: &mut GC,
 ) -> Result<(), RuntimeError> {

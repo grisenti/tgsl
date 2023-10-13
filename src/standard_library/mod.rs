@@ -1,4 +1,4 @@
-use crate::foreign_function::ForeignFunctionInfo;
+use crate::foreign_function::ForeignFunction;
 use crate::Tgsl;
 
 fn println(value: &str) {
@@ -14,8 +14,8 @@ pub fn load_standard_library(tgsl: &mut Tgsl) {
     .load_module(
       include_str!("../../standard-library/io.tgsl"),
       vec![
-        ForeignFunctionInfo::create("print", print),
-        ForeignFunctionInfo::create("println", println),
+        ForeignFunction::create("print", print),
+        ForeignFunction::create("println", println),
       ],
     )
     .expect("error in loading the standard library");
