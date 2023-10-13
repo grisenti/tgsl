@@ -5,9 +5,7 @@ use crate::compiler::types as comp_types;
 use crate::compiler::CompiledModule;
 use crate::foreign_function::{ForeignFunction, ForeignFunctionInfo};
 use crate::value as api_types;
-use crate::vm::call_frame::{CallFrame, EMPTY_CALL_FRAME};
-use crate::vm::gc::GC;
-use crate::vm::interpreter::interpret;
+use crate::vm::interpreter::Interpreter;
 use crate::vm::value::TaggedValue;
 
 use self::address_table::AddressTable;
@@ -20,18 +18,12 @@ pub mod gc;
 mod interpreter;
 pub mod value;
 
-const MAX_CALLS: usize = 64;
-const MAX_LOCALS: usize = u8::MAX as usize;
-const MAX_STACK: usize = MAX_CALLS * MAX_LOCALS;
-
 pub struct VM {
   address_table: AddressTable,
-  stack: [TaggedValue; MAX_STACK],
-  call_stack: [CallFrame; MAX_CALLS],
-  gc: GC,
-  globals: Vec<TaggedValue>,
+  interpreter: Interpreter,
   functions: Vec<Function>,
   foreign_functions: Vec<ForeignFunction>,
+  globals: Vec<TaggedValue>,
 }
 
 fn compare_types(provided_type: &api_types::Type, required_type: &comp_types::Type) -> bool {
@@ -115,16 +107,15 @@ impl VM {
       self.globals.len() + globals_count as usize,
       TaggedValue::none(),
     );
-    interpret(
-      &global_chunk.global_code,
-      &mut self.stack,
-      &mut self.call_stack,
-      &mut self.gc,
-      &mut self.globals,
-      &self.functions,
-      &self.foreign_functions,
-    )
-    .map_err(|_| "stack overflow")?;
+    self
+      .interpreter
+      .interpret(
+        &global_chunk.global_code,
+        &mut self.globals,
+        &self.functions,
+        &self.foreign_functions,
+      )
+      .map_err(|_| "stack overflow")?;
     self.address_table.update_table(
       globals_count as u32,
       compiled_module.foreign_functions.len() as u32,
@@ -138,12 +129,10 @@ impl Default for VM {
   fn default() -> Self {
     Self {
       address_table: Default::default(),
-      stack: [TaggedValue::none(); MAX_STACK],
-      call_stack: [EMPTY_CALL_FRAME; MAX_CALLS],
-      gc: Default::default(),
-      globals: Default::default(),
+      interpreter: Default::default(),
       functions: Default::default(),
       foreign_functions: Default::default(),
+      globals: vec![],
     }
   }
 }

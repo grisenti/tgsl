@@ -1,6 +1,6 @@
 use crate::compiler::codegen::bytecode::OpCode;
-use crate::vm::interpreter::RuntimeError;
-use crate::vm::{chunk::Function, value::TaggedValue, MAX_LOCALS};
+use crate::vm::interpreter::{RuntimeError, MAX_LOCALS};
+use crate::vm::{chunk::Function, value::TaggedValue};
 
 #[derive(Clone, Copy)]
 pub struct CallFrame {
