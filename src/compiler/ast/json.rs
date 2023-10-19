@@ -14,8 +14,8 @@ use super::visitor::ExprVisitor;
 use super::visitor::StmtVisitor;
 use super::AST;
 
-impl From<Token<'_>> for JsonValue {
-  fn from(value: Token) -> Self {
+impl From<&Token<'_>> for JsonValue {
+  fn from(value: &Token) -> Self {
     JsonValue::String(format!("{:?}", value))
   }
 }
@@ -56,7 +56,7 @@ impl ExprVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
   fn visit_literal(&mut self, _ast: &AST, literal: &expr::Literal, _: ExprHandle) -> JsonValue {
     object! {
       "Literal": {
-        "value": literal.value
+        "value": &literal.value
       }
     }
   }
@@ -95,7 +95,7 @@ impl ExprVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
     object! {
       "Binary": {
         left: self.visit_expr(ast, binary.left),
-        operator: binary.operator,
+        operator: &binary.operator,
         right: self.visit_expr(ast, binary.right)
       }
     }
@@ -104,7 +104,7 @@ impl ExprVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
   fn visit_unary(&mut self, ast: &AST, unary: &expr::Unary, _: ExprHandle) -> JsonValue {
     object! {
       "Unary": {
-        "operator": unary.operator,
+        "operator": &unary.operator,
         "right": self.visit_expr(ast, unary.right),
       }
     }

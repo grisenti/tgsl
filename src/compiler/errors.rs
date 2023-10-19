@@ -76,24 +76,24 @@ pub mod parser_err {
     expected_identifier,
     "P001",
     "expected identifier, got {}",
-    got: Token
+    got: &Token
   );
 
   def_err!(
     expected_token,
     "P002",
     "expected {}, got {}",
-    expected: Token,
-    got: Token
+    expected: &Token,
+    got: &Token
   );
 
-  def_err!(unexpected_token, "P002", "expected token {}", got: Token);
+  def_err!(unexpected_token, "P002", "expected token {}", got: &Token);
 
   def_err!(
     expected_type_name,
     "P003",
     "expected type name, got {}",
-    got: Token
+    got: &Token
   );
 
   def_err!(
@@ -115,7 +115,7 @@ pub mod parser_err {
     expected_primary,
     "P007",
     "expected literal, identifier or '(', got {}",
-    got: Token
+    got: &Token
   );
 
   def_err!(
@@ -140,7 +140,7 @@ pub mod parser_err {
     expected_module_identifier,
     "P012",
     "expected module identifier, got {}",
-    got: Token
+    got: &Token
   );
 
   def_err!(
@@ -180,7 +180,7 @@ pub mod ty_err {
     incorrect_unary_operator,
     "TY002",
     "cannot apply unary operator '{}' to operand {}",
-    operator: Token,
+    operator: &Token,
     rhs_type: &Type
   );
 
@@ -188,7 +188,7 @@ pub mod ty_err {
     incorrect_binary_operator,
     "TY003",
     "cannot apply operator {} to operands {} and {}",
-    operator: Token,
+    operator: &Token,
     lhs_type: &Type,
     rhs_type: &Type
   );

@@ -1,5 +1,19 @@
 # Language
 
+## Values
+
+### Booleans
+
+### Strings
+Strings are included inside double quotes `"`, and can contain the following escape characters:
+| escape sequence | replacement       |
+|-----------------|-------------------|
+| `\\`            | `\`               |
+| `\"`            | `"`               |
+| `\n`            | newline character |
+| `\r`            | carrage return    |
+| `\t`            | tab               |
+
 ## Types
 
 The default types are the following:

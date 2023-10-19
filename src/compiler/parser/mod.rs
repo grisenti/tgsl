@@ -97,30 +97,30 @@ impl<'src> Parser<'src> {
       self.advance();
       name
     } else {
-      self.emit_error(parser_err::expected_identifier(&self.lex, self.lookahead));
+      self.emit_error(parser_err::expected_identifier(&self.lex, &self.lookahead));
       ERROR_ID
     }
   }
 
   fn advance(&mut self) -> Token<'src> {
     match self.lex.next_token() {
-      Ok(next) => {
-        self.lookahead = next;
+      Ok(mut next) => {
+        std::mem::swap(&mut next, &mut self.lookahead);
         next
       }
       Err(err) => {
         self.emit_error(err);
         self.state = ParserState::UnrecoverableError;
-        Token::EndOfFile
+        Token::Error
       }
     }
   }
 
   fn unexpected_token(&mut self, expected: Option<Token>) {
     let err = if let Some(tok) = expected {
-      parser_err::expected_token(&self.lex, tok, self.lookahead)
+      parser_err::expected_token(&self.lex, &tok, &self.lookahead)
     } else {
-      parser_err::unexpected_token(&self.lex, self.lookahead)
+      parser_err::unexpected_token(&self.lex, &self.lookahead)
     };
     self.emit_error(err);
   }
@@ -128,9 +128,8 @@ impl<'src> Parser<'src> {
   fn matches_alternatives(&mut self, alternatives: &[Token<'static>]) -> TokenPairOpt<'src> {
     return_if_err!(self, None);
     if alternatives.contains(&self.lookahead) {
-      let res = (self.lookahead, self.lex.previous_token_range());
-      self.advance();
-      Some(res)
+      let token = self.advance();
+      Some((token, self.lex.previous_token_range()))
     } else {
       None
     }
@@ -225,7 +224,7 @@ impl<'src> Parser<'src> {
           )))
       }
       _ => {
-        let err = parser_err::expected_type_name(&self.lex, self.lookahead);
+        let err = parser_err::expected_type_name(&self.lex, &self.lookahead);
         self.emit_error(err);
         TypeHandle::INVALID
       }

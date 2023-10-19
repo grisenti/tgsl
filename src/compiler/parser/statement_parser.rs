@@ -290,7 +290,7 @@ impl<'src> Parser<'src> {
         SourceRange::combine(stmt_start, stmt_end),
       )
     } else {
-      let err = parser_err::expected_module_identifier(&self.lex, self.lookahead);
+      let err = parser_err::expected_module_identifier(&self.lex, &self.lookahead);
       self.emit_error(err);
       StmtHandle::INVALID
     }

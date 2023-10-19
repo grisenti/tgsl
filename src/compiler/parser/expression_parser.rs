@@ -82,15 +82,14 @@ impl<'src> Parser<'src> {
 
     match self.lookahead {
       Token::Number(_) | Token::String(_) | Token::True | Token::False => {
-        let value = self.lookahead;
         let literal_sr = self.lex.previous_token_range();
-        self.advance();
+        let value = self.advance();
         self.ast.add_expression(expr::Literal { value }, literal_sr)
       }
       Token::Id(id) => self.parse_id(id),
       Token::Basic(c) if c == '(' => self.parse_paren(),
       _ => {
-        let err = parser_err::expected_primary(&self.lex, self.lookahead);
+        let err = parser_err::expected_primary(&self.lex, &self.lookahead);
         self.emit_error(err);
         ExprHandle::INVALID
       }
@@ -316,7 +315,7 @@ mod test {
     let literal = parse_correct_expression("\"str\"");
     assert_eq!(
       literal["Literal"]["value"],
-      JsonValue::from(Token::String("str"))
+      JsonValue::from(&Token::String("str".into()))
     );
   }
 
@@ -325,14 +324,14 @@ mod test {
     let literal = parse_correct_expression("1");
     assert_eq!(
       literal["Literal"]["value"],
-      JsonValue::from(Token::Number(1.0))
+      JsonValue::from(&Token::Number(1.0))
     );
   }
 
   #[test]
   fn literal_bool() {
     let literal = parse_correct_expression("true");
-    assert_eq!(literal["Literal"]["value"], JsonValue::from(Token::True));
+    assert_eq!(literal["Literal"]["value"], JsonValue::from(&Token::True));
   }
 
   #[test]
@@ -346,7 +345,7 @@ mod test {
     let literal = parse_correct_expression("(1)");
     assert_eq!(
       literal["Paren"]["expr"]["Literal"]["value"],
-      JsonValue::from(Token::Number(1.0))
+      JsonValue::from(&Token::Number(1.0))
     );
   }
 
@@ -363,14 +362,14 @@ mod test {
   fn binary_op() {
     let bin_op = parse_correct_expression("1 + 1");
     let bin_op = &bin_op["Binary"];
-    assert_eq!(bin_op["operator"], JsonValue::from(Token::Basic('+')));
+    assert_eq!(bin_op["operator"], JsonValue::from(&Token::Basic('+')));
     assert_eq!(
       bin_op["left"]["Literal"]["value"],
-      JsonValue::from(Token::Number(1.0))
+      JsonValue::from(&Token::Number(1.0))
     );
     assert_eq!(
       bin_op["right"]["Literal"]["value"],
-      JsonValue::from(Token::Number(1.0))
+      JsonValue::from(&Token::Number(1.0))
     );
   }
 
@@ -390,15 +389,15 @@ mod test {
     assert_eq!(call["arguments"].len(), 3);
     assert_eq!(
       call["arguments"][0]["Literal"]["value"],
-      JsonValue::from(Token::Number(1.0))
+      JsonValue::from(&Token::Number(1.0))
     );
     assert_eq!(
       call["arguments"][1]["Literal"]["value"],
-      JsonValue::from(Token::Number(2.0))
+      JsonValue::from(&Token::Number(2.0))
     );
     assert_eq!(
       call["arguments"][2]["Literal"]["value"],
-      JsonValue::from(Token::String("str"))
+      JsonValue::from(&Token::String("str".into()))
     );
   }
 
@@ -408,7 +407,7 @@ mod test {
     let call = &call["DotCall"];
     assert_eq!(
       call["lhs"]["Literal"]["value"],
-      JsonValue::from(Token::Number(1.0))
+      JsonValue::from(&Token::Number(1.0))
     );
     assert!(call["arguments"].is_empty());
   }
@@ -419,12 +418,12 @@ mod test {
     let call = &call["DotCall"];
     assert_eq!(
       call["lhs"]["Literal"]["value"],
-      JsonValue::from(Token::Number(1.0))
+      JsonValue::from(&Token::Number(1.0))
     );
     assert_eq!(call["arguments"].len(), 1);
     assert_eq!(
       call["arguments"][0]["Literal"]["value"],
-      JsonValue::from(Token::String("1234string"))
+      JsonValue::from(&Token::String("1234string".into()))
     );
   }
 
@@ -443,11 +442,11 @@ mod test {
     assert_eq!(constructor["arguments"].len(), 2);
     assert_eq!(
       constructor["arguments"][0]["Literal"]["value"],
-      JsonValue::from(Token::Number(1.0))
+      JsonValue::from(&Token::Number(1.0))
     );
     assert_eq!(
       constructor["arguments"][1]["Literal"]["value"],
-      JsonValue::from(Token::String("hello"))
+      JsonValue::from(&Token::String("hello".into()))
     );
   }
 

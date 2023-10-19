@@ -78,9 +78,9 @@ fn check_arguments(
 
 impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
   fn visit_literal(&mut self, _ast: &'a AST, literal: &Literal, _: ExprHandle) -> Type {
-    match literal.value {
+    match &literal.value {
       Token::Number(value) => {
-        unsafe { self.code().push_constant(ConstantValue::Number(value)) };
+        unsafe { self.code().push_constant(ConstantValue::Number(*value)) };
         Type::Num
       }
       Token::String(value) => {
@@ -155,7 +155,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
       } else if !rhs.is_error() || lhs.is_error() {
         self.emit_error(ty_err::incorrect_binary_operator(
           expr_handle.get_source_range(ast),
-          binary.operator,
+          &binary.operator,
           &lhs,
           &rhs,
         ));
@@ -175,7 +175,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     } else {
       self.emit_error(ty_err::incorrect_binary_operator(
         expr_handle.get_source_range(ast),
-        binary.operator,
+        &binary.operator,
         &lhs,
         &rhs,
       ));
@@ -195,7 +195,7 @@ impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
     } else {
       self.emit_error(ty_err::incorrect_unary_operator(
         expr_handle.get_source_range(ast),
-        unary.operator,
+        &unary.operator,
         &rhs,
       ));
       Type::Error

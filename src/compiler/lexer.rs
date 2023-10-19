@@ -1,12 +1,15 @@
+use std::borrow::Cow;
 use std::{fmt::Display, str::CharIndices};
 
 use crate::compiler::errors::lex_err;
 
 use super::errors::CompilerResult;
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+type LexedString<'src> = Cow<'src, str>;
+
+#[derive(Clone, PartialEq, Debug)]
 pub enum Token<'src> {
-  String(&'src str),
+  String(LexedString<'src>),
   Number(f64),
   Id(&'src str),
   Basic(char),
@@ -38,6 +41,8 @@ pub enum Token<'src> {
   Module,
 
   EndOfFile,
+
+  Error,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -129,7 +134,7 @@ impl<'src> Lexer<'src> {
       if let Some((_, kind)) = alternatives.iter().find(|(c, _)| *c == ch) {
         self.advance();
         self.advance();
-        return *kind;
+        return kind.clone();
       }
     }
     self.match_basic()
@@ -217,33 +222,56 @@ impl<'src> Lexer<'src> {
     Token::Number(self.source[tok_start..self.total_offset].parse().unwrap()) // number already checked
   }
 
-  fn process_string(&mut self) -> CompilerResult<Token<'src>> {
-    assert!(self.lookahead == '"');
-    let tok_start = self.total_offset;
-    let mut escaped = false;
-    self.advance();
+  fn process_escaped_string(&mut self, token_start: usize) -> CompilerResult<Token<'src>> {
+    let mut escaped_string = self.source[token_start..self.total_offset].to_string();
     while !self.is_at_end() {
       match self.lookahead {
-        '"' => {
-          if !escaped {
-            break;
-          } else {
-            escaped = false;
+        '\n' => return Err(lex_err::incomplete_string(self as &_)),
+        '\\' => {
+          self.advance();
+          match self.lookahead {
+            '\\' => escaped_string.push('\\'),
+            '"' => escaped_string.push('"'),
+            'n' => escaped_string.push('\n'),
+            'r' => escaped_string.push('\r'),
+            't' => escaped_string.push('\t'),
+            other => todo!(),
           }
         }
-        '\\' => escaped = true,
-        '\n' => break,
-        _ => {}
+        '\"' => break,
+        other => escaped_string.push(other),
       }
       self.advance();
     }
     if self.lookahead == '"' {
       self.advance();
-      Ok(Token::String(
-        &self.source[tok_start + 1..self.total_offset - 1],
-      ))
+      Ok(Token::String(escaped_string.into()))
     } else {
-      Err(lex_err::incomplete_string(&*self))
+      Err(lex_err::incomplete_string(self as &_))
+    }
+  }
+
+  fn process_string(&mut self) -> CompilerResult<Token<'src>> {
+    assert_eq!(self.lookahead, '"');
+    self.advance();
+    let tok_start = self.total_offset;
+    let mut escaped = false;
+    while !self.is_at_end() {
+      // if its '\', we have an escape ch
+      match self.lookahead {
+        '\n' => return Err(lex_err::incomplete_string(self as &_)),
+        '\\' => return self.process_escaped_string(tok_start),
+        '\"' => break,
+        _ => {}
+      }
+      self.advance();
+    }
+    if self.lookahead == '"' {
+      let tok_end = self.total_offset;
+      self.advance();
+      Ok(Token::String(self.source[tok_start..tok_end].into()))
+    } else {
+      Err(lex_err::incomplete_string(self as &_))
     }
   }
 
@@ -339,14 +367,18 @@ mod test {
   }
 
   #[test]
-  fn lex_strings() {
-    let mut lex = Lexer::new(
-      r#"
-      "simple" "with \"quotes\""
-      "#,
+  fn lex_simple_strings() {
+    let mut lex = Lexer::new("\"simple string\"");
+    assert_eq!(lex.next_token(), Ok(Token::String("simple string".into())));
+  }
+
+  #[test]
+  fn lex_escaped_strings() {
+    let mut lex = Lexer::new(r#""\tescaped \r\n \"string""#);
+    assert_eq!(
+      lex.next_token(),
+      Ok(Token::String("\tescaped \r\n \"string".into()))
     );
-    assert_eq!(lex.next_token(), Ok(Token::String("simple")));
-    assert_eq!(lex.next_token(), Ok(Token::String("with \\\"quotes\\\"")));
   }
 
   #[test]
