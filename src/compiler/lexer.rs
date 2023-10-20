@@ -222,6 +222,17 @@ impl<'src> Lexer<'src> {
     Token::Number(self.source[tok_start..self.total_offset].parse().unwrap()) // number already checked
   }
 
+  fn close_string(&mut self) {
+    while !self.is_at_end() && self.lookahead != '"' && self.lookahead != '\n' {
+      self.advance();
+    }
+    if self.lookahead == '"' {
+      self.advance();
+    } else {
+      todo!()
+    }
+  }
+
   fn process_escaped_string(&mut self, token_start: usize) -> CompilerResult<Token<'src>> {
     let mut escaped_string = self.source[token_start..self.total_offset].to_string();
     while !self.is_at_end() {
@@ -235,7 +246,14 @@ impl<'src> Lexer<'src> {
             'n' => escaped_string.push('\n'),
             'r' => escaped_string.push('\r'),
             't' => escaped_string.push('\t'),
-            other => todo!(),
+            other => {
+              let sequence_start = self.total_offset - 1;
+              self.close_string();
+              return Err(lex_err::invalid_escape_character(
+                SourceRange::new(sequence_start, sequence_start + 2),
+                other,
+              ));
+            }
           }
         }
         '\"' => break,

@@ -65,6 +65,8 @@ pub mod lex_err {
   use super::{CompilerError, SourceRangeProvider};
 
   def_err!(incomplete_string, "L001", "incomplete string");
+
+  def_err!(invalid_escape_character, "L002", "'{}' is an invalid escape character", ch: char);
 }
 
 pub mod parser_err {
