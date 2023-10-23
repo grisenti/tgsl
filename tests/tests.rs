@@ -1,4 +1,4 @@
-use tgsl::foreign_function::ForeignFunction;
+use tgsl::module::Module;
 use tgsl::Tgsl;
 
 macro_rules! test_files {
@@ -24,13 +24,12 @@ fn assert(value: bool) {
 
 fn compile_and_run(test_file: &str) {
   let mut tgsl = Tgsl::default();
+  let mut assert_module = Module::new(include_str!("../tests/test_utils.tgsl"));
+  assert_module.add_function("assert", assert);
   tgsl
-    .load_module(
-      include_str!("../tests/test_utils.tgsl"),
-      vec![ForeignFunction::create("assert", assert)],
-    )
+    .load_module(assert_module)
     .expect("error in utils file");
-  if let Err(msg) = tgsl.load_module(test_file, vec![]) {
+  if let Err(msg) = tgsl.load_module(Module::new(test_file)) {
     panic!("{}", msg);
   }
 }
@@ -95,22 +94,20 @@ test_files!(variables,
 );
 
 mod modules {
-  use tgsl::foreign_function::ForeignFunction;
+  use tgsl::module::Module;
   use tgsl::Tgsl;
 
   use crate::assert;
 
   fn compile_and_run_multiple(test_files: &[&str]) {
     let mut tgsl = Tgsl::default();
+    let mut assert_module = Module::new(include_str!("../tests/test_utils.tgsl"));
+    assert_module.add_function("assert", assert);
     tgsl
-      .load_module(
-        include_str!("../tests/test_utils.tgsl"),
-        vec![ForeignFunction::create("assert", assert)],
-      )
+      .load_module(assert_module)
       .expect("error in utils file");
-
-    for test_file in test_files {
-      if let Err(msg) = tgsl.load_module(test_file, vec![]) {
+    for source in test_files {
+      if let Err(msg) = tgsl.load_module(Module::new(source)) {
         panic!("{}", msg);
       }
     }

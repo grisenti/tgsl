@@ -14,15 +14,15 @@ pub trait ForeignParameters<const N: usize>: VmForeignParameters<N> {}
 
 impl<T, const N: usize> ForeignParameters<N> for T where T: VmForeignParameters<N> {}
 
-pub struct ForeignFunction {
-  name: &'static str,
+pub struct ForeignFunction<'name> {
+  name: &'name str,
   parameter_types: Box<[Type]>,
   return_type: Type,
   function: ForeignCallable,
 }
 
-impl ForeignFunction {
-  pub fn create<P, R, F, const N: usize>(name: &'static str, func: F) -> Self
+impl<'name> ForeignFunction<'name> {
+  pub fn create<P, R, F, const N: usize>(name: &'name str, func: F) -> Self
   where
     P: ForeignParameters<N>,
     R: ForeignValue,
