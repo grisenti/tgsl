@@ -59,6 +59,7 @@ impl From<FunctionSignature> for Type {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[non_exhaustive]
 pub enum Type {
   Any,
   Str,

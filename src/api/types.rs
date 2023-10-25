@@ -1,30 +1,4 @@
-use crate::compiler::types::Type as InternalType;
-
-pub struct Type(pub(crate) InternalType);
-
-impl PartialEq<InternalType> for Type {
-  fn eq(&self, other: &InternalType) -> bool {
-    self.0 == *other
-  }
-}
-
-impl Type {
-  pub fn unit() -> Self {
-    Self(InternalType::Nothing)
-  }
-
-  pub fn str() -> Self {
-    Self(InternalType::Str)
-  }
-
-  pub fn bool() -> Self {
-    Self(InternalType::Bool)
-  }
-
-  pub fn num() -> Self {
-    Self(InternalType::Num)
-  }
-}
+pub use crate::compiler::types::Type;
 
 pub trait ToType {
   fn to_type() -> Type;
@@ -32,36 +6,36 @@ pub trait ToType {
 
 impl ToType for () {
   fn to_type() -> Type {
-    Type::unit()
+    Type::Nothing
   }
 }
 
 impl ToType for bool {
   fn to_type() -> Type {
-    Type::bool()
+    Type::Bool
   }
 }
 
 impl ToType for f64 {
   fn to_type() -> Type {
-    Type::num()
+    Type::Num
   }
 }
 
 impl ToType for String {
   fn to_type() -> Type {
-    Type::str()
+    Type::Str
   }
 }
 
 impl ToType for &mut String {
   fn to_type() -> Type {
-    Type::str()
+    Type::Str
   }
 }
 
 impl ToType for &str {
   fn to_type() -> Type {
-    Type::str()
+    Type::Str
   }
 }

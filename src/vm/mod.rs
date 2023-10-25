@@ -98,7 +98,7 @@ fn process_foreign_functions(
       if foreign_func.get_return_type() != func.signature.get_return_type() {
         errors.push(ForeignBindingError::InconsistentReturnType {
           source_function: func.signature.format_with_name(&func.name),
-          provided_return_type: foreign_func.get_return_type().0.to_string(),
+          provided_return_type: foreign_func.get_return_type().to_string(),
         });
       }
       functions.push((func.relative_address, foreign_func.get_foreign_function()))
