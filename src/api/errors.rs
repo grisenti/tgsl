@@ -7,7 +7,7 @@ pub enum RuntimeError {
   StackOverflow,
 }
 
-pub(crate) enum ForeignBindingError {
+pub enum ForeignBindingError {
   InconsistentReturnType {
     source_function: String,
     provided_return_type: String,
