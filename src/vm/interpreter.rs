@@ -3,6 +3,7 @@ use std::ptr;
 
 use crate::api;
 use crate::compiler::codegen::bytecode::OpCode;
+use crate::errors::RuntimeError;
 use crate::vm::call_frame::{CallFrame, EMPTY_CALL_FRAME};
 use crate::vm::chunk::Function;
 use crate::vm::gc::GC;
@@ -37,10 +38,6 @@ macro_rules! unary_operation {
     // popped and pushed a value, the size of the stack does not change
 	  unsafe {$s.push_no_overflow(TaggedValue{ kind: $kind, value: Value{ $t: $op rhs }})};
 	};
-}
-
-pub enum RuntimeError {
-  StackOverflow,
 }
 
 pub struct Interpreter {

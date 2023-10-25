@@ -1,5 +1,6 @@
 use crate::compiler::codegen::bytecode::OpCode;
-use crate::vm::interpreter::{RuntimeError, MAX_LOCALS};
+use crate::errors::RuntimeError;
+use crate::vm::interpreter::MAX_LOCALS;
 use crate::vm::{chunk::Function, value::TaggedValue};
 
 #[derive(Clone, Copy)]

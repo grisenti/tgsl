@@ -31,6 +31,14 @@ impl FunctionSignature {
   pub fn get_parameters(&self) -> &[Type] {
     &self.signature[0..self.signature.len() - 1]
   }
+
+  pub fn format_with_name(&self, name: &str) -> String {
+    format!(
+      "fn {name}({}) -> {}",
+      parameter_types_to_string(self.get_parameters()),
+      self.get_return_type()
+    )
+  }
 }
 
 impl Display for FunctionSignature {

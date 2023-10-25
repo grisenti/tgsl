@@ -30,7 +30,7 @@ fn compile_and_run(test_file: &str) {
     .load_module(assert_module)
     .expect("error in utils file");
   if let Err(msg) = tgsl.load_module(Module::new(test_file)) {
-    panic!("{}", msg);
+    panic!("{:?}", msg);
   }
 }
 
@@ -108,7 +108,7 @@ mod modules {
       .expect("error in utils file");
     for source in test_files {
       if let Err(msg) = tgsl.load_module(Module::new(source)) {
-        panic!("{}", msg);
+        panic!("{:?}", msg);
       }
     }
   }

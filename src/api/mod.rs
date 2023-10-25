@@ -1,9 +1,10 @@
 use crate::api::module::Module;
-use crate::compiler::errors::ErrorPrinter;
 use crate::compiler::Compiler;
+use crate::errors::LoadModuleError;
 use crate::standard_library::load_standard_library;
 use crate::vm::VM;
 
+pub mod errors;
 pub mod foreign_function;
 pub mod gc;
 pub mod module;
@@ -16,12 +17,12 @@ pub struct Tgsl {
 }
 
 impl Tgsl {
-  pub fn load_module(&mut self, module: Module) -> Result<(), String> {
+  pub fn load_module(&mut self, module: Module) -> Result<(), LoadModuleError> {
     match self.compiler.compile(module.source) {
       Ok(compiled_module) => self
         .vm
         .load_module(compiled_module, module.foreign_functions),
-      Err(errors) => Err(ErrorPrinter::to_string(&errors, module.source)),
+      Err(errors) => Err(LoadModuleError::CompilerErrors(errors)),
     }
   }
 }
