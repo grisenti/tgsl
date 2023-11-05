@@ -33,6 +33,15 @@ impl ForeignCallable {
       context_type_id: TypeId::of::<C>(),
     }
   }
+
+  pub(crate) fn new_no_context(
+    function: Box<dyn Fn(&[TaggedValue], Gc, &mut dyn Any) -> TaggedValue>,
+  ) -> Self {
+    Self {
+      function,
+      context_type_id: TypeId::of::<()>(),
+    }
+  }
   fn call(&self, arguments: &[TaggedValue], context: &mut dyn Any, gc: Gc) -> TaggedValue {
     debug_assert_eq!((context as &dyn Any).type_id(), self.context_type_id);
     (self.function)(arguments, gc, context)

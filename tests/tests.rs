@@ -18,7 +18,7 @@ macro_rules! test_files {
   };
 }
 
-fn assert(context: &mut TestUtils, value: bool) {
+fn assert(value: bool) {
   assert!(value);
 }
 
@@ -29,7 +29,7 @@ impl Library for TestUtils {
     tgls
       .load_module(include_str!("../tests/test_utils.tgsl"))
       .bind_function("assert", assert)
-      .execute(&mut ())
+      .execute()
       .expect("errors loading utils file")
   }
 }
@@ -37,7 +37,7 @@ impl Library for TestUtils {
 fn compile_and_run(test_file: &str) {
   let mut tgsl = Tgsl::default();
   tgsl.load_library(TestUtils());
-  if let Err(msg) = tgsl.load_module(test_file).execute(&mut ()) {
+  if let Err(msg) = tgsl.load_module(test_file).execute() {
     panic!("{:?}", msg);
   }
 }
@@ -110,7 +110,7 @@ mod modules {
     let mut tgsl = Tgsl::default();
     tgsl.load_library(TestUtils());
     for source in test_files {
-      if let Err(msg) = tgsl.load_module(source).execute(&mut ()) {
+      if let Err(msg) = tgsl.load_module(source).execute() {
         panic!("{:?}", msg);
       }
     }

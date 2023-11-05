@@ -1,11 +1,11 @@
 use crate::library::Library;
 use crate::Tgsl;
 
-fn println(_: &mut StandardLibrary, value: &str) {
+fn println(value: &str) {
   println!("{}", value.to_string());
 }
 
-fn print(_: &mut StandardLibrary, value: &str) {
+fn print(value: &str) {
   print!("{}", value.to_string());
 }
 
@@ -17,7 +17,7 @@ impl Library for StandardLibrary {
       .load_module(include_str!("../../standard-library/io.tgsl"))
       .bind_function("println", println)
       .bind_function("print", print)
-      .execute(&mut ())
+      .execute()
       .expect("errors loading the standard library");
   }
 }

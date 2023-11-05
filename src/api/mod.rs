@@ -88,7 +88,14 @@ impl<'tgsl> ModuleLoader<'tgsl> {
     self
   }
 
-  pub fn execute<Context: 'static>(mut self, context: &mut Context) -> Result<(), LoadModuleError> {
+  pub fn execute(self) -> Result<(), LoadModuleError> {
+    self.execute_with_context(&mut ())
+  }
+
+  pub fn execute_with_context<Context: 'static>(
+    mut self,
+    context: &mut Context,
+  ) -> Result<(), LoadModuleError> {
     if !self.compiler_errors.is_empty() {
       Err(LoadModuleError::CompilerErrors(self.compiler_errors))
     } else if !self.function_binding_errors.is_empty() {

@@ -80,3 +80,24 @@ where
     }))
   }
 }
+
+impl<F, Params, Ret> ForeignFunction<PhantomData<(Params, Ret)>> for F
+where
+  Params: ForeignParameters,
+  Ret: ForeignValue,
+  F: Fn(Params) -> Ret + 'static,
+{
+  fn parameters() -> Vec<Type> {
+    Params::parameter_types()
+  }
+
+  fn return_type() -> Type {
+    Ret::to_type()
+  }
+
+  fn raw_foreign_function(self) -> ForeignCallable {
+    ForeignCallable::new_no_context(Box::new(move |arguments, gc, _| unsafe {
+      self(Params::from_stack(arguments)).to_value(gc).vm_value
+    }))
+  }
+}
