@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::api::types::Type;
+use crate::errors::RuntimeError;
 use crate::value::{ForeignValue, NativeValue, Value};
 use crate::vm::value::TaggedValue;
 use crate::vm::ForeignCallable;
@@ -71,12 +72,14 @@ where
 
   fn raw_foreign_function(self) -> ForeignCallable {
     ForeignCallable::new::<C>(Box::new(move |arguments, gc, context| unsafe {
-      self(
-        context.downcast_mut().unwrap(),
-        Params::from_stack(arguments),
+      Ok(
+        self(
+          context.downcast_mut().unwrap(),
+          Params::from_stack(arguments),
+        )
+        .to_value(gc)
+        .vm_value,
       )
-      .to_value(gc)
-      .vm_value
     }))
   }
 }
@@ -97,7 +100,28 @@ where
 
   fn raw_foreign_function(self) -> ForeignCallable {
     ForeignCallable::new_no_context(Box::new(move |arguments, gc, _| unsafe {
-      self(Params::from_stack(arguments)).to_value(gc).vm_value
+      Ok(self(Params::from_stack(arguments)).to_value(gc).vm_value)
+    }))
+  }
+}
+
+impl<F, Params, Ret> ForeignFunction<PhantomData<(Params, Result<Ret, RuntimeError>)>> for F
+where
+  Params: ForeignParameters,
+  Ret: ForeignValue,
+  F: Fn(Params) -> Result<Ret, RuntimeError> + 'static,
+{
+  fn parameters() -> Vec<Type> {
+    Params::parameter_types()
+  }
+
+  fn return_type() -> Type {
+    Ret::to_type()
+  }
+
+  fn raw_foreign_function(self) -> ForeignCallable {
+    ForeignCallable::new_no_context(Box::new(move |arguments, gc, _| unsafe {
+      self(Params::from_stack(arguments)).map(|v| v.to_value(gc).vm_value)
     }))
   }
 }

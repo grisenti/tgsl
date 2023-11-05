@@ -342,15 +342,15 @@ fn call_foreign(
   frame.pop_n(arguments);
   let foreign_function = &foreign_functions[id];
   if (user_context as &dyn Any).type_id() == foreign_function.context_type_id {
-    frame.push(foreign_function.call(args, user_context, api::gc::Gc(gc)))?;
+    frame.push(foreign_function.call(args, user_context, api::gc::Gc(gc))?)?;
   } else if foreign_function.context_type_id == TypeId::of::<()>() {
-    frame.push(foreign_function.call(args, &mut (), api::gc::Gc(gc)))?;
+    frame.push(foreign_function.call(args, &mut (), api::gc::Gc(gc))?)?;
   } else {
     if let Some(context) = library_contexts
       .iter_mut()
       .find(|c| foreign_function.context_type_id == c.as_ref().type_id())
     {
-      frame.push(foreign_function.call(args, context.as_mut(), api::gc::Gc(gc)))?;
+      frame.push(foreign_function.call(args, context.as_mut(), api::gc::Gc(gc))?)?;
     } else {
       return Err(RuntimeError::MissingContext);
     }

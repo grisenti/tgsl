@@ -1,11 +1,22 @@
 use std::fmt;
+use std::fmt::Formatter;
 
 use crate::compiler::errors::{CompilerError, ErrorPrinter};
 
-#[derive(Debug)]
 pub enum RuntimeError {
   StackOverflow,
   MissingContext,
+  Panic(String),
+}
+
+impl fmt::Debug for RuntimeError {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    match self {
+      RuntimeError::StackOverflow => write!(f, "stack overflow"),
+      RuntimeError::MissingContext => write!(f, "context missing in function call"),
+      RuntimeError::Panic(message) => write!(f, "panic: \"{message}\""),
+    }
+  }
 }
 
 pub enum ForeignBindingError {
