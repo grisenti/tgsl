@@ -25,12 +25,18 @@ fn assert(value: bool) {
 struct TestUtils();
 
 impl Library for TestUtils {
+  type Context = ();
+
   fn load(&mut self, tgls: &mut Tgsl) {
     tgls
       .load_module(include_str!("../tests/test_utils.tgsl"))
       .bind_function("assert", assert)
       .execute()
       .expect("errors loading utils file")
+  }
+
+  fn context(self) -> Option<Self::Context> {
+    None
   }
 }
 

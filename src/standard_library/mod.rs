@@ -12,6 +12,7 @@ fn print(value: &str) {
 pub struct StandardLibrary {}
 
 impl Library for StandardLibrary {
+  type Context = ();
   fn load(&mut self, tgls: &mut Tgsl) {
     tgls
       .load_module(include_str!("../../standard-library/io.tgsl"))
@@ -19,5 +20,9 @@ impl Library for StandardLibrary {
       .bind_function("print", print)
       .execute()
       .expect("errors loading the standard library");
+  }
+
+  fn context(self) -> Option<Self::Context> {
+    None
   }
 }

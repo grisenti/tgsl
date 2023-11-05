@@ -40,9 +40,14 @@ impl Tgsl {
     }
   }
 
-  pub fn load_library<L: Library + 'static>(&mut self, mut library: L) {
+  pub fn load_library<L: Library>(&mut self, mut library: L)
+  where
+    L::Context: 'static,
+  {
     library.load(self);
-    self.vm.add_library_context(Box::new(library))
+    if let Some(context) = library.context() {
+      self.vm.add_library_context(Box::new(context))
+    }
   }
 }
 
