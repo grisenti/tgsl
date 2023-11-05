@@ -1,3 +1,4 @@
+use tgsl::errors::RuntimeError;
 use tgsl::library::Library;
 use tgsl::Tgsl;
 
@@ -18,8 +19,12 @@ macro_rules! test_files {
   };
 }
 
-fn assert(value: bool) {
-  assert!(value);
+fn assert(value: bool) -> Result<(), RuntimeError> {
+  if value {
+    Ok(())
+  } else {
+    Err(RuntimeError::Panic("failed assertion".into()))
+  }
 }
 
 struct TestUtils();
