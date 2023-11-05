@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::any::{Any, TypeId};
 use std::mem::ManuallyDrop;
 use std::ptr;
 
@@ -343,6 +343,8 @@ fn call_foreign(
   let foreign_function = &foreign_functions[id];
   if (user_context as &dyn Any).type_id() == foreign_function.context_type_id {
     frame.push(foreign_function.call(args, user_context, api::gc::Gc(gc)))?;
+  } else if foreign_function.context_type_id == TypeId::of::<()>() {
+    frame.push(foreign_function.call(args, &mut (), api::gc::Gc(gc)))?;
   } else {
     if let Some(context) = library_contexts
       .iter_mut()
@@ -350,7 +352,7 @@ fn call_foreign(
     {
       frame.push(foreign_function.call(args, context.as_mut(), api::gc::Gc(gc)))?;
     } else {
-      panic!()
+      return Err(RuntimeError::MissingContext);
     }
   }
   Ok(())

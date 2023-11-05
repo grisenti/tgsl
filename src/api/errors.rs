@@ -5,6 +5,7 @@ use crate::compiler::errors::{CompilerError, ErrorPrinter};
 #[derive(Debug)]
 pub enum RuntimeError {
   StackOverflow,
+  MissingContext,
 }
 
 pub enum ForeignBindingError {
