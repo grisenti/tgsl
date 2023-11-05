@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::compiler::functions::LinkedFunctions;
 use crate::compiler::semantics::ModuleExports;
@@ -8,6 +9,7 @@ use crate::compiler::variables::LinkedGlobalVariables;
 use super::types::Type;
 
 pub struct Module {
+  pub name: Rc<str>,
   pub global_variables: LinkedGlobalVariables,
   pub structs: ExportedGlobalStructs,
   pub functions: LinkedFunctions,
@@ -16,7 +18,7 @@ pub struct Module {
 #[derive(Default)]
 pub struct GlobalEnv {
   variable_types: Vec<Type>,
-  modules: HashMap<String, Module>,
+  modules: HashMap<Rc<str>, Module>,
   global_variables_count: u32,
   last_foreign_function_address: u32,
   last_native_function_address: u32,
@@ -49,8 +51,9 @@ impl GlobalEnv {
     self.last_foreign_function_address += foreign_functions;
     self.last_native_function_address += native_functions;
     self.modules.insert(
-      module_exports.module_name,
+      module_exports.module_name.clone(),
       Module {
+        name: module_exports.module_name,
         global_variables: linked_global_variables,
         structs: module_exports.structs,
         functions: linked_functions,

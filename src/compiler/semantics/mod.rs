@@ -46,7 +46,7 @@ fn combine_returns(current: ReturnKind, new: ReturnKind) -> ReturnKind {
 }
 
 pub struct ModuleExports {
-  pub module_name: String,
+  pub module_name: Rc<str>,
   pub global_variables: ExportedGlobalVariables,
   pub structs: ExportedGlobalStructs,
   pub functions: ExportedFunctions,
@@ -94,8 +94,8 @@ impl<'a> SemanticChecker<'a> {
       let global_variable_count = exported_env.global_variables.count();
       let foreign_functions_count = exported_env.foreign_functions.len() as u32;
 
-      let exports = checker.module_name.map(|name| ModuleExports {
-        module_name: name.to_string(),
+      let exports = checker.module_name.map(|module_name| ModuleExports {
+        module_name,
         structs: exported_env.global_structs,
         global_variables: exported_env.global_variables,
         functions: exported_env.global_functions,
