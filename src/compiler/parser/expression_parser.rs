@@ -355,7 +355,7 @@ mod test {
   #[test]
   fn assign_to_lvalue_error() {
     let err = TestParser::new("1 = 2").parse_expression_error();
-    assert_eq!(err.code(), "P009");
+    assert_eq!(err.code(), "lvalue_assignment");
   }
 
   #[test]
