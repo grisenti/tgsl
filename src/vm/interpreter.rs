@@ -9,7 +9,7 @@ use crate::vm::call_frame::{CallFrame, EMPTY_CALL_FRAME};
 use crate::vm::chunk::Function;
 use crate::vm::gc::GC;
 use crate::vm::value::{TaggedValue, Value, ValueType};
-use crate::vm::ForeignCallable;
+use crate::vm::VmForeignFunction;
 
 pub const MAX_CALLS: usize = 64;
 pub const MAX_LOCALS: usize = u8::MAX as usize;
@@ -65,7 +65,7 @@ impl Interpreter {
     function: &Function,
     globals: &mut [TaggedValue],
     functions: &[Function],
-    foreign_functions: &[ForeignCallable],
+    foreign_functions: &[VmForeignFunction],
     user_context: &mut dyn Any,
   ) -> Result<(), RuntimeError> {
     let bp = self.stack.as_mut_ptr();
@@ -329,7 +329,7 @@ fn make_closure(frame: &mut CallFrame, functions: &[Function], gc: &mut GC) {
 
 fn call_foreign(
   frame: &mut CallFrame,
-  foreign_functions: &[ForeignCallable],
+  foreign_functions: &[VmForeignFunction],
   user_context: &mut dyn Any,
   library_contexts: &mut [Box<dyn Any>],
   gc: &mut GC,
@@ -392,7 +392,7 @@ fn call_value(
   frame: &mut CallFrame,
   call_stack: &mut [CallFrame],
   functions: &[Function],
-  foreign_functions: &[ForeignCallable],
+  foreign_functions: &[VmForeignFunction],
   function_call: &mut usize,
   user_context: &mut dyn Any,
   library_contexts: &mut [Box<dyn Any>],

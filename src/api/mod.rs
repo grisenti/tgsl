@@ -4,9 +4,10 @@ use crate::compiler::errors::CompilerError;
 use crate::compiler::functions::RelativeFunctionAddress;
 use crate::compiler::{CompiledModule, Compiler};
 use crate::errors::{ForeignBindingError, LoadModuleError};
-use crate::foreign_function::ForeignFunction;
+use crate::foreign_function::{ForeignFunction, ForeignParameters, FunctionSignature};
 use crate::types::Type;
-use crate::vm::{ForeignCallable, VM};
+use crate::value::ForeignValue;
+use crate::vm::{VmForeignFunction, VM};
 
 pub mod errors;
 pub mod foreign_function;
@@ -66,27 +67,34 @@ pub struct ModuleLoader<'tgsl> {
   compiler_errors: Vec<CompilerError>,
   function_binding_errors: Vec<ForeignBindingError>,
   compiled_module: Option<CompiledModule>,
-  bound_foreign_functions: Vec<(RelativeFunctionAddress, ForeignCallable)>,
+  bound_foreign_functions: Vec<(RelativeFunctionAddress, VmForeignFunction)>,
 }
 
 impl<'tgsl> ModuleLoader<'tgsl> {
   #[must_use]
-  pub fn bind_function<T, F: ForeignFunction<T>>(
+  pub fn bind_function<Signature, F: ForeignFunction<Signature>>(
     mut self,
     name: &str,
     foreign_function: F,
-  ) -> Self {
+  ) -> Self
+  where
+    Signature: FunctionSignature,
+  {
     if let Some(compiled_module) = &self.compiled_module {
       let result = bind_function(
         name,
-        &F::parameters(),
-        F::return_type(),
+        &Signature::parameter_types(),
+        Signature::return_type(),
         &compiled_module.foreign_functions,
       );
       match result {
-        Ok(address) => self
-          .bound_foreign_functions
-          .push((address, foreign_function.raw_foreign_function())),
+        Ok(address) => self.bound_foreign_functions.push((
+          address,
+          VmForeignFunction {
+            function: foreign_function.raw_foreign_function(),
+            context_type_id: Signature::context_type_id(),
+          },
+        )),
         Err(err) => self.function_binding_errors.push(err),
       }
     }

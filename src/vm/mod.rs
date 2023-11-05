@@ -4,7 +4,6 @@ use chunk::*;
 
 use crate::compiler::codegen::ModuleCode;
 use crate::errors::RuntimeError;
-use crate::foreign_function::ForeignFunction;
 use crate::gc::Gc;
 use crate::vm::interpreter::Interpreter;
 use crate::vm::value::TaggedValue;
@@ -19,29 +18,15 @@ pub mod gc;
 mod interpreter;
 pub mod value;
 
-pub struct ForeignCallable {
-  function: Box<dyn Fn(&[TaggedValue], Gc, &mut dyn Any) -> Result<TaggedValue, RuntimeError>>,
-  context_type_id: TypeId,
+pub type ForeignCallable =
+  Box<dyn Fn(&[TaggedValue], Gc, &mut dyn Any) -> Result<TaggedValue, RuntimeError>>;
+
+pub struct VmForeignFunction {
+  pub function: Box<dyn Fn(&[TaggedValue], Gc, &mut dyn Any) -> Result<TaggedValue, RuntimeError>>,
+  pub context_type_id: TypeId,
 }
 
-impl ForeignCallable {
-  pub(crate) fn new<C: 'static>(
-    function: Box<dyn Fn(&[TaggedValue], Gc, &mut dyn Any) -> Result<TaggedValue, RuntimeError>>,
-  ) -> Self {
-    Self {
-      function,
-      context_type_id: TypeId::of::<C>(),
-    }
-  }
-
-  pub(crate) fn new_no_context(
-    function: Box<dyn Fn(&[TaggedValue], Gc, &mut dyn Any) -> Result<TaggedValue, RuntimeError>>,
-  ) -> Self {
-    Self {
-      function,
-      context_type_id: TypeId::of::<()>(),
-    }
-  }
+impl VmForeignFunction {
   fn call(
     &self,
     arguments: &[TaggedValue],
@@ -57,7 +42,7 @@ pub struct VM {
   address_table: AddressTable,
   interpreter: Interpreter,
   functions: Vec<Function>,
-  foreign_functions: Vec<ForeignCallable>,
+  foreign_functions: Vec<VmForeignFunction>,
   globals: Vec<TaggedValue>,
 }
 
@@ -65,7 +50,7 @@ impl VM {
   pub fn load_module(
     &mut self,
     module_code: ModuleCode,
-    foreign_functions: impl Iterator<Item = ForeignCallable>,
+    foreign_functions: impl Iterator<Item = VmForeignFunction>,
     context: &mut dyn Any,
   ) -> Result<(), RuntimeError> {
     let globals_count = module_code.global_variables_count;
