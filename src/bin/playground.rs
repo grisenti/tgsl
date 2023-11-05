@@ -15,8 +15,8 @@ fn test() -> Result<(), String> {
   tgsl.load_library(StandardLibrary {});
   let result = tgsl
     .load_module(&source)
-    .bind_function("test", |num: f64| println!("{}", num))
-    .execute();
+    .bind_function("test", |context: &mut Context| println!("{}", context.s))
+    .execute_with_context(&mut Context { s: "hello".into() });
   match result {
     Ok(_) => {}
     Err(err) => println!("{}", err.detailed(&source)),

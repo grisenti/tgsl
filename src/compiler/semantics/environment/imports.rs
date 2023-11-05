@@ -11,6 +11,9 @@ pub type ImportResult = Result<(), ImportError>;
 
 impl<'src> Environment<'src> {
   pub fn import_module(&mut self, name: &str) -> ImportResult {
+    if self.imported_modules.contains(name) {
+      return Ok(());
+    }
     let module = if let Some(module_id) = self.global_env.get_module(name) {
       module_id
     } else {
@@ -22,6 +25,7 @@ impl<'src> Environment<'src> {
       .global_structs
       .import(&module.structs)
       .expect("todo: consider errors");
+    self.imported_modules.insert(module.name.clone());
     Ok(())
   }
 }

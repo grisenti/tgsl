@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::rc::Rc;
+
 use crate::compiler::codegen::function_code::FunctionCode;
 use crate::compiler::functions::{ExportedFunctions, ForeignFunction, GlobalFunctions};
 use crate::compiler::global_env::GlobalEnv;
@@ -102,6 +105,8 @@ pub struct Environment<'src> {
   names_in_current_scope: u8,
   functions_declaration_stack: Vec<Function>,
   declared_functions: u32,
+
+  imported_modules: HashSet<Rc<str>>,
 
   global_variables: GlobalVariables,
   global_structs: GlobalStructs<'src>,
@@ -222,6 +227,8 @@ impl<'src> Environment<'src> {
       names_in_current_scope: 0,
       functions_declaration_stack: Vec::new(),
       declared_functions: 0,
+
+      imported_modules: HashSet::new(),
 
       global_variables: Default::default(),
       global_structs: Default::default(),
