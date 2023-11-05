@@ -49,14 +49,14 @@ macro_rules! c_err {
 }
 
 macro_rules! def_err {
-    ($func_name:ident, $code:expr, $msg:expr, $($arg_name:ident : $tp:ty),+) => {
+    ($func_name:ident, $msg:expr, $($arg_name:ident : $tp:ty),+) => {
         pub fn $func_name<S: SourceRangeProvider>(provider: S, $($arg_name : $tp),+) -> CompilerError {
-          c_err!(provider.current_range(), $code, $msg, $($arg_name),+)
+          c_err!(provider.current_range(), stringify!($func_name), $msg, $($arg_name),+)
         }
     };
-    ($func_name:ident, $code:expr, $msg:expr) => {
+    ($func_name:ident, $msg:expr) => {
         pub fn $func_name<S: SourceRangeProvider>(provider: S) -> CompilerError {
-          c_err!(provider.current_range(), $code, $msg)
+          c_err!(provider.current_range(), stringify!($func_name), $msg)
         }
     };
 }
@@ -64,9 +64,9 @@ macro_rules! def_err {
 pub mod lex_err {
   use super::{CompilerError, SourceRangeProvider};
 
-  def_err!(incomplete_string, "L001", "incomplete string");
+  def_err!(incomplete_string, "incomplete string");
 
-  def_err!(invalid_escape_character, "L002", "'{}' is an invalid escape character", ch: char);
+  def_err!(invalid_escape_character, "'{}' is an invalid escape character", ch: char);
 }
 
 pub mod parser_err {
@@ -76,90 +76,77 @@ pub mod parser_err {
 
   def_err!(
     expected_identifier,
-    "P001",
     "expected identifier, got {}",
     got: &Token
   );
 
   def_err!(
     expected_token,
-    "P002",
     "expected {}, got {}",
     expected: &Token,
     got: &Token
   );
 
-  def_err!(unexpected_token, "P002", "expected token {}", got: &Token);
+  def_err!(unexpected_token, "expected token {}", got: &Token);
 
   def_err!(
     expected_type_name,
-    "P003",
     "expected type name, got {}",
     got: &Token
   );
 
   def_err!(
     same_scope_name_redeclaration,
-    "P004",
     "cannot redeclare name '{}' in the same scope",
     name: &str
   );
 
-  def_err!(too_many_local_names, "P005", "too many local names");
+  def_err!(too_many_local_names, "too many local names");
 
   def_err!(
     too_many_function_parameters,
-    "P006",
     "function cannot have more than 255 parameters"
   );
 
   def_err!(
     expected_primary,
-    "P007",
     "expected literal, identifier or '(', got {}",
     got: &Token
   );
 
   def_err!(
     too_many_function_arguments,
-    "P008",
     "function cannot have more than 255 arguments"
   );
 
   def_err!(
     lvalue_assignment,
-    "P009",
     "left hand side of assignment cannot be assigned to"
   );
 
   def_err!(
     import_in_local_scope,
-    "P010",
     "import statements can only be in global scope"
   );
 
   def_err!(
     expected_module_identifier,
-    "P012",
     "expected module identifier, got {}",
     got: &Token
   );
 
   def_err!(
     foreign_function_in_local_scope,
-    "P013",
     "foreign functions can only be declared in the global scope"
   );
 
   def_err!(
     module_declarations_is_not_first_statement,
-    "P014",
     "module declaration needs to be the first statement"
   );
 
   def_err!(
     missing_initialization_at_variable_declaration,
-    "P015",
     "variable declaration requires initialization"
   );
 }
@@ -172,7 +159,6 @@ pub mod ty_err {
 
   def_err!(
     type_specifier_expression_mismatch,
-    "TY001",
     "specified type ({}) is different from the type of the initialization expression ({})",
     specified: &Type,
     expression: &Type
@@ -180,7 +166,6 @@ pub mod ty_err {
 
   def_err!(
     incorrect_unary_operator,
-    "TY002",
     "cannot apply unary operator '{}' to operand {}",
     operator: &Token,
     rhs_type: &Type
@@ -188,7 +173,6 @@ pub mod ty_err {
 
   def_err!(
     incorrect_binary_operator,
-    "TY003",
     "cannot apply operator {} to operands {} and {}",
     operator: &Token,
     lhs_type: &Type,
@@ -197,17 +181,15 @@ pub mod ty_err {
 
   def_err!(
     assignment_of_incompatible_types,
-    "TY004",
     "cannot assign value of type {} to identifier of type {}",
     value_type: &Type,
     var_type: &Type
   );
 
-  def_err!(cannot_call_type, "TY005", "cannot call type {}", t:&Type);
+  def_err!(cannot_call_type,  "cannot call type {}", t: &Type);
 
   def_err!(
     incorrect_function_argument_number,
-    "TY005",
     "incorrect number of arguments for function call (required {}, provided {})",
     required: usize,
     provided: usize
@@ -215,7 +197,6 @@ pub mod ty_err {
 
   def_err!(
     incorrect_function_argument_type,
-    "TY006",
     "mismatched types in function call. Argument {} (of type {}) should be of type {}",
     argument_number: usize,
     provided_type: &Type,
@@ -224,27 +205,23 @@ pub mod ty_err {
 
   def_err!(
     not_a_member,
-    "TY007",
     "{} is not a member of type {}",
     member_name: &str,
     object_type: &str
   );
 
   def_err!(cannot_access_member_of_non_struct_type,
-    "TY008",
     "cannot access member of non struct type {}",
     lhs_type:&Type
   );
 
   def_err!(no_member_and_no_function_found,
-    "TY009",
     "{} is neither a function member for the struct nor a valid function could be found that has type {} as a first parameter",
     rhs_name: &str,
     lhs_type: &Type
   );
 
   def_err!(could_not_find_function_for_dot_call,
-    "TY010",
     "could not find function '{}' that takes type '{}' as a first parameter",
     function_name: &str,
     lhs_type: &Type
@@ -252,18 +229,12 @@ pub mod ty_err {
 
   def_err!(
     cannot_assign_to_function,
-    "TY011",
     "functions cannot be assigned new values"
   );
 
-  def_err!(
-    cannot_assing_to_type,
-    "TY012",
-    "cannot assign a value to a type"
-  );
+  def_err!(cannot_assing_to_type, "cannot assign a value to a type");
 
   def_err!(incorrect_return_type,
-    "TY013",
     "expression in return statement (of type {}) does not match the required type ({})",
     expression_type: &Type,
     required_type: &Type
@@ -271,18 +242,16 @@ pub mod ty_err {
 
   def_err!(
     incorrect_conditional_type,
-    "TY014",
     "cannot use value of type {} in a condition",
     conditional_type: &Type
   );
 
-  def_err!(no_available_oveload, "TY015", "no available overload");
+  def_err!(no_available_oveload, "no available overload");
 
-  def_err!(not_struct_name, "TY016", "'{}' is not a declared struct", struct_name: &str);
+  def_err!(not_struct_name,  "'{}' is not a declared struct", struct_name: &str);
 
   def_err!(
     cannot_initialize_with_overloaded_function,
-    "TY017",
     "cannot initialize variable with overloaded function"
   );
 }
@@ -292,28 +261,25 @@ pub mod import_err {
 
   def_err!(
     not_a_loaded_module,
-    "IE001",
+
     "'{}' is not a loaded module",
     module: &str
   );
 
   def_err!(
     name_redeclaration,
-    "IE002",
     "name '{}' was already defined",
     name: String
   );
 
   def_err!(
     overload_conflict,
-    "IE003",
     "redefinition of overloaded function '{}'",
     name: String
   );
 
   def_err!(
     module_already_declared,
-    "IE004",
     "module name '{}' is already used by another module",
     name: &str
   );
@@ -324,39 +290,33 @@ pub mod sema_err {
 
   def_err!(
     name_already_defined,
-    "SE001",
     "name {} was already defined in this scope",
     name: &str
   );
 
   def_err!(
     too_many_local_names,
-    "SE002",
     "the current local scope has more than 255 names"
   );
 
   def_err!(
     name_not_found,
-    "SE003",
     "identifier '{}' could not be found in the current scope",
     name: &str
   );
 
   def_err!(not_a_variable,
-    "SE004",
     "identifier '{}' is not a variable",
     name: &str
   );
 
   def_err!(
     no_unconditional_return,
-    "SE005",
     "function requires one unconditional return type"
   );
 
   def_err!(
     return_outside_of_function,
-    "SE006",
     "cannot have a return statement outside of a function"
   );
 }
@@ -431,8 +391,8 @@ impl ErrorPrinter {
       .collect::<String>();
     write!(
       self.err_string,
-      "error[{}]: {}\n{spaces} |\n{} | {line_str}\n{spaces} | {underline_spaces}{underlines}\n",
-      err.code, err.msg, self.current_line
+      "error: {}\n{spaces} |\n{} | {line_str}\n{spaces} | {underline_spaces}{underlines}\n",
+      err.msg, self.current_line
     )
     .expect("write to string failed");
   }
@@ -440,7 +400,7 @@ impl ErrorPrinter {
   pub fn to_string(errs: &[CompilerError], source: &str) -> String {
     let mut printer = Self {
       current_position: 0,
-      current_line: 0,
+      current_line: 1,
       err_string: String::new(),
     };
     for e in errs {
