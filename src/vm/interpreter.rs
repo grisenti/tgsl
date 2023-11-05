@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::mem::ManuallyDrop;
 use std::ptr;
 
@@ -43,6 +44,7 @@ macro_rules! unary_operation {
 pub struct Interpreter {
   stack: [TaggedValue; MAX_STACK],
   call_stack: [CallFrame; MAX_CALLS],
+  pub library_contexts: Vec<Box<dyn Any>>,
   gc: GC,
 }
 
@@ -51,6 +53,7 @@ impl Default for Interpreter {
     Self {
       stack: [TaggedValue::none(); MAX_STACK],
       call_stack: [EMPTY_CALL_FRAME; MAX_CALLS],
+      library_contexts: Default::default(),
       gc: Default::default(),
     }
   }
@@ -63,6 +66,7 @@ impl Interpreter {
     globals: &mut [TaggedValue],
     functions: &[Function],
     foreign_functions: &[ForeignCallable],
+    user_context: &mut dyn Any,
   ) -> Result<(), RuntimeError> {
     let bp = self.stack.as_mut_ptr();
     let mut frame = CallFrame {
@@ -207,13 +211,21 @@ impl Interpreter {
           functions,
           &mut function_call,
         )?,
-        OpCode::CallForeign => call_foreign(&mut frame, foreign_functions, &mut self.gc)?,
+        OpCode::CallForeign => call_foreign(
+          &mut frame,
+          foreign_functions,
+          user_context,
+          &mut self.library_contexts,
+          &mut self.gc,
+        )?,
         OpCode::CallValue => call_value(
           &mut frame,
           &mut self.call_stack,
           functions,
           foreign_functions,
           &mut function_call,
+          user_context,
+          &mut self.library_contexts,
           &mut self.gc,
         )?,
         OpCode::Construct => construct(&mut frame, &mut self.gc)?,
@@ -318,6 +330,8 @@ fn make_closure(frame: &mut CallFrame, functions: &[Function], gc: &mut GC) {
 fn call_foreign(
   frame: &mut CallFrame,
   foreign_functions: &[ForeignCallable],
+  user_context: &mut dyn Any,
+  library_contexts: &mut [Box<dyn Any>],
   gc: &mut GC,
 ) -> Result<(), RuntimeError> {
   let arguments = frame.read_byte() as usize;
@@ -326,7 +340,19 @@ fn call_foreign(
   let args = unsafe { &*ptr::slice_from_raw_parts(frame.sp.sub(arguments), arguments) };
   let id = unsafe { function_value.as_id() };
   frame.pop_n(arguments);
-  frame.push(foreign_functions[id](api::gc::Gc(gc), args))?;
+  let foreign_function = &foreign_functions[id];
+  if (user_context as &dyn Any).type_id() == foreign_function.context_type_id {
+    frame.push(foreign_function.call(args, user_context, api::gc::Gc(gc)))?;
+  } else {
+    if let Some(context) = library_contexts
+      .iter_mut()
+      .find(|c| foreign_function.context_type_id == c.as_ref().type_id())
+    {
+      frame.push(foreign_function.call(args, context.as_mut(), api::gc::Gc(gc)))?;
+    } else {
+      panic!()
+    }
+  }
   Ok(())
 }
 
@@ -366,11 +392,15 @@ fn call_value(
   functions: &[Function],
   foreign_functions: &[ForeignCallable],
   function_call: &mut usize,
+  user_context: &mut dyn Any,
+  library_contexts: &mut [Box<dyn Any>],
   gc: &mut GC,
 ) -> Result<(), RuntimeError> {
   match frame.top().kind {
     ValueType::FunctionId => call_native(frame, call_stack, functions, function_call),
-    ValueType::ForeignFunctionId => call_foreign(frame, foreign_functions, gc),
+    ValueType::ForeignFunctionId => {
+      call_foreign(frame, foreign_functions, user_context, library_contexts, gc)
+    }
     ValueType::Object => call_closure(frame, call_stack, function_call),
     _ => unreachable!(),
   }

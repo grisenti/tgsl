@@ -18,7 +18,6 @@ pub mod types;
 mod variables;
 
 pub struct CompiledModule {
-  pub globals_count: u16,
   pub foreign_functions: Vec<ForeignFunction>,
   pub code: ModuleCode,
 }
@@ -34,14 +33,12 @@ impl Compiler {
     //println!("{}", ASTJSONPrinter::print_to_string(&ast));
     let module = SemanticChecker::check_program(&ast, &self.global_env)?;
     //println!("{:?}", &module.module_code);
-    let globals_count = module.globals_count as u16;
     if let Some(exports) = module.exports {
       self.global_env.export_module(exports);
     }
     Ok(CompiledModule {
       code: module.module_code,
       foreign_functions: module.foreign_functions,
-      globals_count,
     })
   }
 

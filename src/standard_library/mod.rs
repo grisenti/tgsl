@@ -1,19 +1,23 @@
-use crate::module::Module;
+use crate::library::Library;
 use crate::Tgsl;
 
-fn println(value: &str) {
+fn println(_: &mut StandardLibrary, value: &str) {
   println!("{}", value.to_string());
 }
 
-fn print(value: &str) {
+fn print(_: &mut StandardLibrary, value: &str) {
   print!("{}", value.to_string());
 }
 
-pub fn load_standard_library(tgsl: &mut Tgsl) {
-  let mut io = Module::new(include_str!("../../standard-library/io.tgsl"));
-  io.add_function("print", print)
-    .add_function("println", println);
-  tgsl
-    .load_module(io)
-    .expect("error in loading the standard library");
+pub struct StandardLibrary {}
+
+impl Library for StandardLibrary {
+  fn load(&mut self, tgls: &mut Tgsl) {
+    tgls
+      .load_module(include_str!("../../standard-library/io.tgsl"))
+      .bind_function("println", println)
+      .bind_function("print", print)
+      .execute(&mut ())
+      .expect("errors loading the standard library");
+  }
 }

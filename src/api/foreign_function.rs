@@ -1,74 +1,22 @@
+use std::marker::PhantomData;
+
 use crate::api::types::Type;
 use crate::value::{ForeignValue, NativeValue, Value};
 use crate::vm::value::TaggedValue;
 use crate::vm::ForeignCallable;
 
-trait VmForeignParameters<const N: usize> {
+trait VmForeignParameters {
   unsafe fn from_stack(values: &[TaggedValue]) -> Self;
 
-  fn parameter_types() -> [Type; N];
+  fn parameter_types() -> Vec<Type>;
 }
 
 #[allow(private_bounds)]
-pub trait ForeignParameters<const N: usize>: VmForeignParameters<N> {}
+pub trait ForeignParameters: VmForeignParameters {}
 
-impl<T, const N: usize> ForeignParameters<N> for T where T: VmForeignParameters<N> {}
+impl<T> ForeignParameters for T where T: VmForeignParameters {}
 
-pub struct ForeignFunction<'name> {
-  name: &'name str,
-  parameter_types: Box<[Type]>,
-  return_type: Type,
-  function: ForeignCallable,
-}
-
-impl<'name> ForeignFunction<'name> {
-  pub fn create<P, R, F, const N: usize>(name: &'name str, func: F) -> Self
-  where
-    P: ForeignParameters<N>,
-    R: ForeignValue,
-    F: Fn(P) -> R + 'static,
-  {
-    Self {
-      name,
-      parameter_types: Box::new(<P as VmForeignParameters<N>>::parameter_types()),
-      return_type: R::to_type(),
-      function: Box::new(move |gc, values| unsafe {
-        func(P::from_stack(values)).to_value(gc).vm_value
-      }),
-    }
-  }
-
-  pub fn create_no_arguments<R, F>(name: &'static str, func: F) -> Self
-  where
-    R: ForeignValue,
-    F: Fn() -> R + 'static,
-  {
-    Self {
-      name,
-      parameter_types: Box::new([]),
-      return_type: R::to_type(),
-      function: Box::new(move |gc, _| unsafe { func().to_value(gc).vm_value }),
-    }
-  }
-
-  pub(crate) fn get_name(&self) -> &str {
-    self.name
-  }
-
-  pub(crate) fn get_parameters(&self) -> &[Type] {
-    &self.parameter_types
-  }
-
-  pub(crate) fn get_return_type(&self) -> &Type {
-    &self.return_type
-  }
-
-  pub(crate) fn get_foreign_function(self) -> ForeignCallable {
-    self.function
-  }
-}
-
-impl<P: NativeValue> VmForeignParameters<1> for P {
+impl<P: NativeValue> VmForeignParameters for P {
   unsafe fn from_stack(values: &[TaggedValue]) -> Self {
     debug_assert_eq!(values.len(), 1);
     P::from_value(Value {
@@ -76,12 +24,12 @@ impl<P: NativeValue> VmForeignParameters<1> for P {
     })
   }
 
-  fn parameter_types() -> [Type; 1] {
-    [P::to_type()]
+  fn parameter_types() -> Vec<Type> {
+    vec![P::to_type()]
   }
 }
 
-impl<P1: NativeValue, P2: NativeValue> VmForeignParameters<2> for (P1, P2) {
+impl<P1: NativeValue, P2: NativeValue> VmForeignParameters for (P1, P2) {
   unsafe fn from_stack(values: &[TaggedValue]) -> Self {
     debug_assert_eq!(values.len(), 2);
     (
@@ -94,7 +42,41 @@ impl<P1: NativeValue, P2: NativeValue> VmForeignParameters<2> for (P1, P2) {
     )
   }
 
-  fn parameter_types() -> [Type; 2] {
-    [P1::to_type(), P2::to_type()]
+  fn parameter_types() -> Vec<Type> {
+    vec![P1::to_type(), P2::to_type()]
+  }
+}
+
+pub trait ForeignFunction<T> {
+  fn parameters() -> Vec<Type>;
+
+  fn return_type() -> Type;
+
+  fn raw_foreign_function(self) -> ForeignCallable;
+}
+
+impl<F, C: 'static, Params, Ret> ForeignFunction<PhantomData<(C, Params, Ret)>> for F
+where
+  Params: ForeignParameters,
+  Ret: ForeignValue,
+  F: Fn(&mut C, Params) -> Ret + 'static,
+{
+  fn parameters() -> Vec<Type> {
+    Params::parameter_types()
+  }
+
+  fn return_type() -> Type {
+    Ret::to_type()
+  }
+
+  fn raw_foreign_function(self) -> ForeignCallable {
+    ForeignCallable::new::<C>(Box::new(move |arguments, gc, context| unsafe {
+      self(
+        context.downcast_mut().unwrap(),
+        Params::from_stack(arguments),
+      )
+      .to_value(gc)
+      .vm_value
+    }))
   }
 }

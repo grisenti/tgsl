@@ -1,4 +1,4 @@
-use tgsl::module::Module;
+use tgsl::library::Library;
 use tgsl::Tgsl;
 
 macro_rules! test_files {
@@ -18,18 +18,26 @@ macro_rules! test_files {
   };
 }
 
-fn assert(value: bool) {
+fn assert(context: &mut TestUtils, value: bool) {
   assert!(value);
+}
+
+struct TestUtils();
+
+impl Library for TestUtils {
+  fn load(&mut self, tgls: &mut Tgsl) {
+    tgls
+      .load_module(include_str!("../tests/test_utils.tgsl"))
+      .bind_function("assert", assert)
+      .execute(&mut ())
+      .expect("errors loading utils file")
+  }
 }
 
 fn compile_and_run(test_file: &str) {
   let mut tgsl = Tgsl::default();
-  let mut assert_module = Module::new(include_str!("../tests/test_utils.tgsl"));
-  assert_module.add_function("assert", assert);
-  tgsl
-    .load_module(assert_module)
-    .expect("error in utils file");
-  if let Err(msg) = tgsl.load_module(Module::new(test_file)) {
+  tgsl.load_library(TestUtils());
+  if let Err(msg) = tgsl.load_module(test_file).execute(&mut ()) {
     panic!("{:?}", msg);
   }
 }
@@ -94,20 +102,15 @@ test_files!(variables,
 );
 
 mod modules {
-  use tgsl::module::Module;
   use tgsl::Tgsl;
 
-  use crate::assert;
+  use crate::TestUtils;
 
   fn compile_and_run_multiple(test_files: &[&str]) {
     let mut tgsl = Tgsl::default();
-    let mut assert_module = Module::new(include_str!("../tests/test_utils.tgsl"));
-    assert_module.add_function("assert", assert);
-    tgsl
-      .load_module(assert_module)
-      .expect("error in utils file");
+    tgsl.load_library(TestUtils());
     for source in test_files {
-      if let Err(msg) = tgsl.load_module(Module::new(source)) {
+      if let Err(msg) = tgsl.load_module(source).execute(&mut ()) {
         panic!("{:?}", msg);
       }
     }

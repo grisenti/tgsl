@@ -92,6 +92,8 @@ impl<'a> SemanticChecker<'a> {
       unsafe { checker.global_code.push_op(OpCode::Return) };
       let exported_env = checker.env.export();
       let global_variable_count = exported_env.global_variables.count();
+      let foreign_functions_count = exported_env.foreign_functions.len() as u32;
+
       let exports = checker.module_name.map(|name| ModuleExports {
         module_name: name.to_string(),
         structs: exported_env.global_structs,
@@ -103,6 +105,8 @@ impl<'a> SemanticChecker<'a> {
         module_code: ModuleCode {
           global_code: checker.global_code,
           functions: checker.checked_functions,
+          global_variables_count: global_variable_count,
+          foreign_functions_count,
         },
         globals_count: global_variable_count,
         foreign_functions: exported_env.foreign_functions,

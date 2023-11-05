@@ -9,9 +9,9 @@ pub mod function_code;
 pub struct ModuleCode {
   pub functions: Vec<FunctionCode>,
   pub global_code: FunctionCode,
+  pub global_variables_count: u32,
+  pub foreign_functions_count: u32,
 }
-
-impl ModuleCode {}
 
 impl Debug for ModuleCode {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
