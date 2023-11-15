@@ -1,19 +1,19 @@
 use std::fmt::Debug;
 
-use crate::compiler::codegen::function_code::FunctionCode;
+use crate::compiler::codegen::program_chunk::ProgramChunk;
 
 pub mod bytecode;
-pub mod function_code;
+pub mod program_chunk;
 
 #[derive(Default, Clone)]
-pub struct ModuleCode {
-  pub functions: Vec<FunctionCode>,
-  pub global_code: FunctionCode,
+pub struct ModuleProgram {
+  pub functions: Vec<ProgramChunk>,
+  pub global_code: ProgramChunk,
   pub global_variables_count: u32,
   pub foreign_functions_count: u32,
 }
 
-impl Debug for ModuleCode {
+impl Debug for ModuleProgram {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let mut result = "".to_string();
     for func in &self.functions {

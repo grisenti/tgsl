@@ -2,7 +2,7 @@ use std::any::{Any, TypeId};
 
 use chunk::*;
 
-use crate::compiler::codegen::ModuleCode;
+use crate::compiler::codegen::ModuleProgram;
 use crate::errors::RuntimeError;
 use crate::gc::Gc;
 use crate::vm::interpreter::Interpreter;
@@ -49,7 +49,7 @@ pub struct VM {
 impl VM {
   pub fn load_module(
     &mut self,
-    module_code: ModuleCode,
+    module_code: ModuleProgram,
     foreign_functions: impl Iterator<Item = VmForeignFunction>,
     context: &mut dyn Any,
   ) -> Result<(), RuntimeError> {

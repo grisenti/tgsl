@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use crate::compiler::codegen::function_code::FunctionCode;
+use crate::compiler::codegen::program_chunk::ProgramChunk;
 use crate::compiler::functions::{ExportedFunctions, ForeignFunction, GlobalFunctions};
 use crate::compiler::global_env::GlobalEnv;
 use crate::compiler::structs::{ExportedGlobalStructs, GlobalStructs};
@@ -36,7 +36,7 @@ struct Function {
   name: String,
   captures: Vec<Capture>,
   return_type: Type,
-  code: FunctionCode,
+  code: ProgramChunk,
 }
 
 impl Function {
@@ -71,7 +71,7 @@ impl Function {
 
 pub struct FinalizedFunction {
   pub captures: Vec<Capture>,
-  pub code: FunctionCode,
+  pub code: ProgramChunk,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,7 +125,7 @@ impl<'src> Environment<'src> {
       .map(|func| &func.return_type)
   }
 
-  pub fn get_current_function_code(&mut self) -> Option<&mut FunctionCode> {
+  pub fn get_current_function_code(&mut self) -> Option<&mut ProgramChunk> {
     self
       .functions_declaration_stack
       .last_mut()
@@ -168,7 +168,7 @@ impl<'src> Environment<'src> {
       name,
       captures: Vec::new(),
       return_type,
-      code: FunctionCode::new(debug_name),
+      code: ProgramChunk::new(debug_name),
     })
   }
 

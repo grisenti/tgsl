@@ -7,32 +7,32 @@ pub struct JumpPoint(usize);
 pub struct Address(usize);
 
 #[derive(Clone)]
-pub struct FunctionCode {
-  function_name: String,
+pub struct ProgramChunk {
+  name: String,
   code: Vec<u8>,
   constants: Vec<ConstantValue>,
 }
 
-impl Default for FunctionCode {
+impl Default for ProgramChunk {
   fn default() -> Self {
     Self {
-      function_name: String::new(),
+      name: String::new(),
       code: vec![],
       constants: vec![ConstantValue::None],
     }
   }
 }
 
-impl FunctionCode {
-  pub fn new(function_name: String) -> Self {
+impl ProgramChunk {
+  pub fn new(name: String) -> Self {
     Self {
-      function_name,
+      name,
       ..Default::default()
     }
   }
 
   pub fn get_name(&self) -> &str {
-    &self.function_name
+    &self.name
   }
 
   pub unsafe fn push_constant(&mut self, val: ConstantValue) -> &mut Self {
@@ -128,7 +128,7 @@ impl FunctionCode {
   }
 }
 
-impl Debug for FunctionCode {
+impl Debug for ProgramChunk {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let mut result = "".to_string();
     let mut index = 0;

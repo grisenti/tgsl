@@ -4,8 +4,8 @@ use crate::compiler::ast::parsed_type::ParsedFunctionType;
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle, AST};
 use crate::compiler::codegen::bytecode::OpCode;
-use crate::compiler::codegen::function_code::FunctionCode;
-use crate::compiler::codegen::ModuleCode;
+use crate::compiler::codegen::program_chunk::ProgramChunk;
+use crate::compiler::codegen::ModuleProgram;
 use crate::compiler::errors::{sema_err, ty_err, CompilerError};
 use crate::compiler::functions::ExportedFunctions;
 use crate::compiler::global_env::GlobalEnv;
@@ -56,15 +56,15 @@ pub struct CompiledModule {
   pub exports: Option<ModuleExports>,
   pub foreign_functions: Vec<ForeignFunction>,
   pub globals_count: u32,
-  pub module_code: ModuleCode,
+  pub program: ModuleProgram,
 }
 
 pub struct SemanticChecker<'a> {
   env: Environment<'a>,
   ast: &'a AST<'a>,
   errors: Vec<CompilerError>,
-  checked_functions: Vec<FunctionCode>,
-  global_code: FunctionCode,
+  checked_functions: Vec<ProgramChunk>,
+  global_code: ProgramChunk,
   module_name: Option<Rc<str>>,
 }
 
@@ -78,7 +78,7 @@ impl<'a> SemanticChecker<'a> {
       ast,
       errors: Vec::new(),
       checked_functions: Vec::new(),
-      global_code: FunctionCode::new("<global>".to_string()),
+      global_code: ProgramChunk::new("<global>".to_string()),
       module_name: None,
     };
     for stmt in ast.get_program() {
@@ -102,7 +102,7 @@ impl<'a> SemanticChecker<'a> {
       });
       Ok(CompiledModule {
         exports,
-        module_code: ModuleCode {
+        program: ModuleProgram {
           global_code: checker.global_code,
           functions: checker.checked_functions,
           global_variables_count: global_variable_count,
@@ -206,7 +206,7 @@ impl<'a> SemanticChecker<'a> {
     }
   }
 
-  fn code(&mut self) -> &mut FunctionCode {
+  fn code(&mut self) -> &mut ProgramChunk {
     self
       .env
       .get_current_function_code()

@@ -143,7 +143,7 @@ impl<'tgsl> ModuleLoader<'tgsl> {
           .tgsl
           .vm
           .load_module(
-            compiled_module.code,
+            compiled_module.program,
             self.bound_foreign_functions.into_iter().map(|(_, f)| f),
             context,
           )

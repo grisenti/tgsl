@@ -1,4 +1,4 @@
-use crate::compiler::codegen::ModuleCode;
+use crate::compiler::codegen::ModuleProgram;
 use crate::compiler::functions::ForeignFunction;
 use crate::compiler::global_env::GlobalEnv;
 use crate::compiler::semantics::SemanticChecker;
@@ -19,7 +19,7 @@ mod variables;
 
 pub struct CompiledModule {
   pub foreign_functions: Vec<ForeignFunction>,
-  pub code: ModuleCode,
+  pub program: ModuleProgram,
 }
 
 #[derive(Default)]
@@ -37,7 +37,7 @@ impl Compiler {
       self.global_env.export_module(exports);
     }
     Ok(CompiledModule {
-      code: module.module_code,
+      program: module.program,
       foreign_functions: module.foreign_functions,
     })
   }

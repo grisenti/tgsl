@@ -1,8 +1,8 @@
 use std::mem::ManuallyDrop;
 
 use crate::compiler::codegen::bytecode::ConstantValue;
-use crate::compiler::codegen::function_code::FunctionCode;
-use crate::compiler::codegen::ModuleCode;
+use crate::compiler::codegen::program_chunk::ProgramChunk;
+use crate::compiler::codegen::ModuleProgram;
 
 use super::{
   address_table::AddressTable,
@@ -167,7 +167,7 @@ impl Chunk {
     Default::default()
   }
 
-  pub fn new(function_code: FunctionCode, address_table: &AddressTable) -> Self {
+  pub fn new(function_code: ProgramChunk, address_table: &AddressTable) -> Self {
     let (code, constants) = function_code.into_parts();
     let constants = constants
       .into_iter()
@@ -183,7 +183,7 @@ pub struct GlobalChunk {
 }
 
 impl GlobalChunk {
-  pub fn new(module_code: ModuleCode, address_table: &AddressTable) -> Self {
+  pub fn new(module_code: ModuleProgram, address_table: &AddressTable) -> Self {
     let functions = module_code
       .functions
       .into_iter()

@@ -7,7 +7,7 @@ use crate::compiler::ast::statement::stmt::{
 use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
 use crate::compiler::ast::{StmtHandle, AST};
 use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
-use crate::compiler::codegen::function_code::FunctionCode;
+use crate::compiler::codegen::program_chunk::ProgramChunk;
 use crate::compiler::errors::{import_err, sema_err, ty_err};
 use crate::compiler::functions::RelativeFunctionAddress;
 use crate::compiler::lexer::SourceRange;
@@ -281,7 +281,7 @@ impl<'a> SemanticChecker<'a> {
       Ok(relative_address) => {
         assert!(relative_address as usize <= self.checked_functions.len());
         if relative_address as usize == self.checked_functions.len() {
-          self.checked_functions.push(FunctionCode::default());
+          self.checked_functions.push(ProgramChunk::default());
         }
       }
       Err(_) => todo!(),
@@ -301,7 +301,7 @@ impl<'a> SemanticChecker<'a> {
     self
       .env
       .push_function(function_name, signature.get_return_type().clone());
-    self.checked_functions.push(FunctionCode::default());
+    self.checked_functions.push(ProgramChunk::default());
     match self.env.define_native_function(name, signature) {
       Ok(relative_address) => relative_address,
       Err(_) => panic!(),
