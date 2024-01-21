@@ -3,7 +3,7 @@ use std::any::{Any, TypeId};
 use chunk::*;
 
 use crate::compiler::codegen::ModuleProgram;
-use crate::errors::RuntimeError;
+use crate::errors::{RuntimeError, UserError};
 use crate::gc::Gc;
 use crate::vm::interpreter::Interpreter;
 use crate::vm::value::TaggedValue;
@@ -19,10 +19,11 @@ mod interpreter;
 pub mod value;
 
 pub type ForeignCallable =
-  Box<dyn Fn(&[TaggedValue], Gc, &mut dyn Any) -> Result<TaggedValue, RuntimeError>>;
+  Box<dyn Fn(&[TaggedValue], Gc, &mut dyn Any) -> Result<TaggedValue, Box<dyn UserError>>>;
 
 pub struct VmForeignFunction {
-  pub function: Box<dyn Fn(&[TaggedValue], Gc, &mut dyn Any) -> Result<TaggedValue, RuntimeError>>,
+  pub function:
+    Box<dyn Fn(&[TaggedValue], Gc, &mut dyn Any) -> Result<TaggedValue, Box<dyn UserError>>>,
   pub context_type_id: TypeId,
 }
 
@@ -32,7 +33,7 @@ impl VmForeignFunction {
     arguments: &[TaggedValue],
     context: &mut dyn Any,
     gc: Gc,
-  ) -> Result<TaggedValue, RuntimeError> {
+  ) -> Result<TaggedValue, Box<dyn UserError>> {
     debug_assert_eq!((context as &dyn Any).type_id(), self.context_type_id);
     (self.function)(arguments, gc, context)
   }

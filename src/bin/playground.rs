@@ -2,6 +2,7 @@ extern crate core;
 
 use std::fs;
 
+use tgsl::errors::UserError;
 use tgsl::standard_library::StandardLibrary;
 use tgsl::Tgsl;
 
@@ -15,7 +16,10 @@ fn test() -> Result<(), String> {
   tgsl.load_library(StandardLibrary {});
   let result = tgsl
     .load_module(&source)
-    .bind_function("test", |context: &mut Context| println!("{}", context.s))
+    .bind_function(
+      "test",
+      |context: &mut Context| -> Result<(), Box<dyn UserError>> { Err(Box::new("test error")) },
+    )
     .execute_with_context(&mut Context { s: "hello".into() });
   match result {
     Ok(_) => {}

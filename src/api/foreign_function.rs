@@ -2,7 +2,7 @@ use std::any::TypeId;
 use std::marker::PhantomData;
 
 use crate::api::types::Type;
-use crate::errors::RuntimeError;
+use crate::errors::UserError;
 use crate::value::{ForeignValue, NativeValue, ToValue, Value};
 use crate::vm::value::TaggedValue;
 use crate::vm::ForeignCallable;
@@ -133,7 +133,7 @@ pub trait ForeignFunction<T: FunctionSignature> {
   fn raw_foreign_function(self) -> ForeignCallable;
 }
 
-pub type CallResult<T> = Result<T, RuntimeError>;
+pub type CallResult<T> = Result<T, Box<dyn UserError>>;
 
 impl<F, Ret> ForeignFunction<NoContext<UnFallible<SignatureNoParams<Ret>>>> for F
 where
@@ -174,7 +174,7 @@ impl<F, Context, Ret> ForeignFunction<WithContext<Context, Fallible<SignatureNoP
 where
   Context: 'static,
   Ret: ForeignValue,
-  F: Fn(&mut Context) -> Result<Ret, RuntimeError> + 'static,
+  F: Fn(&mut Context) -> Result<Ret, Box<dyn UserError>> + 'static,
 {
   fn raw_foreign_function(self) -> ForeignCallable {
     Box::new(move |arguments, gc, context| unsafe {
@@ -201,7 +201,7 @@ impl<F, Params, Ret> ForeignFunction<NoContext<Fallible<Signature<Params, Ret>>>
 where
   Params: ForeignParameters,
   Ret: ForeignValue,
-  F: Fn(Params) -> Result<Ret, RuntimeError> + 'static,
+  F: Fn(Params) -> Result<Ret, Box<dyn UserError>> + 'static,
 {
   fn raw_foreign_function(self) -> ForeignCallable {
     Box::new(move |arguments, gc, _| unsafe {
@@ -236,7 +236,7 @@ where
   Context: 'static,
   Params: ForeignParameters,
   Ret: ForeignValue,
-  F: Fn(&mut Context, Params) -> Result<Ret, RuntimeError> + 'static,
+  F: Fn(&mut Context, Params) -> Result<Ret, Box<dyn UserError>> + 'static,
 {
   fn raw_foreign_function(self) -> ForeignCallable {
     Box::new(move |arguments, gc, context| unsafe {

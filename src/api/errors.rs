@@ -3,10 +3,27 @@ use std::fmt::Formatter;
 
 use crate::compiler::errors::{CompilerError, ErrorPrinter};
 
+pub trait UserError {
+  fn message(&self) -> String;
+}
+
+impl UserError for &str {
+  fn message(&self) -> String {
+    self.to_string()
+  }
+}
+
 pub enum RuntimeError {
   StackOverflow,
   MissingContext,
   Panic(String),
+  User(Box<dyn UserError>),
+}
+
+impl From<Box<dyn UserError>> for RuntimeError {
+  fn from(user_error: Box<dyn UserError>) -> Self {
+    RuntimeError::User(user_error)
+  }
 }
 
 impl fmt::Debug for RuntimeError {
@@ -15,6 +32,7 @@ impl fmt::Debug for RuntimeError {
       RuntimeError::StackOverflow => write!(f, "stack overflow"),
       RuntimeError::MissingContext => write!(f, "context missing in function call"),
       RuntimeError::Panic(message) => write!(f, "panic: \"{message}\""),
+      RuntimeError::User(user_error) => write!(f, "user error: {}", user_error.message()),
     }
   }
 }

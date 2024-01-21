@@ -1,8 +1,8 @@
 import std_io;
 
-foreign fn test(i: num);
+foreign fn test();
 
-test(1);
+test();
 
 println("hello");
 
