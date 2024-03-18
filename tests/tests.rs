@@ -1,4 +1,4 @@
-use tgsl::errors::RuntimeError;
+use tgsl::errors::UserError;
 use tgsl::library::Library;
 use tgsl::Tgsl;
 
@@ -19,11 +19,11 @@ macro_rules! test_files {
   };
 }
 
-fn assert(value: bool) -> Result<(), RuntimeError> {
+fn assert(value: bool) -> Result<(), Box<dyn UserError>> {
   if value {
     Ok(())
   } else {
-    Err(RuntimeError::Panic("failed assertion".into()))
+    Err(Box::new("failed assertion"))
   }
 }
 
