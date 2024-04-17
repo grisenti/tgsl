@@ -430,14 +430,14 @@ mod test {
   #[test]
   fn parse_empty_constructor() {
     let constructor = parse_correct_expression("A{}");
-    assert_eq!(constructor["Constructor"]["type_name"], "A");
-    assert!(constructor["Constructor"]["arguments"].is_empty());
+    assert_eq!(constructor["Construct"]["type_name"], "A");
+    assert!(constructor["Construct"]["arguments"].is_empty());
   }
 
   #[test]
   fn parse_non_empty_constructor() {
     let constructor = parse_correct_expression("SeriousStruct{1, \"hello\"}");
-    let constructor = &constructor["Constructor"];
+    let constructor = &constructor["Construct"];
     assert_eq!(constructor["type_name"], "SeriousStruct");
     assert_eq!(constructor["arguments"].len(), 2);
     assert_eq!(

@@ -1,291 +1,328 @@
 use json::object;
 use json::JsonValue;
 
-use crate::compiler::ast::expression::expr::{DotCall, MemberGet, MemberSet};
-use crate::compiler::ast::parsed_type::ParsedFunctionType;
-use crate::compiler::ast::statement::stmt::{ModuleDecl, StructDeclaration};
-use crate::compiler::ast::visitor::ParsedTypeVisitor;
+use crate::compiler::ast::parsed_type::ParsedType;
 use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle};
 use crate::compiler::lexer::Token;
 
 use super::expression::*;
 use super::statement::*;
-use super::visitor::ExprVisitor;
-use super::visitor::StmtVisitor;
 use super::AST;
 
 impl From<&Token<'_>> for JsonValue {
-  fn from(value: &Token) -> Self {
+  fn from(value: &Token<'_>) -> Self {
     JsonValue::String(format!("{:?}", value))
   }
 }
 
-fn expr_list_to_json(expressions: &[ExprHandle], ast: &AST) -> JsonValue {
-  let mut printer = ASTJSONPrinter {};
-  JsonValue::Array(
-    expressions
-      .iter()
-      .map(|&e| printer.visit_expr(ast, e))
-      .collect::<Vec<_>>(),
-  )
+pub trait ToJson {
+  fn to_json(&self, ast: &AST) -> JsonValue;
 }
 
-fn stmt_list_to_json(statements: &[StmtHandle], ast: &AST) -> JsonValue {
-  let mut printer = ASTJSONPrinter {};
-  JsonValue::Array(
-    statements
-      .iter()
-      .map(|&s| printer.visit_stmt(ast, s))
-      .collect::<Vec<_>>(),
-  )
+impl ToJson for ExprHandle {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    match self.get_expr(ast) {
+      Expr::Literal(l) => l.to_json(ast),
+      Expr::Id(i) => i.to_json(ast),
+      Expr::Paren(p) => p.to_json(ast),
+      Expr::Assignment(a) => a.to_json(ast),
+      Expr::Binary(b) => b.to_json(ast),
+      Expr::Unary(u) => u.to_json(ast),
+      Expr::Lambda(l) => l.to_json(ast),
+      Expr::FnCall(f) => f.to_json(ast),
+      Expr::MemberGet(m) => m.to_json(ast),
+      Expr::MemberSet(m) => m.to_json(ast),
+      Expr::DotCall(d) => d.to_json(ast),
+      Expr::Construct(c) => c.to_json(ast),
+    }
+  }
 }
 
-fn parsed_type_list_to_json(parsed_types: &[TypeHandle], ast: &AST) -> JsonValue {
-  let mut printer = ASTJSONPrinter {};
-  JsonValue::Array(
-    parsed_types
+impl ToJson for Vec<ExprHandle> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    self
       .iter()
-      .map(|&t| printer.visit_parsed_type(ast, t))
-      .collect::<Vec<_>>(),
-  )
+      .map(|e| e.to_json(ast))
+      .collect::<Vec<_>>()
+      .into()
+  }
 }
 
-pub struct ASTJSONPrinter {}
+impl ToJson for Token<'_> {
+  fn to_json(&self, _: &AST) -> JsonValue {
+    JsonValue::String(format!("{:?}", self))
+  }
+}
 
-impl ExprVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
-  fn visit_literal(&mut self, _ast: &AST, literal: &expr::Literal, _: ExprHandle) -> JsonValue {
+impl ToJson for expr::Literal<'_> {
+  fn to_json(&self, _: &AST) -> JsonValue {
     object! {
       "Literal": {
-        "value": &literal.value
-      }
-    }
-  }
-
-  fn visit_id(&mut self, _ast: &AST, id: &expr::Id, _: ExprHandle) -> JsonValue {
-    object! {
-      "Id": {
-        "id": id.id
-      }
-    }
-  }
-
-  fn visit_paren(&mut self, ast: &AST, paren: &expr::Paren, _: ExprHandle) -> JsonValue {
-    object! {
-      "Paren": {
-        "expr": self.visit_expr(ast, paren.inner)
-      }
-    }
-  }
-
-  fn visit_assignment(
-    &mut self,
-    ast: &AST,
-    assignment: &expr::Assignment,
-    _: ExprHandle,
-  ) -> JsonValue {
-    object! {
-      "Assignment": {
-        var_name: assignment.var_name,
-        rhs: self.visit_expr(ast, assignment.rhs),
-      }
-    }
-  }
-
-  fn visit_binary(&mut self, ast: &AST, binary: &expr::Binary, _: ExprHandle) -> JsonValue {
-    object! {
-      "Binary": {
-        left: self.visit_expr(ast, binary.left),
-        operator: &binary.operator,
-        right: self.visit_expr(ast, binary.right)
-      }
-    }
-  }
-
-  fn visit_unary(&mut self, ast: &AST, unary: &expr::Unary, _: ExprHandle) -> JsonValue {
-    object! {
-      "Unary": {
-        "operator": &unary.operator,
-        "right": self.visit_expr(ast, unary.right),
-      }
-    }
-  }
-
-  fn visit_lambda(&mut self, ast: &AST, lambda: &expr::Lambda, _: ExprHandle) -> JsonValue {
-    object! {
-      "Lambda": {
-        "parameter_names": lambda.parameter_names.clone(),
-        "parameter_types": parsed_type_list_to_json(&lambda.parameter_types, ast),
-        "return_type": self.visit_parsed_type(ast, lambda.return_type),
-        "body": stmt_list_to_json(&lambda.body, ast)
-      }
-    }
-  }
-
-  fn visit_fn_call(&mut self, ast: &AST, fn_call: &expr::FnCall, _: ExprHandle) -> JsonValue {
-    object! {
-      "FnCall": {
-        "func": self.visit_expr(ast, fn_call.func),
-        "arguments": expr_list_to_json(&fn_call.arguments, ast)
-      }
-    }
-  }
-
-  fn visit_member_get(
-    &mut self,
-    ast: &'_ AST,
-    member_get: &'_ MemberGet<'_>,
-    _: ExprHandle,
-  ) -> JsonValue {
-    object! {
-      "MemberGet": {
-        "lhs": self.visit_expr(ast, member_get.lhs),
-        "member_name": member_get.member_name
-      }
-    }
-  }
-
-  fn visit_member_set(&mut self, ast: &AST, member_set: &MemberSet, _: ExprHandle) -> JsonValue {
-    object! {
-      "MemberSet": {
-        "lhs": self.visit_expr(ast, member_set.lhs),
-        "member_name": member_set.member_name,
-        "value": self.visit_expr(ast, member_set.value),
-      }
-    }
-  }
-
-  fn visit_dot_call(&mut self, ast: &AST, dot_call: &DotCall, _: ExprHandle) -> JsonValue {
-    object! {
-      "DotCall": {
-        "lhs": self.visit_expr(ast, dot_call.lhs),
-        "function_name": dot_call.function_name,
-        "arguments": expr_list_to_json(&dot_call.arguments, ast)
-      }
-    }
-  }
-
-  fn visit_constructor(
-    &mut self,
-    ast: &AST,
-    constructor: &expr::Construct,
-    _: ExprHandle,
-  ) -> JsonValue {
-    object! {
-      "Constructor": {
-        "type_name": constructor.type_name,
-        "arguments": expr_list_to_json(&constructor.arguments, ast)
+        "value": &self.value
       }
     }
   }
 }
 
-impl StmtVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
-  fn visit_var_decl(&mut self, ast: &AST, var_decl: &stmt::VarDecl, _: StmtHandle) -> JsonValue {
+impl ToJson for expr::Id<'_> {
+  fn to_json(&self, _: &AST) -> JsonValue {
+    object! {
+      "Id": {
+        "id": self.id
+      }
+    }
+  }
+}
+
+impl ToJson for expr::Paren {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    object! {
+      "Paren": {
+        "expr": self.inner.to_json(ast)
+      }
+    }
+  }
+}
+
+impl ToJson for expr::Assignment<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    object! {
+      "Assignment": {
+        "var_name": self.var_name,
+        "rhs": self.rhs.to_json(ast)
+      }
+    }
+  }
+}
+
+impl ToJson for expr::Binary<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    object! {
+      "Binary": {
+        "left": self.left.to_json(ast),
+        "operator": self.operator.to_json(ast),
+        "right": self.right.to_json(ast)
+      }
+    }
+  }
+}
+
+impl ToJson for expr::Unary<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    object! {
+      "Unary": {
+        "operator": self.operator.to_json(ast),
+        "right": self.right.to_json(ast)
+      }
+    }
+  }
+}
+
+impl ToJson for expr::Lambda<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    object! {
+      "Lambda": {
+        "parameter_names": self.parameter_names.clone(),
+        "parameter_types": self.parameter_types.to_json(ast),
+        "return_type": self.return_type.to_json(ast),
+        "body": self.body.to_json(ast),
+      }
+    }
+  }
+}
+
+impl ToJson for expr::FnCall {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    object! {
+      "FnCall": {
+        "func": self.func.to_json(ast),
+        "arguments": self.arguments.to_json(ast)
+      }
+    }
+  }
+}
+
+impl ToJson for expr::MemberGet<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    object! {
+      "MemberGet": {
+        "lhs": self.lhs.to_json(ast),
+        "member_name": self.member_name
+      }
+    }
+  }
+}
+
+impl ToJson for expr::MemberSet<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    object! {
+      "MemberSet": {
+        "lhs": self.lhs.to_json(ast),
+        "member_name": self.member_name,
+        "value": self.value.to_json(ast)
+      }
+    }
+  }
+}
+
+impl ToJson for expr::DotCall<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    object! {
+      "DotCall": {
+        "lhs": self.lhs.to_json(ast),
+        "function_name": self.function_name,
+        "arguments": self.arguments.to_json(ast)
+      }
+    }
+  }
+}
+
+impl ToJson for expr::Construct<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    object! {
+      "Construct": {
+        "type_name": self.type_name,
+        "arguments": self.arguments.to_json(ast),
+      }
+    }
+  }
+}
+
+impl ToJson for StmtHandle {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    match self.get_stmt(ast) {
+      Stmt::VarDecl(v) => v.to_json(ast),
+      Stmt::StmtExpr(s) => s.to_json(ast),
+      Stmt::Block(b) => b.to_json(ast),
+      Stmt::IfBranch(i) => i.to_json(ast),
+      Stmt::While(w) => w.to_json(ast),
+      Stmt::FunctionDefinition(f) => f.to_json(ast),
+      Stmt::FunctionDeclaration(f) => f.to_json(ast),
+      Stmt::ForeignFunction(f) => f.to_json(ast),
+      Stmt::Break => "Break".into(),
+      Stmt::Return(r) => r.to_json(ast),
+      Stmt::StructDeclaration(s) => s.to_json(ast),
+      Stmt::StructDefinition(s) => s.to_json(ast),
+      Stmt::Import(i) => i.to_json(ast),
+      Stmt::ModuleDecl(m) => m.to_json(ast),
+    }
+  }
+}
+
+impl ToJson for Vec<StmtHandle> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    self
+      .iter()
+      .map(|s| s.to_json(ast))
+      .collect::<Vec<_>>()
+      .into()
+  }
+}
+
+impl ToJson for stmt::VarDecl<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
     object! {
       "VarDecl": {
-        "name": var_decl.name,
-        "specified_type": self.visit_parsed_type(ast, var_decl.specified_type),
-        "init_expr": self.visit_expr(ast, var_decl.init_expr)
+        "name": self.name,
+        "specified_type": self.specified_type.to_json(ast),
+        "init_expr": self.init_expr.to_json(ast)
       }
     }
   }
+}
 
-  fn visit_stmt_expr(&mut self, ast: &AST, expr: &stmt::StmtExpr, _: StmtHandle) -> JsonValue {
+impl ToJson for stmt::StmtExpr {
+  fn to_json(&self, ast: &AST) -> JsonValue {
     object! {
       "StmtExpr": {
-        "expr": self.visit_expr(ast, expr.expr),
+        "expr": self.expr.to_json(ast)
       }
     }
   }
+}
 
-  fn visit_block(&mut self, ast: &AST, block: &stmt::Block, _: StmtHandle) -> JsonValue {
+impl ToJson for stmt::Block {
+  fn to_json(&self, ast: &AST) -> JsonValue {
     object! {
       "Block": {
-        "statements": stmt_list_to_json(&block.statements, ast)
+        "statements": self.statements.to_json(ast)
       }
     }
   }
+}
 
-  fn visit_if_branch(&mut self, ast: &AST, if_branch: &stmt::IfBranch, _: StmtHandle) -> JsonValue {
-    let else_branch = if let Some(stmt) = if_branch.else_branch {
-      self.visit_stmt(ast, stmt)
+impl ToJson for stmt::IfBranch {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    let else_branch = if let Some(stmt) = self.else_branch {
+      stmt.to_json(ast)
     } else {
       JsonValue::Null
     };
     object! {
       "IfBranch": {
-        "condition": self.visit_expr(ast, if_branch.condition),
-        "true branch": self.visit_stmt(ast, if_branch.true_branch),
+        "condition": self.condition.to_json(ast),
+        "true branch": self.true_branch.to_json(ast),
         "else branch": else_branch
       }
     }
   }
+}
 
-  fn visit_while(&mut self, ast: &AST, while_stmt: &stmt::While, _: StmtHandle) -> JsonValue {
+impl ToJson for stmt::While {
+  fn to_json(&self, ast: &AST) -> JsonValue {
     object! {
       "While": {
-        "condition": self.visit_expr(ast, while_stmt.condition),
-        "body": self.visit_stmt(ast, while_stmt.loop_body)
+        "condition": self.condition.to_json(ast),
+        "body": self.loop_body.to_json(ast)
       }
     }
   }
+}
 
-  fn visit_function_definition(
-    &mut self,
-    ast: &AST,
-    function_definition: &stmt::FunctionDefinition,
-    _: StmtHandle,
-  ) -> JsonValue {
+impl ToJson for stmt::FunctionDefinition<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
     object! {
       "FunctionDefinition": {
-        "name": function_definition.name,
-        "parameter_names": function_definition.parameter_names.clone(),
-        "parameter_types": parsed_type_list_to_json(&function_definition.parameter_types, ast),
-        "return_type": self.visit_parsed_type(ast, function_definition.return_type),
-        "body": stmt_list_to_json(&function_definition.body, ast)
+        "name": self.name,
+        "parameter_names": self.parameter_names.clone(),
+        "parameter_types": self.parameter_types.to_json(ast),
+        "return_type": self.return_type.to_json(ast),
+        "body": self.body.to_json(ast)
       }
     }
   }
+}
 
-  fn visit_function_declaration(
-    &mut self,
-    ast: &AST,
-    function_declaration: &stmt::FunctionDeclaration,
-    _: StmtHandle,
-  ) -> JsonValue {
+impl ToJson for stmt::FunctionDeclaration<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
     object! {
-        "FunctionDeclaration": {
-          "name": function_declaration.name,
-          "parameter_names": function_declaration.parameter_names.clone(),
-          "parameter_types": parsed_type_list_to_json(&function_declaration.parameter_types, ast),
-          "return_type": self.visit_parsed_type(ast, function_declaration.return_type)
-        }
+      "FunctionDeclaration": {
+        "name": self.name,
+        "parameter_names": self.parameter_names.clone(),
+        "parameter_types": self.parameter_types.to_json(ast),
+        "return_type": self.return_type.to_json(ast)
+      }
     }
   }
+}
 
-  fn visit_foreign_function(
-    &mut self,
-    ast: &AST,
-    foreign_function: &stmt::ForeignFunction,
-    _: StmtHandle,
-  ) -> JsonValue {
+impl ToJson for stmt::ForeignFunction<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
     object! {
       "ForeignalFunction": {
-        "name": foreign_function.name,
-        "parameter_names": foreign_function.parameter_names.clone(),
-        "parameter_types": parsed_type_list_to_json(&foreign_function.parameter_types, ast),
-        "return_type": self.visit_parsed_type(ast, foreign_function.return_type)
+        "name": self.name,
+        "parameter_names": self.parameter_names.clone(),
+        "parameter_types": self.parameter_types.to_json(ast),
+        "return_type": self.return_type.to_json(ast)
       }
     }
   }
+}
 
-  fn visit_break(&mut self, _ast: &AST, _: StmtHandle) -> JsonValue {
-    JsonValue::String("Break".to_string())
-  }
-
-  fn visit_return(&mut self, ast: &AST, return_stmt: &stmt::Return, _: StmtHandle) -> JsonValue {
-    let ret_expr = if let Some(expr) = return_stmt.expr {
-      self.visit_expr(ast, expr)
+impl ToJson for stmt::Return {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    let ret_expr = if let Some(expr) = self.expr {
+      expr.to_json(ast)
     } else {
       JsonValue::Null
     };
@@ -295,108 +332,91 @@ impl StmtVisitor<'_, '_, JsonValue> for ASTJSONPrinter {
       }
     }
   }
+}
 
-  fn visit_struct_declaration(
-    &mut self,
-    _ast: &'_ AST,
-    struct_decl: &'_ StructDeclaration<'_>,
-    _: StmtHandle,
-  ) -> JsonValue {
+impl ToJson for stmt::StructDeclaration<'_> {
+  fn to_json(&self, _ast: &AST) -> JsonValue {
     object! {
       "StructDeclaration": {
-        "name": struct_decl.name,
+        "name": self.name
       }
     }
   }
+}
 
-  fn visit_struct_definition(
-    &mut self,
-    ast: &AST,
-    struct_def: &stmt::StructDefinition,
-    _: StmtHandle,
-  ) -> JsonValue {
+impl ToJson for stmt::StructDefinition<'_> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
     object! {
       "StructDefinition": {
-        "name": struct_def.name,
-        "member_names": struct_def.member_names.clone(),
-        "member_types": parsed_type_list_to_json(&struct_def.member_types, ast)
+        "name": self.name,
+        "member_names": self.member_names.clone(),
+        "member_types": self.member_types.to_json(ast)
       }
     }
   }
+}
 
-  fn visit_import(&mut self, _ast: &AST, import: &stmt::Import, _: StmtHandle) -> JsonValue {
+impl ToJson for stmt::Import<'_> {
+  fn to_json(&self, _ast: &AST) -> JsonValue {
     object! {
       "Import": {
-        "module_name": import.module_name
+        "module_name": self.module_name
       }
     }
   }
+}
 
-  fn visit_module_decl(
-    &mut self,
-    _ast: &AST,
-    module_decl: &ModuleDecl,
-    _: StmtHandle,
-  ) -> JsonValue {
+impl ToJson for stmt::ModuleDecl<'_> {
+  fn to_json(&self, _ast: &AST) -> JsonValue {
     object! {
       "ModuleDecl": {
-        "name": module_decl.name
+        "name": self.name
       }
     }
   }
 }
 
-impl ParsedTypeVisitor<JsonValue> for ASTJSONPrinter {
-  fn visit_num(&mut self, _ast: &AST) -> JsonValue {
-    JsonValue::String("num".to_string())
+impl ToJson for Vec<TypeHandle> {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    self
+      .iter()
+      .map(|t| t.to_json(ast))
+      .collect::<Vec<_>>()
+      .into()
   }
+}
 
-  fn visit_str(&mut self, _ast: &AST) -> JsonValue {
-    JsonValue::String("str".to_string())
+impl ToJson for TypeHandle {
+  fn to_json(&self, ast: &AST) -> JsonValue {
+    self.get_type(ast).to_json(ast)
   }
+}
 
-  fn visit_bool(&mut self, _ast: &AST) -> JsonValue {
-    JsonValue::String("bool".to_string())
-  }
-
-  fn visit_nothing(&mut self, _ast: &AST) -> JsonValue {
-    JsonValue::String("nothing".to_string())
-  }
-
-  fn visit_any(&mut self, _ast: &AST) -> JsonValue {
-    JsonValue::String("any".to_string())
-  }
-
-  fn visit_named(&mut self, _ast: &AST, name: &str) -> JsonValue {
-    object! {named: name}
-  }
-
-  fn visit_function(&mut self, ast: &AST, function: &ParsedFunctionType) -> JsonValue {
-    object! {
-      "Function": {
-        "parameters": parsed_type_list_to_json(&function.parameters(), ast),
-        "return_type": self.visit_parsed_type(ast, function.return_type()),
-      }
+impl ToJson for ParsedType<'_> {
+  fn to_json(&self, _: &AST) -> JsonValue {
+    match self {
+      ParsedType::Num => "num".into(),
+      ParsedType::Bool => "bool".into(),
+      ParsedType::Str => "str".into(),
+      ParsedType::Function(_) => todo!(),
+      ParsedType::Named(s) => object! {named: s.to_string()},
+      ParsedType::Nothing => "nothing".into(),
+      _ => todo!(),
     }
   }
 }
 
-impl ASTJSONPrinter {
-  pub fn print_to_string(ast: &AST) -> String {
-    let program = ast
-      .get_program()
-      .iter()
-      .map(|s| ASTJSONPrinter {}.visit_stmt(ast, *s))
-      .collect::<Vec<_>>();
-    json::stringify_pretty(program, 1)
-  }
+#[allow(unused)]
+pub fn to_json(ast: &AST) -> JsonValue {
+  let program = ast
+    .get_program()
+    .iter()
+    .map(|s| s.to_json(ast))
+    .collect::<Vec<_>>();
+  JsonValue::Array(program)
+}
 
-  pub fn to_json(ast: &AST) -> JsonValue {
-    let program = ast
-      .get_program()
-      .iter()
-      .map(|s| ASTJSONPrinter {}.visit_stmt(ast, *s))
-      .collect::<Vec<_>>();
-    JsonValue::Array(program)
-  }
+#[allow(unused)]
+pub fn to_json_string(ast: &AST) -> String {
+  json::stringify_pretty(to_json(ast), 1)
 }

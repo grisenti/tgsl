@@ -293,8 +293,7 @@ impl<'src> Parser<'src> {
 mod test {
   use json::JsonValue;
 
-  use crate::compiler::ast::json::ASTJSONPrinter;
-  use crate::compiler::ast::visitor::{ExprVisitor, StmtVisitor};
+  use crate::compiler::ast::json::ToJson;
   use crate::compiler::ast::AST;
   use crate::compiler::errors::CompilerError;
   use crate::compiler::lexer::{Lexer, Token};
@@ -322,8 +321,7 @@ mod test {
       if !self.parser.errors.is_empty() {
         panic!("parsing error: {:?}", self.parser.errors);
       }
-      let mut printer = ASTJSONPrinter {};
-      printer.visit_expr(&self.parser.ast, expr)
+      expr.to_json(&self.parser.ast)
     }
 
     pub fn parse_expression_error(mut self) -> CompilerError {
@@ -336,8 +334,7 @@ mod test {
       if !self.parser.errors.is_empty() {
         panic!("parsing error: {:?}", self.parser.errors);
       }
-      let mut printer = ASTJSONPrinter {};
-      printer.visit_stmt(&self.parser.ast, stmt)
+      stmt.to_json(&self.parser.ast)
     }
   }
 }
