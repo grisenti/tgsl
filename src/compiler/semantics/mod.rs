@@ -1,20 +1,15 @@
 use std::rc::Rc;
 
-use crate::compiler::ast::parsed_type::ParsedFunctionType;
-use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor, StmtVisitor};
-use crate::compiler::ast::{ExprHandle, StmtHandle, TypeHandle, AST};
-use crate::compiler::codegen::bytecode::OpCode;
-use crate::compiler::codegen::program_chunk::ProgramChunk;
-use crate::compiler::codegen::ModuleProgram;
-use crate::compiler::errors::{sema_err, ty_err, CompilerError};
-use crate::compiler::functions::ExportedFunctions;
+use crate::compiler::ast::parsed_type::ParsedType;
+use crate::compiler::ast::{StmtHandle, TypeHandle, AST};
+
+use crate::compiler::errors::CompilerError;
 use crate::compiler::global_env::GlobalEnv;
+use crate::compiler::ir::{Capture, Ir, IrStmtHandle};
 use crate::compiler::lexer::SourceRange;
-use crate::compiler::semantics::environment::{DeclarationError, DeclarationResult, Environment};
-use crate::compiler::structs::ExportedGlobalStructs;
+use crate::compiler::semantics::environment::{Environment, ExportedEnv};
+use crate::compiler::semantics::statement_semantics::CheckStmtSemantics;
 use crate::compiler::types::{FunctionSignature, Type};
-use crate::compiler::variables::ExportedGlobalVariables;
-use crate::compiler::ForeignFunction;
 
 mod environment;
 mod expression_semantics;
@@ -47,207 +42,146 @@ fn combine_returns(current: ReturnKind, new: ReturnKind) -> ReturnKind {
 
 pub struct ModuleExports {
   pub module_name: Rc<str>,
-  pub global_variables: ExportedGlobalVariables,
-  pub structs: ExportedGlobalStructs,
-  pub functions: ExportedFunctions,
+  pub exports: ExportedEnv,
 }
 
 pub struct CompiledModule {
   pub exports: Option<ModuleExports>,
-  pub foreign_functions: Vec<ForeignFunction>,
-  pub globals_count: u32,
-  pub program: ModuleProgram,
+  pub ir: Ir,
 }
 
-pub struct SemanticChecker<'a> {
-  env: Environment<'a>,
-  ast: &'a AST<'a>,
+pub fn check_program_semantics(
+  ast: &AST,
+  global_env: &GlobalEnv,
+) -> Result<Ir, Vec<CompilerError>> {
+  let mut state = SemanticState::new(global_env);
+  let mut ir = Ir::default();
+
+  for stmt in ast.get_program() {
+    let checked_stmt = stmt.check(ast, &mut ir, &mut state);
+    if let Some(handle) = checked_stmt.handle {
+      ir.add_startup_instruction(handle);
+    }
+  }
+
+  if !state.errors.is_empty() {
+    return Err(state.errors);
+  }
+  Ok(ir)
+}
+
+struct SemanticState<'env> {
   errors: Vec<CompilerError>,
-  checked_functions: Vec<ProgramChunk>,
-  global_code: ProgramChunk,
+  source_range_stack: Vec<SourceRange>,
+  env: Environment<'env>,
   module_name: Option<Rc<str>>,
+  function_count: u32,
+  global_var_count: u32,
 }
 
-impl<'a> SemanticChecker<'a> {
-  pub fn check_program(
-    ast: &'a AST<'a>,
-    global_env: &'a GlobalEnv,
-  ) -> Result<CompiledModule, Vec<CompilerError>> {
-    let mut checker = Self {
-      env: Environment::new(global_env),
-      ast,
+impl<'a> SemanticState<'a> {
+  fn new(global_env: &'a GlobalEnv) -> Self {
+    Self {
       errors: Vec::new(),
-      checked_functions: Vec::new(),
-      global_code: ProgramChunk::new("<global>".to_string()),
+      source_range_stack: Vec::new(),
+      env: Environment::new(global_env),
       module_name: None,
-    };
-    for stmt in ast.get_program() {
-      checker.visit_stmt(ast, *stmt);
-    }
-    assert!(
-      checker.env.get_current_function_code().is_none(),
-      "some functions have yet to be closed"
-    );
-    if checker.errors.is_empty() {
-      unsafe { checker.global_code.push_op(OpCode::Return) };
-      let exported_env = checker.env.export();
-      let global_variable_count = exported_env.global_variables.count();
-      let foreign_functions_count = exported_env.foreign_functions.len() as u32;
-
-      let exports = checker.module_name.map(|module_name| ModuleExports {
-        module_name,
-        structs: exported_env.global_structs,
-        global_variables: exported_env.global_variables,
-        functions: exported_env.global_functions,
-      });
-      Ok(CompiledModule {
-        exports,
-        program: ModuleProgram {
-          global_code: checker.global_code,
-          functions: checker.checked_functions,
-          global_variables_count: global_variable_count,
-          foreign_functions_count,
-        },
-        globals_count: global_variable_count,
-        foreign_functions: exported_env.foreign_functions,
-      })
-    } else {
-      Err(checker.errors)
+      function_count: 0,
+      global_var_count: 0,
     }
   }
 
-  fn emit_error(&mut self, error: CompilerError) {
-    self.errors.push(error);
+  fn push_source_range(&mut self, source_range: SourceRange) {
+    self.source_range_stack.push(source_range);
   }
 
-  fn check_declaration<T>(
+  fn top_source_range(&self) -> SourceRange {
+    *self.source_range_stack.last().unwrap()
+  }
+
+  fn pop_source_range(&mut self) -> SourceRange {
+    self.source_range_stack.pop().unwrap()
+  }
+
+  /// Creates a new function scope and adds to it all the function's parameters
+  fn open_function(
     &mut self,
-    name: &str,
-    decl: DeclarationResult<T>,
-    stmt_sr: SourceRange,
-  ) -> Option<T> {
-    match decl {
-      Ok(value) => Some(value),
-      Err(DeclarationError::AlreadyDefined) => {
-        self.emit_error(sema_err::name_already_defined(stmt_sr, name));
-        None
-      }
-      Err(DeclarationError::TooManyLocalNames) => {
-        assert!(!self.env.in_global_scope());
-        self.emit_error(sema_err::too_many_local_names(stmt_sr));
-        None
-      }
+    name: Rc<str>,
+    parameter_names: &[&str],
+    parameter_types: &[Type],
+    return_type: Type,
+  ) -> u32 {
+    self.env.start_function_definition(name, return_type);
+    for (name, type_) in parameter_names.iter().zip(parameter_types) {
+      self
+        .env
+        .declare_variable(Rc::from(*name), type_.clone())
+        .expect("TODO: error checking");
     }
+    let function_id = self.function_count;
+    self.function_count += 1;
+    function_id
   }
 
-  fn finalize_function_code(&mut self) {
-    if *self.env.get_current_function_return_type().unwrap() == Type::Nothing {
-      unsafe {
-        self.code().push_constant_none();
-        self.code().push_op(OpCode::Return);
-      }
-    }
+  fn close_function(&mut self) -> Vec<Capture> {
+    self.env.end_function_definition()
   }
 
-  fn visit_statements(&mut self, statements: &[StmtHandle]) -> ReturnKind {
-    let mut return_type = ReturnKind::None;
-    for stmt in statements {
-      let stmt_return = self.visit_stmt(self.ast, *stmt);
-      return_type = combine_returns(return_type, stmt_return);
-    }
-    return_type
+  fn module_name(&self) -> Rc<str> {
+    self
+      .module_name
+      .clone()
+      .unwrap_or(Rc::from(Type::ANONYMOUS_MODULE))
   }
+}
 
-  fn visit_function_body(&mut self, statements: &[StmtHandle], statements_sr: SourceRange) {
-    let return_kind = self.visit_statements(statements);
-    let return_type = self
-      .env
-      .get_current_function_return_type()
-      .expect("parsing function body in the global scope");
-    if !return_type.is_error()
-      && *return_type != Type::Nothing
-      && return_kind != ReturnKind::Unconditional
-    {
-      self.emit_error(sema_err::no_unconditional_return(statements_sr));
-    }
-  }
-
-  fn convert_type_list(&mut self, parameter_types: &[TypeHandle]) -> Vec<Type> {
-    parameter_types
-      .iter()
-      .map(|t| self.visit_parsed_type(self.ast, *t))
-      .collect::<Vec<_>>()
-  }
-
-  fn visit_expr_list(&mut self, ast: &'a AST<'a>, expr_list: &[ExprHandle]) -> Vec<Type> {
-    expr_list.iter().map(|e| self.visit_expr(ast, *e)).collect()
-  }
-
-  fn declare_local_var(&mut self, name: &'a str, var_type: Type, stmt_sr: SourceRange) {
-    if let Err(err) = self.env.declare_local_var(name, var_type) {
+fn convert_parsed_type(t: TypeHandle, ast: &AST, state: &SemanticState) -> Type {
+  match t.get_type(ast) {
+    ParsedType::Num => Type::Num,
+    ParsedType::Str => Type::Str,
+    ParsedType::Bool => Type::Bool,
+    ParsedType::Nothing => Type::Nothing,
+    ParsedType::Any => Type::Any,
+    ParsedType::Named(name) => {
       todo!()
     }
-  }
-
-  fn declare_function_parameters(&mut self, names: &[&'a str], types: &[Type], sr: SourceRange) {
-    for (name, type_) in names.iter().zip(types) {
-      self.declare_local_var(name, type_.clone(), sr);
+    ParsedType::Function(function) => {
+      let parameters = convert_type_list(function.parameters(), ast, state);
+      let return_type = convert_parsed_type(function.return_type(), ast, state);
+      FunctionSignature::new(parameters, return_type).into()
     }
-  }
-
-  fn check_condition(&mut self, condition_type: Type, sr: SourceRange) -> bool {
-    if condition_type.is_error() {
-      false
-    } else if condition_type != Type::Bool {
-      self.emit_error(ty_err::incorrect_conditional_type(sr, &condition_type));
-      false
-    } else {
-      true
-    }
-  }
-
-  fn code(&mut self) -> &mut ProgramChunk {
-    self
-      .env
-      .get_current_function_code()
-      .unwrap_or(&mut self.global_code)
   }
 }
 
-impl ParsedTypeVisitor<Type> for SemanticChecker<'_> {
-  fn visit_num(&mut self, _ast: &AST) -> Type {
-    Type::Num
-  }
+fn convert_type_list(types: &[TypeHandle], ast: &AST, state: &SemanticState) -> Vec<Type> {
+  types
+    .iter()
+    .map(|t| convert_parsed_type(*t, ast, state))
+    .collect()
+}
 
-  fn visit_str(&mut self, _ast: &AST) -> Type {
-    Type::Str
-  }
+struct CheckedBlock {
+  return_kind: ReturnKind,
+  block_statements: Vec<IrStmtHandle>,
+}
 
-  fn visit_bool(&mut self, _ast: &AST) -> Type {
-    Type::Bool
-  }
-
-  fn visit_nothing(&mut self, _ast: &AST) -> Type {
-    Type::Nothing
-  }
-
-  fn visit_any(&mut self, _ast: &AST) -> Type {
-    Type::Any
-  }
-
-  fn visit_named(&mut self, _ast: &AST, name: &str) -> Type {
-    Type::Struct {
-      name: Rc::from(name),
-      module_name: self
-        .module_name
-        .clone()
-        .unwrap_or(Rc::from(Type::ANONYMOUS_MODULE)),
+fn check_statement_block(
+  statements: &[StmtHandle],
+  ast: &AST,
+  ir: &mut Ir,
+  state: &mut SemanticState,
+) -> CheckedBlock {
+  let mut return_kind = ReturnKind::None;
+  let mut block_statements = Vec::with_capacity(statements.len());
+  for stmt in statements {
+    let checked_stmt = stmt.check(ast, ir, state);
+    if let Some(handle) = checked_stmt.handle {
+      block_statements.push(handle);
     }
+    return_kind = combine_returns(return_kind, checked_stmt.return_kind);
   }
-
-  fn visit_function(&mut self, ast: &AST, function: &ParsedFunctionType) -> Type {
-    let parameters = self.convert_type_list(function.parameters());
-    let return_type = self.visit_parsed_type(ast, function.return_type());
-    FunctionSignature::new(parameters, return_type).into()
+  CheckedBlock {
+    return_kind,
+    block_statements,
   }
 }

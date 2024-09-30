@@ -1,8 +1,14 @@
-import std_io;
+var i = 0;
+i = i + 1;
 
-foreign fn test();
+var x = || -> num {
+    return 1 + 1;
+};
 
-test();
-
-println("hello");
-
+{
+    var this_is_a_test = 0;
+    while (this_is_a_test < 10) {
+        this_is_a_test = this_is_a_test + 1;
+        i = i + 1;
+    }
+}

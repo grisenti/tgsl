@@ -1,7 +1,6 @@
 use core::fmt::Debug;
 
 use crate::compiler::functions::overload_set::FunctionAddress;
-use crate::compiler::variables::GlobalVarAddress;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
@@ -86,20 +85,6 @@ pub enum ConstantValue {
 
 impl From<FunctionAddress> for ConstantValue {
   fn from(value: FunctionAddress) -> Self {
-    match value {
-      FunctionAddress::RelativeNative(a) => Self::RelativeNativeFn(a),
-      FunctionAddress::RelativeForeign(a) => Self::RelativeForeignFn(a),
-      FunctionAddress::AbsoluteNative(a) => Self::AbsoluteNativeFn(a),
-      FunctionAddress::AbsoluteForeign(a) => Self::AbsoluteForeignFn(a),
-    }
-  }
-}
-
-impl From<GlobalVarAddress> for ConstantValue {
-  fn from(value: GlobalVarAddress) -> Self {
-    match value {
-      GlobalVarAddress::AbsoluteNative(a) => Self::AbsoluteNativeGlobalVar(a),
-      GlobalVarAddress::RelativeNative(a) => Self::RelativeNativeGlobalVar(a),
-    }
+    todo!()
   }
 }

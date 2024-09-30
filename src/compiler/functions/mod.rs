@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use overload_set::OverloadSet;
 
-use crate::compiler::functions::overload_set::{FindError, Function, FunctionKind};
+use crate::compiler::functions::overload_set::{FindError, FunctionKind, OverloadedFunction};
 use crate::compiler::types::FunctionSignature;
 
 pub mod overload_set;
@@ -84,7 +84,7 @@ impl GlobalFunctions {
         Err(FindError::RedefinedImport) => todo!(),
         Err(FindError::MultipleDefinitions) => todo!(),
         Err(FindError::NotFound) => {
-          overload_set.insert(Function {
+          overload_set.insert(OverloadedFunction {
             address,
             kind,
             signature,
@@ -95,7 +95,7 @@ impl GlobalFunctions {
     } else {
       self.function_names.insert(
         Rc::from(name),
-        OverloadSet::new(Function {
+        OverloadSet::new(OverloadedFunction {
           address,
           kind,
           signature,
@@ -145,7 +145,7 @@ impl GlobalFunctions {
         Err(FindError::MultipleDefinitions) => todo!(),
         Err(FindError::NotFound) => {
           let address = self.last_native_function;
-          overload_set.insert(Function {
+          overload_set.insert(OverloadedFunction {
             address,
             kind: FunctionKind::RelativeNative,
             signature,
@@ -158,7 +158,7 @@ impl GlobalFunctions {
       let address = self.last_native_function;
       self.function_names.insert(
         Rc::from(name),
-        OverloadSet::new(Function {
+        OverloadSet::new(OverloadedFunction {
           address,
           kind: FunctionKind::RelativeNative,
           signature,

@@ -32,8 +32,8 @@ impl Struct {
     (&self.member_names[index.0], &self.member_types[index.0])
   }
 
-  pub fn get_name(&self) -> &str {
-    &self.name
+  pub fn get_name(&self) -> Rc<str> {
+    self.name.clone()
   }
 
   pub fn clone_name(&self) -> Rc<str> {

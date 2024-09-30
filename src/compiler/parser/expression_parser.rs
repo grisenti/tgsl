@@ -301,8 +301,6 @@ impl<'src> Parser<'src> {
 
 #[cfg(test)]
 mod test {
-  use json::{array, object, JsonValue};
-
   use crate::compiler::lexer::Token;
   use crate::compiler::parser::test::TestParser;
 

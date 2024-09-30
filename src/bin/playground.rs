@@ -13,7 +13,7 @@ struct Context {
 fn test() -> Result<(), String> {
   let source = fs::read_to_string("src/bin/test_program.tgsl").unwrap();
   let mut tgsl = Tgsl::default();
-  tgsl.load_library(StandardLibrary {});
+  //tgsl.load_library(StandardLibrary {});
   let result = tgsl
     .load_module(&source)
     .bind_function(

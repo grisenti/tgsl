@@ -1,6 +1,6 @@
 use crate::api::library::Library;
 use crate::compiler;
-use crate::compiler::errors::CompilerError;
+use crate::compiler::errors::{CompilerError, ErrorPrinter};
 use crate::compiler::functions::RelativeFunctionAddress;
 use crate::compiler::{CompiledModule, Compiler};
 use crate::errors::{ForeignBindingError, LoadModuleError};
@@ -24,21 +24,29 @@ pub struct Tgsl {
 impl Tgsl {
   pub fn load_module(&mut self, source: &str) -> ModuleLoader {
     match self.compiler.compile(source) {
-      Ok(compiled_module) => ModuleLoader {
-        tgsl: self,
-        compiler_errors: vec![],
-        function_binding_errors: vec![],
-        compiled_module: Some(compiled_module),
-        bound_foreign_functions: vec![],
-      },
-      Err(compiler_errors) => ModuleLoader {
-        tgsl: self,
-        compiler_errors,
-        compiled_module: None,
-        function_binding_errors: vec![],
-        bound_foreign_functions: vec![],
-      },
+      Ok(_) => panic!(),
+      Err(err) => {
+        println!("{}", ErrorPrinter::to_string(&err, source));
+        panic!();
+      }
     }
+    panic!()
+    // match self.compiler.compile(source) {
+    //   Ok(compiled_module) => ModuleLoader {
+    //     tgsl: self,
+    //     compiler_errors: vec![],
+    //     function_binding_errors: vec![],
+    //     compiled_module: Some(compiled_module),
+    //     bound_foreign_functions: vec![],
+    //   },
+    //   Err(compiler_errors) => ModuleLoader {
+    //     tgsl: self,
+    //     compiler_errors,
+    //     compiled_module: None,
+    //     function_binding_errors: vec![],
+    //     bound_foreign_functions: vec![],
+    //   },
+    // }
   }
 
   pub fn load_library<L: Library>(&mut self, mut library: L)

@@ -407,7 +407,7 @@ impl ToJson for ParsedType<'_> {
 }
 
 #[allow(unused)]
-pub fn to_json(ast: &AST) -> JsonValue {
+pub fn ast_to_json(ast: &AST) -> JsonValue {
   let program = ast
     .get_program()
     .iter()
@@ -417,6 +417,6 @@ pub fn to_json(ast: &AST) -> JsonValue {
 }
 
 #[allow(unused)]
-pub fn to_json_string(ast: &AST) -> String {
-  json::stringify_pretty(to_json(ast), 1)
+pub fn ast_to_json_string(ast: &AST) -> String {
+  json::stringify_pretty(ast_to_json(ast), 1)
 }

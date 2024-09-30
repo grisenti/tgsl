@@ -1,55 +1,581 @@
 use std::rc::Rc;
 
-use crate::compiler::ast::expression::expr::{
-  Assignment, Binary, Construct, DotCall, FnCall, Id, Lambda, Literal, MemberGet, MemberSet, Paren,
-  Unary,
-};
-use crate::compiler::ast::expression::Expr;
-use crate::compiler::ast::visitor::{ExprVisitor, ParsedTypeVisitor};
+use crate::compiler::ast::expression::{expr, Expr};
 use crate::compiler::ast::{ExprHandle, AST};
-use crate::compiler::codegen::bytecode::{ConstantValue, OpCode};
 use crate::compiler::errors::{sema_err, ty_err, CompilerError};
 use crate::compiler::functions::overload_set::{FunctionAddress, ResolvedOverload};
-use crate::compiler::functions::RelativeFunctionAddress;
+use crate::compiler::global_symbols::GlobalSymbol;
+use crate::compiler::ir::{
+  And, Assignment, BuiltinBinary, BuiltinOperation, BuiltinUnary, CallForeign, CallNative,
+  CallValue, Constant, Construct, CreateClosure, ExprIr, ExpressionInfo, FunctionIr, GetMember, Ir,
+  IrExprHandle, Or, SetMember, SymbolIndex, VarIndex,
+};
 use crate::compiler::lexer::{SourceRange, Token};
-use crate::compiler::semantics::environment::Capture;
-use crate::compiler::semantics::SemanticChecker;
+use crate::compiler::semantics::{
+  check_statement_block, convert_parsed_type, convert_type_list, SemanticState,
+};
 use crate::compiler::structs::{MemberIndex, StructGetError};
 use crate::compiler::types::{parameter_types_to_string, FunctionSignature, Type};
 
 #[rustfmt::skip]
-const BINARY_OPERATORS: &[(Token, Type, Type, Type, OpCode)] = &[
+const BINARY_OPERATORS: &[(Token, Type, Type, Type, BuiltinOperation)] = &[
   // number
-  (Token::Basic('+'), Type::Num, Type::Num, Type::Num, OpCode::AddNum),
-  (Token::Basic('-'), Type::Num, Type::Num, Type::Num, OpCode::SubNum),
-  (Token::Basic('*'), Type::Num, Type::Num, Type::Num, OpCode::MulNum),
-  (Token::Basic('/'), Type::Num, Type::Num, Type::Num, OpCode::DivNum),
-  (Token::Basic('<'), Type::Num, Type::Num, Type::Bool, OpCode::LeNum),
-  (Token::Basic('>'), Type::Num, Type::Num, Type::Bool, OpCode::GeNum),
-  (Token::Leq, Type::Num, Type::Num, Type::Bool, OpCode::LeqNum),
-  (Token::Geq, Type::Num, Type::Num, Type::Bool, OpCode::GeqNum),
-  (Token::Same, Type::Num, Type::Num, Type::Bool, OpCode::SameNum),
-  (Token::Different, Type::Num, Type::Num, Type::Bool, OpCode::DiffNum),
+  (Token::Basic('+'), Type::Num, Type::Num, Type::Num, BuiltinOperation::AddNum),
+  (Token::Basic('-'), Type::Num, Type::Num, Type::Num, BuiltinOperation::SubNum),
+  (Token::Basic('*'), Type::Num, Type::Num, Type::Num, BuiltinOperation::MulNum),
+  (Token::Basic('/'), Type::Num, Type::Num, Type::Num, BuiltinOperation::DivNum),
+  (Token::Basic('<'), Type::Num, Type::Num, Type::Bool, BuiltinOperation::LeNum),
+  (Token::Basic('>'), Type::Num, Type::Num, Type::Bool, BuiltinOperation::GeNum),
+  (Token::Leq, Type::Num, Type::Num, Type::Bool, BuiltinOperation::LeqNum),
+  (Token::Geq, Type::Num, Type::Num, Type::Bool, BuiltinOperation::GeqNum),
+  (Token::Same, Type::Num, Type::Num, Type::Bool, BuiltinOperation::SameNum),
+  (Token::Different, Type::Num, Type::Num, Type::Bool, BuiltinOperation::DiffNum),
   // string Token
-  (Token::Basic('+'), Type::Str, Type::Str, Type::Str, OpCode::AddStr),
-  (Token::Basic('<'), Type::Str, Type::Str, Type::Bool, OpCode::LeStr),
-  (Token::Basic('>'), Type::Str, Type::Str, Type::Bool, OpCode::GeStr),
-  (Token::Leq, Type::Str, Type::Str, Type::Bool, OpCode::LeqStr),
-  (Token::Geq, Type::Str, Type::Str, Type::Bool, OpCode::GeqStr),
-  (Token::Same, Type::Str, Type::Str, Type::Bool, OpCode::SameStr),
-  (Token::Different, Type::Str, Type::Str, Type::Bool, OpCode::DiffStr),
+  (Token::Basic('+'), Type::Str, Type::Str, Type::Str, BuiltinOperation::AddStr),
+  (Token::Basic('<'), Type::Str, Type::Str, Type::Bool, BuiltinOperation::LeStr),
+  (Token::Basic('>'), Type::Str, Type::Str, Type::Bool, BuiltinOperation::GeStr),
+  (Token::Leq, Type::Str, Type::Str, Type::Bool, BuiltinOperation::LeqStr),
+  (Token::Geq, Type::Str, Type::Str, Type::Bool, BuiltinOperation::GeqStr),
+  (Token::Same, Type::Str, Type::Str, Type::Bool, BuiltinOperation::SameStr),
+  (Token::Different, Type::Str, Type::Str, Type::Bool, BuiltinOperation::DiffStr),
   // bool
-  (Token::Same, Type::Bool, Type::Bool, Type::Bool, OpCode::SameBool),
-  (Token::Different, Type::Bool, Type::Bool, Type::Bool, OpCode::DiffBool),
+  (Token::Same, Type::Bool, Type::Bool, Type::Bool, BuiltinOperation::SameBool),
+  (Token::Different, Type::Bool, Type::Bool, Type::Bool, BuiltinOperation::DiffBool),
 ];
 
 #[rustfmt::skip]
-const UNARY_OPERATORS: &[(Token, Type, Type, OpCode)] = &[
-  (Token::Basic('-'), Type::Num, Type::Num, OpCode::NegNum),
-  (Token::Basic('!'), Type::Bool, Type::Bool, OpCode::NotBool),
+const UNARY_OPERATORS: &[(Token, Type, Type, BuiltinOperation)] = &[
+  (Token::Basic('-'), Type::Num, Type::Num, BuiltinOperation::NegNum),
+  (Token::Basic('!'), Type::Bool, Type::Bool, BuiltinOperation::NotBool),
 ];
 
-fn check_arguments(
+pub struct CheckedExpr {
+  pub type_: Type,
+  pub handle: IrExprHandle,
+}
+
+impl CheckedExpr {
+  const ERROR: Self = Self {
+    type_: Type::Error,
+    handle: IrExprHandle::INVALID,
+  };
+
+  fn new<E: Into<ExprIr>>(expr: E, source_range: SourceRange, type_: Type, ir: &mut Ir) -> Self {
+    let handle = ir.add_expression(
+      expr.into(),
+      ExpressionInfo {
+        type_: type_.clone(),
+        source_range,
+      },
+    );
+    Self { type_, handle }
+  }
+}
+
+pub trait CheckExprSemantics {
+  fn check(&self, ast: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr;
+}
+
+impl CheckExprSemantics for ExprHandle {
+  fn check(&self, ast: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    state.push_source_range(self.get_source_range(ast));
+    let checked_expr = match self.get_expr(ast) {
+      Expr::Literal(literal) => literal.check(ast, ir, state),
+      Expr::Id(id) => id.check(ast, ir, state),
+      Expr::Paren(paren) => paren.check(ast, ir, state),
+      Expr::Assignment(assignment) => assignment.check(ast, ir, state),
+      Expr::Binary(binary) => binary.check(ast, ir, state),
+      Expr::Unary(unary) => unary.check(ast, ir, state),
+      Expr::Lambda(lambda) => lambda.check(ast, ir, state),
+      Expr::FnCall(fn_call) => fn_call.check(ast, ir, state),
+      Expr::MemberGet(member_get) => member_get.check(ast, ir, state),
+      Expr::MemberSet(member_set) => member_set.check(ast, ir, state),
+      Expr::DotCall(dot_call) => dot_call.check(ast, ir, state),
+      Expr::Construct(construct) => construct.check(ast, ir, state),
+    };
+    state.pop_source_range();
+    checked_expr
+  }
+}
+
+impl CheckExprSemantics for expr::Literal<'_> {
+  fn check(&self, _: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    let source_range = state.top_source_range();
+    match &self.value {
+      Token::Number(value) => CheckedExpr::new(Constant::Num(*value), source_range, Type::Num, ir),
+      Token::String(value) => CheckedExpr::new(
+        Constant::Str(value.to_string()),
+        source_range,
+        Type::Str,
+        ir,
+      ),
+      Token::True | Token::False => CheckedExpr::new(
+        Constant::Bool(self.value == Token::True),
+        source_range,
+        Type::Bool,
+        ir,
+      ),
+      _ => panic!("non literal as literal value"),
+    }
+  }
+}
+
+impl CheckExprSemantics for expr::Id<'_> {
+  fn check(&self, _: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    let (id, type_) = map_identifier(self.id, state);
+    CheckedExpr::new(ExprIr::SymbolIndex(id), state.top_source_range(), type_, ir)
+  }
+}
+
+impl CheckExprSemantics for expr::Paren {
+  fn check(&self, ast: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    self.inner.check(ast, ir, state)
+  }
+}
+
+impl CheckExprSemantics for expr::Assignment<'_> {
+  fn check(&self, ast: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    let (lhs_symbol_index, lhs_type) = map_identifier(self.var_name, state);
+    let var_index = match lhs_symbol_index {
+      SymbolIndex::Local(index) => VarIndex::Local(index),
+      SymbolIndex::Capture(index) => VarIndex::Capture(index),
+      SymbolIndex::Global {
+        index,
+        module_index,
+      } => VarIndex::Global {
+        index,
+        module_index,
+      },
+      _ => todo!("invalid assignment target"),
+    };
+
+    let rhs = self.rhs.check(ast, ir, state);
+
+    // if one of these is an error type, it should have already been reported
+    if lhs_type.is_error() || rhs.type_.is_error() {
+      return CheckedExpr::ERROR;
+    }
+    if lhs_type != rhs.type_ {
+      state.errors.push(ty_err::assignment_of_incompatible_types(
+        state.top_source_range(),
+        &lhs_type,
+        &rhs.type_,
+      ));
+      return CheckedExpr::ERROR;
+    }
+    CheckedExpr::new(
+      Assignment {
+        target: var_index,
+        value: rhs.handle,
+      },
+      state.top_source_range(),
+      lhs_type,
+      ir,
+    )
+  }
+}
+
+impl CheckExprSemantics for expr::Binary<'_> {
+  fn check(&self, ast: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    let lhs = self.left.check(ast, ir, state);
+    let rhs = self.right.check(ast, ir, state);
+
+    // if one of these is an error type, it should have already been reported
+    if lhs.type_.is_error() || rhs.type_.is_error() {
+      return CheckedExpr::ERROR;
+    }
+
+    if lhs.type_ == Type::Bool || rhs.type_ == Type::Bool {
+      if self.operator == Token::And {
+        return CheckedExpr::new(
+          And {
+            lhs: lhs.handle,
+            rhs: rhs.handle,
+          },
+          state.top_source_range(),
+          Type::Bool,
+          ir,
+        );
+      }
+      if self.operator == Token::Or {
+        return CheckedExpr::new(
+          Or {
+            lhs: lhs.handle,
+            rhs: rhs.handle,
+          },
+          state.top_source_range(),
+          Type::Bool,
+          ir,
+        );
+      }
+    }
+
+    let result = BINARY_OPERATORS
+      .iter()
+      .filter(|bin_op| bin_op.0 == self.operator)
+      .find(|bin_op| bin_op.1 == lhs.type_ && bin_op.2 == rhs.type_)
+      .map(|e| (e.3.clone(), e.4));
+    if let Some((expr_type, op)) = result {
+      CheckedExpr::new(
+        BuiltinBinary {
+          operation: op,
+          lhs: lhs.handle,
+          rhs: rhs.handle,
+        },
+        state.top_source_range(),
+        expr_type,
+        ir,
+      )
+    } else {
+      state.errors.push(ty_err::incorrect_binary_operator(
+        state.top_source_range(),
+        &self.operator,
+        &lhs.type_,
+        &rhs.type_,
+      ));
+      CheckedExpr::ERROR
+    }
+  }
+}
+
+impl CheckExprSemantics for expr::Unary<'_> {
+  fn check(&self, ast: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    let rhs = self.right.check(ast, ir, state);
+
+    // if the right hand side is an error type, it should have already been reported
+    if rhs.type_.is_error() {
+      return CheckedExpr::ERROR;
+    }
+
+    let result = UNARY_OPERATORS
+      .iter()
+      .find(|(op_token, operand_ty, ..)| *op_token == self.operator && *operand_ty == rhs.type_)
+      .map(|(_, _, expression_type, operator)| (expression_type.clone(), *operator));
+    if let Some((expr_type, op)) = result {
+      CheckedExpr::new(
+        BuiltinUnary {
+          operation: op,
+          operand: rhs.handle,
+        },
+        state.top_source_range(),
+        expr_type,
+        ir,
+      )
+    } else {
+      state.errors.push(ty_err::incorrect_unary_operator(
+        state.top_source_range(),
+        &self.operator,
+        &rhs.type_,
+      ));
+      CheckedExpr::ERROR
+    }
+  }
+}
+
+impl CheckExprSemantics for expr::Lambda<'_> {
+  fn check(&self, ast: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    let parameter_types = convert_type_list(&self.parameter_types, ast, state);
+    let return_type = convert_parsed_type(self.return_type, ast, state);
+    let signature = FunctionSignature::new(parameter_types, return_type);
+
+    let name = Rc::<str>::from(format!(
+      "{}::<lambda>({}) -> {}",
+      state.env.function_stack(),
+      parameter_types_to_string(signature.get_parameters()),
+      signature.get_return_type()
+    ));
+
+    let function_index = state.open_function(
+      name.clone(),
+      &self.parameter_names,
+      signature.get_parameters(),
+      signature.get_return_type().clone(),
+    );
+    let checked_body = check_statement_block(&self.body, ast, ir, state);
+    let captures = state.close_function();
+
+    ir.add_function(FunctionIr {
+      name,
+      index: function_index,
+      signature: signature.clone(),
+      source_range: state.top_source_range(),
+      instructions: checked_body.block_statements,
+    });
+    CheckedExpr::new(
+      CreateClosure {
+        function_id: function_index,
+        captures,
+      },
+      state.top_source_range(),
+      signature.into(),
+      ir,
+    )
+  }
+}
+
+impl CheckExprSemantics for expr::FnCall {
+  fn check(&self, ast: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    if let Expr::Id(id) = self.func.get_expr(ast) {
+      call_named(id.id, &self.arguments, ast, ir, state)
+    } else {
+      let function = self.func.check(ast, ir, state);
+      call_value(function, &self.arguments, ast, ir, state)
+    }
+  }
+}
+
+impl CheckExprSemantics for expr::MemberGet<'_> {
+  fn check(&self, ast: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    let lhs = self.lhs.check(ast, ir, state);
+
+    if let Some((member_type, member_index)) = struct_member(&lhs.type_, self.member_name, state) {
+      CheckedExpr::new(
+        GetMember {
+          lhs: lhs.handle,
+          member_index,
+        },
+        state.top_source_range(),
+        member_type,
+        ir,
+      )
+    } else {
+      CheckedExpr::ERROR
+    }
+  }
+}
+
+impl CheckExprSemantics for expr::MemberSet<'_> {
+  fn check(&self, ast: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    let lhs = self.lhs.check(ast, ir, state);
+    if let Some((member_type, member_index)) = struct_member(&lhs.type_, self.member_name, state) {
+      let value = self.value.check(ast, ir, state);
+
+      if value.type_ != member_type {
+        todo!("invalid assignment")
+      }
+
+      CheckedExpr::new(
+        SetMember {
+          lhs: lhs.handle,
+          member_index,
+          value: value.handle,
+        },
+        state.top_source_range(),
+        member_type,
+        ir,
+      )
+    } else {
+      CheckedExpr::ERROR
+    }
+  }
+}
+
+impl CheckExprSemantics for expr::DotCall<'_> {
+  fn check(&self, ast: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    let lhs = self.lhs.check(ast, ir, state);
+
+    if lhs.type_.is_error() {
+      return CheckedExpr::ERROR;
+    }
+
+    if let Type::Struct { .. } = &lhs.type_ {
+      if let Some((member_type, member_index)) =
+        struct_member(&lhs.type_, self.function_name, state)
+      {
+        let function = CheckedExpr::new(
+          GetMember {
+            lhs: lhs.handle,
+            member_index,
+          },
+          state.top_source_range(),
+          member_type,
+          ir,
+        );
+        call_value(function, &self.arguments, ast, ir, state)
+      } else {
+        CheckedExpr::ERROR
+      }
+    } else {
+      // not very efficient, but its simple and short
+      let mut arguments = self.arguments.clone();
+      arguments.insert(0, self.lhs.clone());
+
+      call_named(self.function_name, &self.arguments, ast, ir, state)
+    }
+  }
+}
+
+impl CheckExprSemantics for expr::Construct<'_> {
+  fn check(&self, ast: &AST, ir: &mut Ir, state: &mut SemanticState) -> CheckedExpr {
+    let (argument_types, argument_handles) = check_expression_list(&self.arguments, ast, ir, state);
+
+    // FIXME: duplicated code from `struct_member`
+    let struct_ = if let Some(GlobalSymbol::Struct(s)) = state.env.get_global(self.type_name) {
+      s
+    } else {
+      todo!("error: struct was not defined");
+    };
+
+    if argument_types.len() != struct_.get_member_types().len() {
+      todo!("error: incorrect number of arguments")
+    }
+
+    if argument_types != struct_.get_member_types() {
+      todo!("error: incorrect argument types")
+    }
+
+    CheckedExpr::new(
+      Construct {
+        arguments: argument_handles,
+      },
+      state.top_source_range(),
+      Type::Struct {
+        name: struct_.get_name(),
+        module_name: state.module_name(),
+      },
+      ir,
+    )
+  }
+}
+
+fn call_named(
+  name: &str,
+  arguments: &[ExprHandle],
+  ast: &AST,
+  ir: &mut Ir,
+  state: &mut SemanticState,
+) -> CheckedExpr {
+  let (argument_types, argument_handles) = check_expression_list(arguments, ast, ir, state);
+
+  if let Some(GlobalSymbol::OverloadSet(overload_set)) = state.env.get_global(name) {
+    match overload_set.find(&argument_types) {
+      Ok(resolved_overload) => call_overload(&resolved_overload, argument_handles, ir, state),
+      Err(_) => {
+        todo!("no overload error");
+      }
+    }
+  } else {
+    todo!("no overload error");
+  }
+}
+
+fn call_overload(
+  overload: &ResolvedOverload,
+  arguments: Vec<IrExprHandle>,
+  ir: &mut Ir,
+  state: &mut SemanticState,
+) -> CheckedExpr {
+  let return_type = overload.signature.get_return_type().clone();
+  match overload.address {
+    FunctionAddress::Native { id, module_id } => CheckedExpr::new(
+      CallNative {
+        function_id: id,
+        function_module_id: module_id,
+        arguments,
+      },
+      state.top_source_range(),
+      return_type,
+      ir,
+    ),
+    FunctionAddress::Foreign { id, module_id } => CheckedExpr::new(
+      CallForeign {
+        function_id: id,
+        function_module_id: module_id,
+        arguments,
+      },
+      state.top_source_range(),
+      return_type,
+      ir,
+    ),
+    _ => panic!(),
+  }
+}
+
+fn call_value(
+  function: CheckedExpr,
+  arguments: &[ExprHandle],
+  ast: &AST,
+  ir: &mut Ir,
+  state: &mut SemanticState,
+) -> CheckedExpr {
+  // if the value we are trying to call is an error type, it should have already been reported
+  if function.type_.is_error() {
+    return CheckedExpr::ERROR;
+  }
+
+  if let Type::Function(signature) = function.type_ {
+    let (argument_types, argument_handles) = check_expression_list(arguments, ast, ir, state);
+    if argument_types.len() != signature.get_parameters().len() {
+      todo!("error: incorrect number of arguments")
+    }
+    if argument_types != signature.get_parameters() {
+      todo!("error: incorrect argument types")
+    }
+
+    CheckedExpr::new(
+      CallValue {
+        value: function.handle,
+        arguments: argument_handles,
+      },
+      state.top_source_range(),
+      signature.get_return_type().clone(),
+      ir,
+    )
+  } else {
+    todo!("error: not a function")
+  }
+}
+
+fn check_expression_list(
+  args: &[ExprHandle],
+  ast: &AST,
+  ir: &mut Ir,
+  state: &mut SemanticState,
+) -> (Vec<Type>, Vec<IrExprHandle>) {
+  let it = args.iter().map(|arg| arg.check(ast, ir, state));
+  let mut types = Vec::with_capacity(args.len());
+  let mut handles = Vec::with_capacity(args.len());
+  for checked in it {
+    types.push(checked.type_);
+    handles.push(checked.handle);
+  }
+  (types, handles)
+}
+
+fn struct_member(
+  object_type: &Type,
+  member_name: &str,
+  state: &mut SemanticState,
+) -> Option<(Type, MemberIndex)> {
+  // if the left hand side is an error type, it should have already been reported
+  if object_type.is_error() {
+    return None;
+  }
+
+  let struct_name = match object_type {
+    Type::Struct { name, .. } => name,
+    _ => {
+      todo!("not a struct");
+    }
+  };
+
+  let struct_ = if let Some(GlobalSymbol::Struct(s)) = state.env.get_global(struct_name) {
+    s
+  } else {
+    todo!("error: struct was not defined");
+  };
+
+  let member_index = match struct_.get_member_index(member_name) {
+    Some(index) => index,
+    None => {
+      todo!("not a member")
+    }
+  };
+  let (_, member_type) = struct_.member_info(member_index);
+  Some((member_type.clone(), member_index))
+}
+
+fn check_function_call(
   errors: &mut Vec<CompilerError>,
   parameters: &[Type],
   arguments: &[Type],
@@ -72,509 +598,6 @@ fn check_arguments(
         argument,
         param,
       ));
-    }
-  }
-}
-
-impl<'a> ExprVisitor<'a, 'a, Type> for SemanticChecker<'a> {
-  fn visit_literal(&mut self, _ast: &'a AST, literal: &Literal, _: ExprHandle) -> Type {
-    match &literal.value {
-      Token::Number(value) => {
-        unsafe { self.code().push_constant(ConstantValue::Number(*value)) };
-        Type::Num
-      }
-      Token::String(value) => {
-        unsafe {
-          self
-            .code()
-            .push_constant(ConstantValue::Str(value.to_string()))
-        };
-        Type::Str
-      }
-      Token::True | Token::False => {
-        unsafe {
-          self
-            .code()
-            .push_constant(ConstantValue::Bool(literal.value == Token::True));
-        }
-        Type::Bool
-      }
-      _ => panic!("non literal as literal value"),
-    }
-  }
-
-  fn visit_id(&mut self, ast: &'a AST, id: &Id, expr_handle: ExprHandle) -> Type {
-    self.generate_var_get(id.id, expr_handle.get_source_range(ast))
-  }
-
-  fn visit_paren(&mut self, ast: &'a AST, paren: &Paren, _: ExprHandle) -> Type {
-    self.visit_expr(ast, paren.inner)
-  }
-
-  fn visit_assignment(
-    &mut self,
-    ast: &'a AST,
-    assignment: &Assignment,
-    expr_handle: ExprHandle,
-  ) -> Type {
-    let rhs_type = self.visit_expr(ast, assignment.rhs);
-
-    let var_type = self.generate_assignment(ast, assignment.var_name, expr_handle);
-    if !var_type.is_error() && !rhs_type.is_error() && var_type != rhs_type {
-      let var_type = var_type.clone(); // we already borrowed self with get_variable
-      self.emit_error(ty_err::assignment_of_incompatible_types(
-        expr_handle.get_source_range(ast),
-        &rhs_type,
-        &var_type,
-      ));
-      Type::Error
-    } else {
-      rhs_type
-    }
-  }
-
-  fn visit_binary(&mut self, ast: &'a AST, binary: &Binary, expr_handle: ExprHandle) -> Type {
-    let lhs = self.visit_expr(ast, binary.left);
-
-    if binary.operator == Token::And || binary.operator == Token::Or {
-      let jump = if binary.operator == Token::And {
-        let jump = unsafe { self.code().push_jump(OpCode::JumpIfFalseNoPop) };
-        unsafe { self.code().push_op(OpCode::Pop) };
-        jump
-      } else {
-        let check_rhs = unsafe { self.code().push_jump(OpCode::JumpIfFalseNoPop) };
-        let skip_rhs_jump = unsafe { self.code().push_jump(OpCode::Jump) };
-        self.code().backpatch_current_instruction(check_rhs);
-        unsafe { self.code().push_op(OpCode::Pop) };
-        skip_rhs_jump
-      };
-      let rhs = self.visit_expr(ast, binary.right);
-      if lhs == Type::Bool && lhs == rhs {
-        self.code().backpatch_current_instruction(jump);
-        return Type::Bool;
-      } else if !rhs.is_error() || lhs.is_error() {
-        self.emit_error(ty_err::incorrect_binary_operator(
-          expr_handle.get_source_range(ast),
-          &binary.operator,
-          &lhs,
-          &rhs,
-        ));
-      }
-      return Type::Error;
-    }
-
-    let rhs = self.visit_expr(ast, binary.right);
-    let result = BINARY_OPERATORS
-      .iter()
-      .filter(|bin_op| bin_op.0 == binary.operator)
-      .find(|bin_op| bin_op.1 == lhs && bin_op.2 == rhs)
-      .map(|e| (e.3.clone(), e.4));
-    if let Some((expr_type, bin_op)) = result {
-      unsafe { self.code().push_op(bin_op) };
-      expr_type
-    } else {
-      self.emit_error(ty_err::incorrect_binary_operator(
-        expr_handle.get_source_range(ast),
-        &binary.operator,
-        &lhs,
-        &rhs,
-      ));
-      Type::Error
-    }
-  }
-
-  fn visit_unary(&mut self, ast: &'a AST, unary: &Unary, expr_handle: ExprHandle) -> Type {
-    let rhs = self.visit_expr(ast, unary.right);
-    let result = UNARY_OPERATORS
-      .iter()
-      .find(|e| e.0 == unary.operator && e.1 == rhs)
-      .map(|e| (e.2.clone(), e.3));
-    if let Some((expr_type, unary_op)) = result {
-      unsafe { self.code().push_op(unary_op) };
-      expr_type
-    } else {
-      self.emit_error(ty_err::incorrect_unary_operator(
-        expr_handle.get_source_range(ast),
-        &unary.operator,
-        &rhs,
-      ));
-      Type::Error
-    }
-  }
-
-  fn visit_lambda(
-    &mut self,
-    ast: &'a AST<'a>,
-    lambda: &Lambda<'a>,
-    expr_handle: ExprHandle,
-  ) -> Type {
-    let parameter_types = self.convert_type_list(&lambda.parameter_types);
-    let return_type = self.visit_parsed_type(ast, lambda.return_type);
-    let expr_sr = expr_handle.get_source_range(ast);
-
-    self.start_lambda(&parameter_types, return_type.clone());
-    self.declare_function_parameters(&lambda.parameter_names, &parameter_types, expr_sr);
-    self.visit_function_body(&lambda.body, expr_sr);
-    let (function_id, captures) = self.end_lambda();
-    unsafe {
-      self
-        .code()
-        .push_constant(ConstantValue::RelativeNativeFn(function_id));
-      self.create_closure(&captures);
-    };
-    FunctionSignature::new(parameter_types, return_type).into()
-  }
-
-  fn visit_fn_call(&mut self, ast: &'a AST, fn_call: &FnCall, expr_handle: ExprHandle) -> Type {
-    let arguments = self.visit_expr_list(ast, &fn_call.arguments);
-    let call_sr = expr_handle.get_source_range(ast);
-    let expr_type = if let Expr::Id(id) = fn_call.func.get_expr(ast) {
-      self.call_function(&arguments, id.id, call_sr)
-    } else {
-      let lhs_type = self.visit_expr(ast, fn_call.func);
-      self.call_value(&lhs_type, &arguments, call_sr)
-    };
-    expr_type
-  }
-
-  fn visit_member_get(
-    &mut self,
-    ast: &'a AST,
-    member_get: &'a MemberGet<'a>,
-    expr_handle: ExprHandle,
-  ) -> Type {
-    let lhs_type = self.visit_expr(ast, member_get.lhs);
-    if lhs_type.is_error() {
-      return Type::Error;
-    }
-
-    if let Some((member_type, member_index)) = self.get_struct_member(
-      member_get.member_name,
-      &lhs_type,
-      expr_handle.get_source_range(ast),
-    ) {
-      let member_type = member_type.clone();
-      unsafe {
-        self
-          .code()
-          .push_op2(OpCode::GetMember, member_index.get_index() as u8)
-      };
-      member_type
-    } else {
-      Type::Error
-    }
-  }
-
-  fn visit_member_set(
-    &mut self,
-    ast: &'a AST,
-    member_set: &'a MemberSet<'a>,
-    expr_handle: ExprHandle,
-  ) -> Type {
-    let lhs_type = self.visit_expr(ast, member_set.lhs);
-    if lhs_type.is_error() {
-      return Type::Error;
-    }
-
-    if let Some((member_type, member_index)) = self.get_struct_member(
-      member_set.member_name,
-      &lhs_type,
-      expr_handle.get_source_range(ast),
-    ) {
-      let member_type = member_type.clone();
-      self.visit_expr(ast, member_set.value);
-      unsafe {
-        self
-          .code()
-          .push_op2(OpCode::SetMember, member_index.get_index() as u8)
-      };
-      member_type
-    } else {
-      Type::Error
-    }
-  }
-
-  fn visit_dot_call(&mut self, ast: &'a AST, dot_call: &DotCall, expr_handle: ExprHandle) -> Type {
-    // if rhs is member, call it
-    // otherwise, ensure name is a function and try to call it
-    let call_sr = expr_handle.get_source_range(ast);
-    let start = self.code().get_next_instruction_address();
-    let lhs_type = self.visit_expr(ast, dot_call.lhs);
-    let mid = self.code().get_next_instruction_address();
-    let mut arguments = self.visit_expr_list(ast, &dot_call.arguments);
-    let end = self.code().get_next_instruction_address();
-
-    if let Type::Struct { name, .. } = &lhs_type {
-      match self.env.global_structs().get(&name) {
-        Ok(struct_) => {
-          if let Some(member_index) = struct_.get_member_index(dot_call.function_name) {
-            let (_, member_type) = struct_.member_info(member_index);
-            if let Type::Function(signature) = member_type {
-              let return_type = signature.get_return_type().clone();
-              check_arguments(
-                &mut self.errors,
-                signature.get_parameters(),
-                &arguments,
-                expr_handle.get_source_range(ast),
-              );
-              self.code().swap(start, mid, end);
-              unsafe {
-                self
-                  .code()
-                  .push_op2(OpCode::GetMember, member_index.get_index() as u8);
-                self
-                  .code()
-                  .push_op2(OpCode::CallValue, arguments.len() as u8);
-              }
-              return return_type;
-            } // its not a function
-          } // its not a member
-        }
-        Err(StructGetError::NotDefined) => {
-          todo!("error: struct was not defined, we don't know if the right side is a member")
-        }
-        _ => {}
-      }
-    }
-    arguments.push(lhs_type);
-    self.call_function(&arguments, dot_call.function_name, call_sr)
-  }
-
-  fn visit_constructor(
-    &mut self,
-    ast: &'a AST,
-    constructor: &Construct,
-    expr_handle: ExprHandle,
-  ) -> Type {
-    let expr_sr = expr_handle.get_source_range(ast);
-    let arguments = self.visit_expr_list(ast, &constructor.arguments);
-    match self.env.global_structs().get(constructor.type_name) {
-      Ok(struct_) => {
-        let type_ = Type::Struct {
-          name: struct_.clone_name(),
-          module_name: self
-            .module_name
-            .clone()
-            .unwrap_or(Rc::from(Type::ANONYMOUS_MODULE)),
-        };
-        check_arguments(
-          &mut self.errors,
-          struct_.get_member_types(),
-          &arguments,
-          expr_sr,
-        );
-        unsafe {
-          self
-            .code()
-            .push_op2(OpCode::Construct, constructor.arguments.len() as u8)
-        };
-        type_
-      }
-      Err(StructGetError::NotAStruct) => {
-        self.emit_error(ty_err::not_struct_name(expr_sr, constructor.type_name));
-        Type::Error
-      }
-      Err(StructGetError::NotDefined) => {
-        todo!("error: struct was not defined");
-      }
-      Err(StructGetError::MultipleDefinitions) | Err(StructGetError::RedefinedImport) => {
-        Type::Error
-      }
-    }
-  }
-}
-
-impl SemanticChecker<'_> {
-  fn generate_var_get(&mut self, var_name: &str, var_sr: SourceRange) -> Type {
-    if let Some((local_id, var_type)) = self.env.get_local_var(var_name) {
-      unsafe { self.code().push_op2(OpCode::GetLocal, local_id) };
-      var_type.clone()
-    } else if let Some((capture_id, var_type)) = self.env.get_capture_or_capture_var(var_name) {
-      unsafe { self.code().push_op2(OpCode::GetCapture, capture_id) };
-      var_type.clone()
-    } else if let Some((address, var_type)) = self.env.get_global_var(var_name) {
-      unsafe {
-        self.code().push_constant(address.into());
-        self.code().push_op(OpCode::GetGlobal);
-      };
-      var_type.clone()
-    } else if let Some(overload) = self.env.global_functions().get_overload_set(var_name) {
-      match overload.auto_resolve() {
-        Ok(resolved_overload) => {
-          unsafe {
-            self
-              .code()
-              .push_constant(resolved_overload.function_address.into())
-          };
-          resolved_overload.function_signature.clone().into()
-        }
-        Err(_) => {
-          todo!()
-        }
-      }
-    } else if self.env.is_type(var_name) {
-      todo!("error: cannot access value of a type")
-    } else {
-      self.errors.push(sema_err::name_not_found(var_sr, var_name));
-      Type::Error
-    }
-  }
-
-  fn generate_assignment(&mut self, ast: &AST, var_name: &str, expr_handle: ExprHandle) -> Type {
-    if let Some((local_id, var_type)) = self.env.get_local_var(var_name) {
-      unsafe { self.code().push_op2(OpCode::SetLocal, local_id) };
-      var_type
-    } else if let Some((capture_id, var_type)) = self.env.get_capture_or_capture_var(var_name) {
-      unsafe { self.code().push_op2(OpCode::SetCapture, capture_id) };
-      var_type
-    } else if let Some((address, var_type)) = self.env.get_global_var(var_name) {
-      unsafe {
-        self.code().push_constant(address.into());
-        self.code().push_op(OpCode::SetGlobal);
-      };
-      var_type.clone()
-    } else if self
-      .env
-      .global_functions()
-      .get_overload_set(var_name)
-      .is_some()
-    {
-      todo!("error: left hand side of assignment is a function");
-    } else if self.env.is_type(var_name) {
-      todo!("error: left hand side of assignment is a type")
-    } else {
-      self.errors.push(sema_err::name_not_found(
-        expr_handle.get_source_range(ast),
-        var_name,
-      ));
-      Type::Error
-    }
-  }
-
-  fn start_lambda(&mut self, parameter_types: &[Type], return_type: Type) {
-    let name = format!("<lambda>({})", parameter_types_to_string(parameter_types));
-    self.env.push_function(name, return_type);
-  }
-
-  fn end_lambda(&mut self) -> (RelativeFunctionAddress, Vec<Capture>) {
-    self.finalize_function_code();
-    let function = self.env.pop_function();
-    let function_id = self.env.generate_lambda_address();
-    assert_eq!(function_id as usize, self.checked_functions.len());
-    self.checked_functions.push(function.code);
-    (function_id, function.captures)
-  }
-
-  unsafe fn call_resolved_overload(&mut self, resolved_overload: ResolvedOverload) -> Type {
-    let return_type = resolved_overload
-      .function_signature
-      .get_return_type()
-      .clone();
-    let arguments = resolved_overload.function_signature.get_parameters().len() as u8;
-    match resolved_overload.function_address {
-      FunctionAddress::RelativeNative(address) => self
-        .code()
-        .push_constant(ConstantValue::RelativeNativeFn(address))
-        .push_op2(OpCode::CallNative, arguments),
-      FunctionAddress::RelativeForeign(address) => self
-        .code()
-        .push_constant(ConstantValue::RelativeForeignFn(address))
-        .push_op2(OpCode::CallForeign, arguments),
-      FunctionAddress::AbsoluteNative(address) => self
-        .code()
-        .push_constant(ConstantValue::AbsoluteNativeFn(address))
-        .push_op2(OpCode::CallNative, arguments),
-      FunctionAddress::AbsoluteForeign(address) => self
-        .code()
-        .push_constant(ConstantValue::AbsoluteForeignFn(address))
-        .push_op2(OpCode::CallForeign, arguments),
-    }
-    return_type
-  }
-
-  fn call_function(
-    &mut self,
-    arguments: &[Type],
-    function_name: &str,
-    call_sr: SourceRange,
-  ) -> Type {
-    // TODO: improve errors for overload sets with only one element (use `check_arguments`)
-    if let Some(overload_set) = self.env.global_functions().get_overload_set(function_name) {
-      match overload_set.find(&arguments) {
-        Ok(resolved_overload) => unsafe { self.call_resolved_overload(resolved_overload) },
-        Err(_) => {
-          todo!()
-        }
-      }
-    } else {
-      let var_type = self.generate_var_get(function_name, call_sr);
-      self.call_value(&var_type, arguments, call_sr)
-    }
-  }
-
-  fn call_value(&mut self, value_type: &Type, arguments: &[Type], call_sr: SourceRange) -> Type {
-    if value_type.is_error() {
-      return Type::Error;
-    }
-
-    if let Type::Function(signature) = value_type {
-      check_arguments(
-        &mut self.errors,
-        signature.get_parameters(),
-        arguments,
-        call_sr,
-      );
-      unsafe {
-        self
-          .code()
-          .push_op2(OpCode::CallValue, arguments.len() as u8)
-      };
-      signature.get_return_type().clone()
-    } else {
-      todo!("error: not a function")
-    }
-  }
-
-  unsafe fn create_closure(&mut self, captures: &[Capture]) {
-    if !captures.is_empty() {
-      self
-        .code()
-        .push_op2(OpCode::MakeClosure, captures.len() as u8);
-      for c in captures {
-        match c {
-          Capture::Local(local_address) => self.code().push_op2(OpCode::GetLocal, *local_address),
-          Capture::Capture(capture_address) => {
-            self.code().push_op2(OpCode::GetCapture, *capture_address)
-          }
-        }
-        self.code().push_op(OpCode::Capture);
-      }
-    }
-  }
-
-  fn get_struct_member(
-    &mut self,
-    member_name: &str,
-    type_: &Type,
-    sr: SourceRange,
-  ) -> Option<(&Type, MemberIndex)> {
-    if let Type::Struct { name, .. } = type_ {
-      if let Ok(struct_) = self.env.global_structs().get(name) {
-        if let Some(index) = struct_.get_member_index(member_name) {
-          let (_, member_type) = struct_.member_info(index);
-          Some((member_type, index))
-        } else {
-          self
-            .errors
-            .push(ty_err::not_a_member(sr, member_name, struct_.get_name()));
-          None
-        }
-      } else {
-        todo!("error: struct was not defined yet")
-      }
-    } else {
-      self.emit_error(ty_err::cannot_access_member_of_non_struct_type(sr, &type_));
-      None
     }
   }
 }
